@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# 中間生成物（揮発）
+work/
+tasks/
+
+# Python
+__pycache__/
+*.pyc
