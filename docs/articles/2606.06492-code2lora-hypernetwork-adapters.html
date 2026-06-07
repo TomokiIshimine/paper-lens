@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>リポジトリの知識を「長い入力」ではなく「重み」に注入する Code2LoRA — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-04-2606.06492-code2lora-hypernetwork-adapters-cover.png"
+           alt="Code2LoRA：リポジトリのコードを条件にハイパーネットワークが LoRA アダプタを生成し、静的版と進化版で凍結 LLM に注入する仕組みを示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">リポジトリの知識を「長い入力」ではなく「重み」に注入する Code2LoRA</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-04</span>
+      <span>arXiv：2606.06492</span>
+      <span>カテゴリ：cs.SE / cs.AI / cs.CL</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>コードを書く AI に、対象プロジェクトの作法やライブラリの知識をどう教えるかは難しい問題です。この論文は、その知識を毎回「長い入力文」として与える代わりに、リポジトリごとに専用の小さな調整部品（LoRA アダプタ）を自動生成してモデルへ組み込む手法 Code2LoRA を提案します。リポジトリのコードを入力すると、ハイパーネットワークと呼ぶ別のネットワークが 1 回の計算でそのアダプタを作り出します。静的なコードベース向けと、コミットのたびに差分で更新していく進化対応版の 2 形態を備え、専用ベンチマーク上で既存手法を上回りました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">63.8%</span>
+          <span class="stat__label">静的版の Cross-Repo EM<br>（FFT+RAG を 9.9pt 上回る）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">60.3%</span>
+          <span class="stat__label">進化版の Cross-Repo EM<br>（進化トラック最高）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">604</span>
+          <span class="stat__label">RepoPeftBench の<br>Python リポジトリ件数</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">~745M</span>
+          <span class="stat__label">進化版ハイパーネットワークの<br>学習可能パラメータ</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>コードを補完する大規模言語モデル（LLM）は、import の解決、API の使い方、プロジェクト固有の命名規約など、そのリポジトリ全体に散らばった知識を必要とします。ところが現実のソフトウェアは絶えず変化します。コミットが入るたびに、いったん覚えさせた知識は古くなります。</p>
+      <p>この「知識をどう与え、変化にどう追従するか」という問いに、本論文は新しい角度から答えます。知識を入力トークンとして毎回与えるのではなく、モデルの重み（パラメータ）として注入し、しかもコードの進化に合わせて安く更新する、という発想です。これは、より低コストでカスタマイズ可能な AI コードアシスタントを作るうえでの土台になると著者らは位置づけています。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>リポジトリの知識をモデルに与える既存手法は、大きく 2 つの方向に分かれます。どちらも一長一短があります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">方式 1</span> 長い入力として渡す</p>
+          <p>検索（RAG）や依存関係の解析で関連コードを集め、プロンプトの前に貼り付けます。ただしリポジトリの文脈は膨大になりがちで、LLM が一度に読める入力の長さ（コンテキスト窓）を圧迫し、検索の精度にも依存し、推論のたびにコストがかかります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">方式 2</span> パラメータに押し込む</p>
+          <p>リポジトリ単位でモデルや LoRA を学習し、知識をパラメータに押し込みます。一度学習すれば入力は短くて済みますが、学習コストが高く、進化するコードベースに対して脆いという欠点があります。コミットが入るたびにアダプタが古くなり、再学習が必要になります。</p>
+        </div>
+      </div>
+
+      <p>近年は、ハイパーネットワーク（hypernetwork）と呼ぶ、条件入力から別ネットワークの重みを生成するネットワークを使い、1 回の計算で凍結した LLM 向けの LoRA を作る研究も登場しています。ただし既存のものは短い自然言語のタスク記述や単一文書を対象に作られており、リポジトリが持つ長い文脈には対応できず、条件入力が固定的でコードの進化を追う仕組みも持っていませんでした。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>本論文の中核は「リポジトリのコードを条件として、その場で LoRA アダプタを生成するハイパーネットワーク」です。著者らは設計を 2 つの軸で整理します。知識がどのようにパラメータへ入るか（how）と、いつ更新されるか（when）です。この整理のもとで 2 つの利用形態を実装します。</p>
+
+      <h3>全体の構成</h3>
+      <p>システムは 3 つの部品から成ります。このうち学習するのはハイパーネットワークだけで、リポジトリエンコーダとベース LLM は凍結（学習しない）したまま使います。学習は標準的な言語モデリングの損失で行います。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 220" role="img" aria-label="リポジトリのコードがリポジトリエンコーダで 1 本の埋め込みに圧縮され、ハイパーネットワークが LoRA 重みへ変換し、凍結したベース LLM に注入される流れの図">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="80" width="150" height="60" rx="8"></rect>
+          <text class="node-label" x="95" y="106" text-anchor="middle">リポジトリのコード</text>
+          <text class="edge-label" x="95" y="126" text-anchor="middle">（数百万トークン）</text>
+
+          <path class="edge" d="M170,110 L214,110" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="216" y="74" width="170" height="72" rx="8"></rect>
+          <text class="node-label" x="301" y="100" text-anchor="middle">リポジトリエンコーダ</text>
+          <text class="edge-label" x="301" y="120" text-anchor="middle">凍結・学習なし</text>
+          <text class="edge-label" x="301" y="136" text-anchor="middle">→ 1 本の埋め込み</text>
+
+          <path class="edge" d="M386,110 L430,110" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="432" y="74" width="160" height="72" rx="8"></rect>
+          <text class="node-label" x="512" y="100" text-anchor="middle">ハイパーネットワーク</text>
+          <text class="edge-label" x="512" y="120" text-anchor="middle">学習するのはここだけ</text>
+          <text class="edge-label" x="512" y="136" text-anchor="middle">→ LoRA 重みを生成</text>
+
+          <path class="edge" d="M592,110 L636,110" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="614" y="100" text-anchor="middle">注入</text>
+
+          <rect class="node" x="638" y="80" width="104" height="60" rx="8"></rect>
+          <text class="node-label" x="690" y="106" text-anchor="middle">ベース LLM</text>
+          <text class="edge-label" x="690" y="126" text-anchor="middle">凍結</text>
+        </svg>
+        <figcaption class="diagram__caption">リポジトリのコードを 1 本の埋め込みに圧縮し、ハイパーネットワークが LoRA 重みへ変換して凍結したベース LLM に注入する。学習対象はハイパーネットワークのみ。</figcaption>
+      </figure>
+
+      <h3>リポジトリエンコーダ：コードを 1 本のベクトルに</h3>
+      <p>リポジトリエンコーダは学習を必要としない 2 段階の埋め込みです。凍結した Qwen3-Embedding-0.6B というモデルを使います。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">ファイル単位の埋め込み</p>
+          <p>各ファイル（または差分単位）を 4096 トークンのチャンク（512 トークン分を重ねる）に分割して埋め込み、平均をとって 1024 次元のファイルベクトルを得ます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">重要度の重み付け</p>
+          <p>各ファイルベクトルに、内容の特異性・ファイルサイズ・パスの重要度を組み合わせた重みを付けます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">リポジトリ単位への集約</p>
+          <p>重み付き平均と最大値プール（max pooling、次元ごとに最大値を取って複数のベクトルを 1 本にまとめる操作）を連結した埋め込みを得ます。これらは学習時にあらかじめ計算しておきます。</p>
+        </li>
+      </ol>
+
+      <h3>Code2LoRA-Static：静的スナップショット向け</h3>
+      <p>静的版は、リポジトリの 1 つの埋め込みを 1 回の計算で LoRA アダプタに変換します。Transformer の各モジュール種別（q, k, v, o, gate, up, down の全 7 種）ごとに、共有の 2 層の多層パーセプトロン（MLP、層を重ねた小さなニューラルネットワーク）と専用の出力ヘッドで LoRA の行列を生成します。アダプタの大きさは学習可能なスケール係数で制御します。生成した LoRA はベース LLM の全層で共有して注入します。LoRA のランクは 16 で、ハイパーネットワークの学習可能パラメータは約 720M です。</p>
+
+      <p>近縁手法の Text2LoRA / Doc2LoRA とアーキテクチャは似ていますが、本手法は次の 2 点が異なります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">駆動する条件入力</p>
+          <p>タスク記述ではなく、数百万トークンから要約した「リポジトリ全体の埋め込み」で駆動されます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">注入するモジュール</p>
+          <p>一部のモジュールだけでなく、全 7 種に LoRA を注入します。</p>
+        </div>
+      </div>
+
+      <h3>Code2LoRA-Evo：進化に追従する</h3>
+      <p>進化対応版は、コミットごとの差分の埋め込みを時系列順にまとめていく再帰型のハイパーネットワークです。集約には GRU という再帰ニューラルネットを使います。各コミットの差分埋め込みを取り込んで内部状態を更新し、その状態から静的版と同じ共有ヘッドで LoRA を生成します。こうして、リポジトリの一生にわたる「アダプタの軌跡（adapter trajectory）」が得られます。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>ここが効率の鍵です。各更新はリポジトリ全体を再エンコードせず、保存済みの差分埋め込みに対する <strong>GRU 1 ステップだけ</strong>で済みます。GRU と初期状態の射影器で約 25M のパラメータが加わり、合計で約 745M になります。著者らはこの GRU を「スナップショットの事前知識を置き換えるのではなく補強するもの」と位置づけています。</p>
+        </div>
+      </div>
+
+      <p>学習では、凍結したベース LLM のアサーション補完ペアに対するクロスエントロピー損失を最小化します。進化版は切断 BPTT（truncated backpropagation through time）で最適化し、内部状態を 16 ステップごとに切り離して勾配を止めます。バッチは「まずリポジトリを選び、その中から入出力ペアを選ぶ」順で構成し、データの多いリポジトリへの過適合を防ぎます。</p>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>評価の土台：RepoPeftBench</h3>
+      <p>著者らは評価用に RepoPeftBench という専用ベンチマークを整備しました。GitHub 由来の Python リポジトリ 604 件から成り、pytest または unittest を使い、寛容なライセンスで、最近の活動があるものを選んでいます。2025-04-01 を時間のカットオフとし、512 件を分布内、92 件を分布外（OOD、カットオフ後に作成されたリポジトリ）に分けています。</p>
+      <p>タスクはアサーション補完（assertion completion）です。テストコードのアサーションの期待値、つまり比較演算子の右辺や検証関数の最後の引数を予測します。分布内の 512 件は、学習に一切使わない未知リポジトリで評価する Cross-Repo（CR）と、学習に使うリポジトリ内で評価する In-Repo（IR）に分けます。さらに、1 つのスナップショットから抽出する Static トラックと、コミット履歴を再生して差分も保存する Evolution トラックの 2 系統で評価します。</p>
+      <p>評価には次の 3 つの指標を使います。Exact Match（EM、表記ゆれを吸収した緩い一致）、Edit Similarity（編集の類似度）、CodeBLEU（構文木やデータフローを加味した一致度）です。ベース LLM はすべての手法で共通して Qwen2.5-Coder-1.5B を使います。</p>
+
+      <h3>静的なコードベースでの結果</h3>
+      <p>Static トラックの Cross-Repo（未知リポジトリ）における EM では、Code2LoRA-Static が 63.8% を記録しました。最も強いベースラインである FFT+RAG（全パラメータ学習と検索の併用、53.9%）に対して 9.9 ポイント上回ります。次の表は同じ Static / Cross-Repo 設定での EM 比較です（数値が大きいほど良い）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法（Static / Cross-Repo）</th>
+            <th>系統</th>
+            <th>EM (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>RAG</th>
+            <td>文脈を入力に足す</td>
+            <td>39.7</td>
+          </tr>
+          <tr>
+            <th>依存解決済み文脈</th>
+            <td>文脈を入力に足す</td>
+            <td>48.2</td>
+          </tr>
+          <tr>
+            <th>Text2LoRA（被覆を強化）</th>
+            <td>アダプタ生成</td>
+            <td>45.8</td>
+          </tr>
+          <tr>
+            <th>単一 LoRA</th>
+            <td>ファインチューニング</td>
+            <td>47.4</td>
+          </tr>
+          <tr>
+            <th>全パラメータ学習（FFT）</th>
+            <td>ファインチューニング</td>
+            <td>51.4</td>
+          </tr>
+          <tr>
+            <th>FFT+RAG（最強ベースライン）</th>
+            <td>学習＋検索</td>
+            <td>53.9</td>
+          </tr>
+          <tr>
+            <th>Code2LoRA-Static（提案手法）</th>
+            <td>アダプタ生成</td>
+            <td class="is-best">63.8</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>興味深いのは、入力の与え方とターゲットの被覆を Code2LoRA に揃えて強化した Text2LoRA でも、同じ設定で 45.8% にとどまった点です。著者らはこれを、リポジトリレベル適応の弱点が Text2LoRA の LoRA 生成ヘッドにあることを切り分けた結果だと述べています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＊</span>
+        <div class="callout__body">
+          <p>In-Repo（学習に使ったリポジトリ内）では Code2LoRA-Static が 66.2% に達し、リポジトリ単位で個別に学習する Per-repo LoRA の上限（64.0%）に、<strong>リポジトリ単位の学習を一切せずに</strong>匹敵しました。</p>
+        </div>
+      </div>
+
+      <h3>進化するコードベースでの結果</h3>
+      <p>Evolution トラックでは、タスクが大きく難化します。素のベース LLM の Cross-Repo EM は 45.7% から 31.5% へ低下し、文脈を入力に足す系統は崩れ、RAG は素のモデルすら下回りました。</p>
+      <p>この難しい条件で Code2LoRA-Evo は Cross-Repo / In-Repo の両分割で最も高いスコアを記録しました。次の表は進化トラックの EM 比較です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法（Evolution トラック）</th>
+            <th>Cross-Repo EM (%)</th>
+            <th>In-Repo EM (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>素のベース LLM</th>
+            <td>31.5</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <th>単一 LoRA</th>
+            <td>55.1</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <th>Per-repo LoRA（上限）</th>
+            <td>—</td>
+            <td>64.2</td>
+          </tr>
+          <tr>
+            <th>Code2LoRA-Static</th>
+            <td>55.7</td>
+            <td>60.6</td>
+          </tr>
+          <tr>
+            <th>Code2LoRA-Evo（提案手法）</th>
+            <td class="is-best">60.3</td>
+            <td class="is-best">64.5</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Cross-Repo では単一 LoRA（55.1%）に対して 5.2 ポイント上回り、In-Repo ではリポジトリ単位学習なしで Per-repo LoRA の上限（64.2%）を超えました。なお Code2LoRA-Static は同トラックで 55.7% / 60.6% にとどまり、コミット由来の入力では静的版が苦戦することも示されています。</p>
+
+      <h3>分布外での結果と注意点</h3>
+      <p>カットオフ後に作られた 92 リポジトリの OOD テストでは、Code2LoRA-Evo が 74.1% で最高でした。Code2LoRA-Static（72.2%）や単一 LoRA（72.3%）を上回ります。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>ただし著者らは注意点も明記しています。OOD のアサーションは予測対象が系統的に短く（中央値 7 文字に対し、CR/IR テストは 12〜13 文字）、これが EM のスコアを全体的に押し上げています。そのため比較はこの表の中だけにとどめるべきだとし、その上で Code2LoRA-Evo が次点のアダプタ系統を約 1.8 ポイント上回り、Edit Similarity や CodeBLEU でも一貫していると述べています。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、リポジトリの知識を「長い入力文脈」として与えるより、「パラメータとして注入し、ソフトウェアの進化を追って更新する」ほうが良い、という主張を専用ベンチマークで裏づけた点にあります。推論時に文脈トークンを追加で消費しないため、入力長やコストの問題を避けられます。著者らは Code2LoRA を、より強力で低コストな AI コードアシスタントの構成要素と位置づけています。</p>
+
+      <p>一方で、論文は次の限界も率直に認めています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">評価範囲が限定的</p>
+          <p>Python リポジトリのみ、凍結したバックボーン 1 種（Qwen2.5-Coder-1.5B）、下流タスクもアサーション補完 1 種に限られます。原理的には言語・タスクに依存しない設計ですが、他言語・他モデル・他タスクへの実証は今後の課題です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">OOD のスコアの押し上げ</p>
+          <p>74.1% という OOD の EM は、予測対象が短いことで部分的に高く出ている可能性があり、著者らは OOD 内での比較（約 1.8 ポイント差）を強調しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">指標の表層性</p>
+          <p>Exact Match は機能的な等価性を見落とします。Edit Similarity や CodeBLEU、一部での実行プローブで補っていますが、全生成物を実行して意味的に評価することは計算予算の都合で範囲外です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">モデルサイズ</p>
+          <p>学習可能パラメータの大半をハイパーネットワークが占めます（静的版で約 720M、進化版で約 745M）。知見は 1.5B 規模で最も直接的に裏づけられており、はるかに大きなモデルで再帰的な集約が必要十分かは未解決です。</p>
+        </div>
+      </div>
+
+      <p>また著者らは潜在的なリスクにも触れています。private なリポジトリを入力した際に、学習リポジトリのアサーションが逐語的に表面化すると帰属の問題が生じうるため、ライセンスを考慮したフィルタや人手レビューなしの本番運用の安全性は主張しないとしています。コードと RepoPeftBench、ハイパーパラメータは採択後に公開予定です。</p>
+
+      <h2>まとめ</h2>
+      <p>Code2LoRA は、リポジトリの知識を毎回の入力ではなく LoRA アダプタの重みとして注入し、それをハイパーネットワークで自動生成する手法です。静的版と、コミット差分で安く更新する進化版を備え、専用ベンチマークで既存手法を上回りました。ソフトウェアの絶え間ない変化に追従しながら、推論コストを抑える方向性を示した研究といえます。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>LoRA（Low-Rank Adaptation）</dt>
+        <dd>モデルの重みの更新を低ランクの行列に分解し、少ないパラメータで効率よくモデルを適応させる手法。本論文ではベース LLM の重みに加える形で注入します。</dd>
+
+        <dt>ハイパーネットワーク（hypernetwork）</dt>
+        <dd>条件となる入力信号から、別のネットワークのパラメータを生成するネットワーク。本論文ではリポジトリの埋め込みから LoRA の重みを生成します。</dd>
+
+        <dt>リポジトリレベル文脈（repository-level context）</dt>
+        <dd>import や API、プロジェクト固有の規約など、コード補完に必要なリポジトリ全体に散らばった知識のこと。</dd>
+
+        <dt>推論時トークンオーバーヘッドゼロ（zero inference-time token overhead）</dt>
+        <dd>知識を入力トークンとして毎回与えず重みに注入するため、推論時に文脈トークンを追加で消費しないこと。</dd>
+
+        <dt>アサーション補完（assertion completion）</dt>
+        <dd>テストコードのアサーションの期待値を予測するタスク。本ベンチマークの評価タスクです。</dd>
+
+        <dt>Cross-Repo（CR）/ In-Repo（IR）</dt>
+        <dd>未知のリポジトリへの汎化を測る分割（CR）と、学習に使ったリポジトリ内で評価する分割（IR）。</dd>
+
+        <dt>OOD（out-of-distribution、分布外）</dt>
+        <dd>時間のカットオフ後に作成された 92 リポジトリによる、時間的な保留テスト。</dd>
+
+        <dt>GRU</dt>
+        <dd>進化版が時系列のコード差分埋め込みをまとめるのに使う再帰ニューラルネット。各コミットで内部状態を更新します。</dd>
+
+        <dt>アダプタの軌跡（adapter trajectory）</dt>
+        <dd>コミット履歴に沿って内部状態が更新されることで得られる、リポジトリの一生にわたる LoRA アダプタの時系列。</dd>
+
+        <dt>切断 BPTT（truncated backpropagation through time）</dt>
+        <dd>進化版の学習で、内部状態を一定ステップごとに切り離して勾配を止める最適化手法。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Code2LoRA: Hypernetwork-Generated Adapters for Code Language Models under Software Evolution</p>
+      <a href="https://arxiv.org/abs/2606.06492" target="_blank" rel="noopener noreferrer">arXiv:2606.06492 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
