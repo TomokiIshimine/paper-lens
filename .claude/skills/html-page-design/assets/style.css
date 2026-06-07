@@ -311,6 +311,246 @@ a:hover { text-decoration: underline; }
 }
 
 /* ============================================================================
+ * ビジュアルコンポーネント（インフォグラフィック風リッチ HTML 用）
+ * ----------------------------------------------------------------------------
+ * html-page-design SKILL.md の `## ビジュアルコンポーネント規約` で定義する
+ * クラス契約の実体。article-html-author が確定 Markdown を視覚化する際に使う。
+ * すべて既存のデザイントークン（配色・余白スケール・タイポ）を流用し、量産時
+ * のデザイン統一を保つ。記事 HTML 側に <style> でデザインを書かない。
+ * 「リッチだが崩れない」ため、各コンポーネントにレスポンシブ・はみ出し防止を
+ * 適用する（狭幅でカードグリッドは段組み解除、比較表は横スクロール可能）。
+ * ========================================================================== */
+
+/* ---- 要点カード：複数の要点・特徴を並列に提示 -------------------------- */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: var(--space-md);
+  margin: var(--space-md) 0;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 3px solid var(--color-accent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  min-width: 0;   /* グリッド内のはみ出し防止 */
+}
+.card__title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-heading);
+  line-height: var(--line-height-head);
+  margin: 0;
+}
+.card p { margin: 0; }
+.card p + p { margin-top: var(--space-xs); }
+
+/* ---- 数値ハイライト：主要結果数値・指標を強調 -------------------------- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-md);
+  margin: var(--space-md) 0;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.25rem;
+  padding: var(--space-md) var(--space-sm);
+  background: var(--color-accent-soft);
+  border-radius: var(--radius);
+  min-width: 0;
+}
+.stat__value {
+  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.5rem);
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--color-accent);
+  letter-spacing: 0.01em;
+  font-feature-settings: "tnum";   /* 数字の等幅で桁揃え */
+  overflow-wrap: anywhere;
+}
+.stat__label {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  line-height: var(--line-height-head);
+}
+
+/* ---- 比較表：手法間・条件間の対比を表で示す ---------------------------- */
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-md) 0;
+  font-size: 0.9375rem;
+  display: block;          /* 狭幅で横スクロールを成立させる */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.compare-table th,
+.compare-table td {
+  border: 1px solid var(--color-border);
+  padding: 0.6em 0.9em;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;     /* セル内改行を避け、はみ出し時は横スクロール */
+}
+.compare-table thead th {
+  background: var(--color-accent-soft);
+  color: var(--color-heading);
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+}
+.compare-table tbody th {
+  background: var(--color-bg);
+  color: var(--color-heading);
+  font-weight: 700;
+}
+.compare-table tbody tr:nth-child(even) { background: var(--color-bg); }
+/* 強調セル（最良値など）を控えめにハイライト */
+.compare-table .is-best {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+/* ---- タイムライン／ステップ：手順・時系列・処理段階 -------------------- */
+.timeline {
+  list-style: none;
+  margin: var(--space-md) 0;
+  padding: 0;
+  position: relative;
+}
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.5rem;
+  top: 0.4rem;
+  bottom: 0.4rem;
+  width: 2px;
+  background: var(--color-accent-soft);
+}
+.timeline__step {
+  position: relative;
+  padding: 0 0 var(--space-md) var(--space-lg);
+  min-width: 0;
+}
+.timeline__step:last-child { padding-bottom: 0; }
+.timeline__step::before {
+  content: "";
+  position: absolute;
+  left: 0.125rem;
+  top: 0.35rem;
+  width: 0.85rem;
+  height: 0.85rem;
+  background: var(--color-surface);
+  border: 3px solid var(--color-accent);
+  border-radius: 50%;
+}
+.timeline__step-title {
+  font-weight: 700;
+  color: var(--color-heading);
+  line-height: var(--line-height-head);
+  margin: 0 0 0.2rem;
+}
+.timeline__step p { margin: 0; }
+
+/* ---- 処理フロー・ダイアグラム：インライン SVG / CSS 図形のラッパ ------- */
+.diagram {
+  margin: var(--space-md) 0;
+  padding: var(--space-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow-x: auto;            /* 図がはみ出す場合は横スクロール */
+  text-align: center;
+}
+.diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;                /* 縦横比を維持して縮小 */
+  margin-inline: auto;
+}
+.diagram__caption {
+  margin-top: var(--space-xs);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+/* インライン SVG の基本スタイル（線・塗り・ラベル文字）。
+   個別 SVG で presentation 属性により上書き可能。 */
+.diagram svg text {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  fill: var(--color-text);
+}
+.diagram .node {           /* ノード（箱）の塗りと枠 */
+  fill: var(--color-accent-soft);
+  stroke: var(--color-accent);
+  stroke-width: 1.5;
+}
+.diagram .node-label { fill: var(--color-heading); font-weight: 700; }
+.diagram .edge {           /* 接続線 */
+  fill: none;
+  stroke: var(--color-text-muted);
+  stroke-width: 1.5;
+}
+.diagram .edge-arrow { fill: var(--color-text-muted); }
+.diagram .edge-label { fill: var(--color-text-muted); font-size: 12px; }
+
+/* ---- アイコン的強調・補足：注意・ポイント・ラベル --------------------- */
+.callout {
+  display: flex;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-accent-soft);
+  border-left: 4px solid var(--color-accent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--color-text);
+}
+.callout__icon {
+  flex: 0 0 auto;
+  font-size: 1.25rem;
+  line-height: var(--line-height-body);
+  color: var(--color-accent);
+}
+.callout__body { min-width: 0; }
+.callout__body > :first-child { margin-top: 0; }
+.callout__body > :last-child { margin-bottom: 0; }
+/* 補助アクセント版（用語・補足など） */
+.callout--note {
+  background: var(--color-surface);
+  border-left-color: var(--color-accent-2);
+}
+.callout--note .callout__icon { color: var(--color-accent-2); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.15em 0.6em;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.6;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.badge--accent-2 {
+  background: var(--color-surface);
+  color: var(--color-accent-2);
+  border: 1px solid var(--color-accent-2);
+}
+
+/* ============================================================================
  * 記事一覧トップ（docs/index.html）
  * ========================================================================== */
 .index { padding-block: var(--space-lg) var(--space-xl); }
@@ -402,4 +642,11 @@ a:hover { text-decoration: underline; }
   }
   .article-card__thumb img { aspect-ratio: 16 / 9; height: auto; }
   .article-card__body { padding: 0 var(--space-md) var(--space-md); }
+
+  /* ビジュアルコンポーネントの狭幅対応：カード／数値は 1 列に段組み解除 */
+  .card-grid { grid-template-columns: 1fr; }
+  .stat-grid { grid-template-columns: 1fr 1fr; gap: var(--space-sm); }
+  .stat { padding: var(--space-sm) var(--space-xs); }
+  /* 比較表は引き続き横スクロール（.compare-table の display:block で成立） */
+  .timeline__step { padding-left: var(--space-md); }
 }

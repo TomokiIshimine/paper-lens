@@ -32,7 +32,7 @@ arXiv から新着論文を取得し、未解説の 1 本を選定して日本�
 - メイン側の作法は `/workflow-orchestration` の契約に従う。横断的なメインの作法（限定 Read 契約・絶対パス引き回し・サブエージェント実行モード・戻り値形式・整合チェック失敗時の中断ポリシー・メインがしないこと）は本スキルでは **再掲しない**。
 - 観点別並列レビュー → FAIL ファイル再生成 → 合格まで反復（**Step 5 の記事本文検証ループ・Step 6 のインフォグラフィック検証ループの両方**）の契約は `/multi-aspect-review` に従う。観点別レビュアー／再生成 author／オーケストレーターの 3 役の責務・PASS/FAIL ループ手順は本スキルでは **再掲しない**。
 - インフォグラフィックの設計・品質基準・画像内テキストの根拠規約・スタイル統一仕様・各観点（`image-fact` / `image-coverage` / `image-legibility` / `image-consistency`）の判定基準は `/infographic-design`（How スキル）を単一の真実源とする。Step 6 の生成側（`article-image-generator`）・レビュー側（`image-reviewer`）が同一基準を共有し、本スキルでは判定基準を **再掲しない**。
-- HTML デザイン・レイアウト・コンポーネント・共有外部 CSS（`docs/assets/style.css`）・記事一覧トップ `index.html` 規約・公開元ディレクトリ規約・公開手順（add→commit→push・`origin main` 固定・force 禁止）・HTML レビューの観点別判定基準（`design-consistency` / `readability`）は `/html-page-design`（How スキル）を単一の真実源とする。Step 8〜10 の生成側（`article-html-author`）・レビュー側（`html-reviewer`）が同一基準を共有し、本スキルでは判定基準・CSS 実体・公開手順を **再掲しない**（`/infographic-design` の記述と同型）。Step 9 の HTML レビューループ自体は `/multi-aspect-review` 契約に従う（Step 5/6 と同一参照）。
+- HTML デザイン・レイアウト・コンポーネント・共有外部 CSS（`docs/assets/style.css`）・記事一覧トップ `index.html` 規約・公開元ディレクトリ規約・公開手順（add→commit→push・`origin main` 固定・force 禁止）・HTML レビューの観点別判定基準（`design-consistency` / `readability` / `infographic-richness`）は `/html-page-design`（How スキル）を単一の真実源とする。Step 8〜10 の生成側（`article-html-author`）・レビュー側（`html-reviewer`）が同一基準を共有し、本スキルでは判定基準・CSS 実体・公開手順を **再掲しない**（`/infographic-design` の記述と同型）。Step 9 の HTML レビューループ自体は `/multi-aspect-review` 契約に従う（Step 5/6 と同一参照）。
 - 本ワークフローは設計サイクル（draft → ユーザー承認 → apply → revise）および承認ゲートを **持たない** ため、`/proposal-design-cycle` は参照しない。
 - 以下の各セクションでは、本ワークフロー固有の差分（自スキル内での `<run-id>` 採番・限定 Read 契約の固定見出しテーブル・反復制御の差分など）のみを列挙する。
 
@@ -145,7 +145,7 @@ Step 7 で `output/<記事>.md`（Markdown・dedup 照合キー）が確定し�
 
 `/multi-aspect-review` 契約と「検証ループ共通の再生成規約」に従う。各観点の判定基準は `/html-page-design` の `## 観点別判定基準` に集約する（本スキルには判定基準を再掲しない）。本文ファクトは Step 5 で確定済みのため HTML 工程では再点検しない。本 Step 固有の差分は以下。
 
-- **観点リスト**: `<html-review-aspects>` = `design-consistency` / `readability` の 2 観点。**宣言順** = `design-consistency` → `readability`。観点識別子のリストと宣言順・反復制御は本 SKILL.md が保持する。
+- **観点リスト**: `<html-review-aspects>` = `design-consistency` / `readability` / `infographic-richness` の 3 観点。**宣言順** = `design-consistency` → `readability` → `infographic-richness`。観点識別子のリストと宣言順・反復制御は本 SKILL.md が保持する。各観点の判定基準実体は `/html-page-design` の `## 観点別判定基準` に集約する（本 SKILL.md に再掲しない）。
 - **対象ファイル**（author の担当ファイル）: 対象記事 HTML `docs/articles/<記事スラッグ>.html`（再生成 author = `article-html-author`）。
 - **反復上限**: **2 周**（Step 5/6 の 5 周より低コスト）。
 - **並列レビュー**: 各観点について `html-reviewer` を単一メッセージ内で並列 spawn する。
