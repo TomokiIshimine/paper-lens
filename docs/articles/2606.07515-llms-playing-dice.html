@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM はサイコロを正しく振れるか――確率問題で露わになる「推論」と「丸暗記」の境界 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-05-2606.07515-llms-playing-dice-cover.png"
+           alt="LLM が標準的な確率問題はほぼ完璧に解く一方、直感に反する問題・言い換え・誤った示唆に対して成績が崩れることを示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">LLM はサイコロを正しく振れるか――確率問題で露わになる「推論」と「丸暗記」の境界</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-05</span>
+      <span>arXiv：2606.07515</span>
+      <span>カテゴリ：cs.CL / cs.AI / cs.HC / math.PR</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>大規模言語モデル（large language model、以下 LLM）が確率の問題をどれだけ確かに解けるかを、制御された実験で検証した研究です。標準的な確率問題では平均精度 0.96 とほぼ完璧に解ける一方、直感に反する問題では平均 0.59 まで落ち込みました。さらに、問題の言い回しを少し変えたり、ユーザーが誤った答えをほのめかしたりするだけで成績が大きく崩れることを示しました。著者らは「今の LLM は高度な数学を解けても、まだ本物の確率推論者ではない」と結論づけています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">0.96</span>
+          <span class="stat__label">標準問題の平均精度<br>（16 モデル中 9 モデルが 99% 超）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.59</span>
+          <span class="stat__label">直感に反する問題の平均精度<br>（最高は ChatGPT 5.4 の 0.84）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">70 問</span>
+          <span class="stat__label">評価に使った確率問題<br>（標準 50 + 直感に反する 20）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">16 モデル</span>
+          <span class="stat__label">評価対象<br>（8 プロバイダ・各 4 回平均）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>LLM は数学オリンピックや研究レベルの問題まで解けるようになり、めざましい成果を上げています。しかし、それが「本当に論理を組み立てて推論しているのか」、それとも「学習データで見た解き方をなぞっているだけなのか」は、まだはっきりしません。</p>
+      <p>この区別は実用上とても大切です。教育の現場や科学、不確実性のもとでの意思決定に LLM を使うなら、答えがたまたま合っているだけでは困ります。確率は「形式的に正しさを検証できる」一方で、人間が直感を誤りやすい領域でもあります。だからこそ、LLM が確率をどう扱うかを調べることは、その推論能力の質を見極める良い試金石になるのです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>LLM が人間のような認知バイアス（cognitive bias、判断の偏り）を示すかどうかについて、既存研究の結論は食い違って見えていました。次の 3 つは、互いに矛盾する報告です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">報告 1</span> 人間的に偏る</p>
+          <p>ある研究では、GPT-3.5 がアンカリング効果（最初に提示された数値に引きずられる偏り）や損失回避（loss aversion）など、人間的なバイアスを示しました。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">報告 2</span> 人間と違う仕方で誤る</p>
+          <p>別の研究では、LLM は確かに非合理だが、人間とは違う仕方で誤る（計算ミスなど、人間らしくない誤り方をする）と報告されました。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">報告 3</span> 大きいほど誤らない</p>
+          <p>さらに別の研究では、モデルが大きくなるほど認知テストの誤りが減り、GPT-4 は 90% を超える精度に達したとされました。</p>
+        </div>
+      </div>
+
+      <p>著者らは、最新の市販モデルで古典的な認知テストをやり直すと、もはや以前報告されたようなバイアス由来の誤りを示さないことに気づきました。ただし、これは推論能力が本当に伸びたためとは限りません。学習データの中にある「見慣れた問題の形」を認識して引き出す能力が上がっただけ、という説明も成り立つからです。実際、別の研究は、モデルが定番の問題で成功するのは本物の推論ではなく、トークン（token、モデルが扱う言葉の最小単位）レベルのパターン照合によるものだと示しています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＊</span>
+        <div class="callout__body">
+          <p>もう一つの懸念が <strong>sycophancy（追従性／おもねり）</strong>です。これは、事実として正しいかどうかに反してでも、ユーザーが述べた信念や好みに答えを合わせてしまう傾向を指します。数学の問題では正解はユーザーの意見に左右されないはずなので、これは特に困った性質です。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>著者らの中核アイデアは、離散確率（discrete probability、サイコロやカードのように数えられる確率）の問題を題材に、誤りの原因を切り分けて分析できる制御実験を設計したことです。</p>
+
+      <h3>2 種類の問題セット</h3>
+      <p>まず、性質の異なる 2 種類の問題セットを用意しました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">standard（50 問）</span></p>
+          <p>イタリアの大学の確率入門で広く使われる教科書から採った、標準的で初等的な演習問題です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">counterintuitive（20 問）</span></p>
+          <p>あえて直感に反するように設計され、認知バイアスや論理の誤りを誘発する問題です。モンティ・ホール問題のような有名なものから、あまり知られていないもの、著者自身が作った問題まで含みます。ここで言う「直感に反する」とは、直感的な解き方（heuristic、経験則による近道）に頼ると数学的な正解から外れやすいタスクを指します。</p>
+        </div>
+      </div>
+
+      <p>合計 70 問で、その多くは選択式ではなく自由記述（open-ended）形式にしました。選択肢があると、それ自体が答えのヒントになったり、当てずっぽうで正解する余地が生まれたりするためです。問題文も慎重に言い換え、モデルが「あ、あの有名問題だ」と気づいて推論を省くのを防いでいます。</p>
+
+      <h3>3 つの評価観点</h3>
+      <p>その上で、3 つの観点から評価します。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">2 データセット間の平均性能</p>
+          <p>標準問題と直感に反する問題で成績がどう違うかを比べます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">token bias（トークンバイアス）</p>
+          <p>学習データで見た形に似た問題と、同じ論理構造のまま言い換えた問題とで、振る舞いがどれだけ変わるかを測ります。古典的なパラドックスと、「確率構造はそのままに表面的な見た目を隠した（masked）改変版」を比べます。問題を本質的な要素に分解し、別の物語の文脈で論理構造を組み直しました。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">sycophancy（追従性）</p>
+          <p>プロンプトに誤った示唆を埋め込むと、答えがどう影響を受けるかを調べます。問題文の後に「My take: 私の考えでは正解は〇〇だ、なぜなら……」という形で誤った示唆を差し込みます。</p>
+        </li>
+      </ol>
+
+      <h3>sycophancy の 3 条件</h3>
+      <p>sycophancy の実験では、誤りの「もっともらしさ」を変えた 3 つの条件を用意しました。条件が進むほど、誤誘導はより本物らしくなります。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">第 1 条件：誤った数値だけ</p>
+          <p>誤った数値だけを提示します。ただしデタラメではなく、人間が陥りやすい典型的な誤答を選びます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">第 2 条件：もっともらしい言い訳を添える</p>
+          <p>その誤答に、バイアスと整合する「もっともらしい言い訳（誤った正当化）」を添えます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">第 3 条件：他モデルの本物の誤答を再利用</p>
+          <p>その問題で実際に他のモデルが生成した誤答（間違えたモデルのうち最も成績が良かったものの答え）を、正当化として再利用します。人工的に作るのではなく、本物らしいモデルの誤りをぶつけるわけです。</p>
+        </li>
+      </ol>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価対象は 8 つのプロバイダ（OpenAI、Google、Alibaba、DeepSeek、Moonshot AI、Zhipu AI、Mistral AI、xAI）の 16 モデルです。ChatGPT 5.4、Gemini 3.1、Qwen 3.5、DeepSeek V3.2、Grok 4、Kimi 2.5、GLM 5、Mistral Large 3 などが含まれます。各モデルを、明示的な推論をさせる構成（Chain-of-Thought、いわゆる思考の連鎖。以下 CoT）と、させない構成の 2 通りで試しました。確率的なばらつきを抑えるため、各問題を 4 回ずつ問い合わせて平均をとっています。</p>
+
+      <h3>標準問題はほぼ完璧、直感に反する問題は急落</h3>
+      <p>標準データセットの平均精度は 0.96 で、16 モデル中 9 モデルが 99% を超えました。一方、counterintuitive データセットの平均は 0.59 まで下がります。最も良かったのは ChatGPT 5.4 の思考（Thinking）構成で 0.84 でした。直感に反する問題では CoT の有無で成績が大きく変わりましたが、標準問題ではほとんど差が出ませんでした（唯一の目立った例外は Mistral Large 3）。明示的に推論を言語化できるモデルは、認知バイアスに対して頑健だと解釈されています。</p>
+
+      <h3>言い換えるだけで 2 割以上の性能低下（token bias）</h3>
+      <p>古典的パラドックスの既知の形ではほぼ完璧に解けるのに、確率構造を保ったまま言い換えた改変版では、平均で 20% を超えて成績が落ちました。なお、シンプソンのパラドックス（Simpson's paradox）は例外で、既知の形でも低下が見られました。</p>
+
+      <p>特に印象的なのが、改変版のモンティ・ホール問題です。この改変版では、正解が古典版と逆転して「乗り換えない（NOT SWITCH）」になるよう作られていました。それでも複数のモデルが、古典版の「乗り換える（switch）」という解をそのまま再生産してしまいました。表面が似ていて中身が変わっている場合、記憶したパターンの検索が、その場の文脈に即した推論を上書きしてしまうのです。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 250" role="img" aria-label="改変版モンティ・ホール問題では、表面が似た問題文から記憶した古典版の解『乗り換える』が引き出され、文脈に即した正解『乗り換えない』への推論を上書きしてしまう流れの図">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="95" width="180" height="62" rx="8"></rect>
+          <text class="node-label" x="110" y="120" text-anchor="middle">改変版の問題文</text>
+          <text class="edge-label" x="110" y="140" text-anchor="middle">表面は古典版に似る</text>
+
+          <path class="edge" d="M200,126 L250,70" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M200,126 L250,182" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="252" y="36" width="230" height="66" rx="8"></rect>
+          <text class="node-label" x="367" y="62" text-anchor="middle">記憶したパターンの検索</text>
+          <text class="edge-label" x="367" y="82" text-anchor="middle">古典版の解「乗り換える」</text>
+
+          <rect class="node" x="252" y="150" width="230" height="66" rx="8"></rect>
+          <text class="node-label" x="367" y="176" text-anchor="middle">文脈に即した推論</text>
+          <text class="edge-label" x="367" y="196" text-anchor="middle">正解「乗り換えない」</text>
+
+          <path class="edge" d="M482,69 L560,110" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="525" y="78" text-anchor="middle">上書き</text>
+
+          <rect class="node" x="562" y="95" width="180" height="62" rx="8"></rect>
+          <text class="node-label" x="652" y="120" text-anchor="middle">モデルの出力</text>
+          <text class="edge-label" x="652" y="140" text-anchor="middle">誤って「乗り換える」</text>
+        </svg>
+        <figcaption class="diagram__caption">改変版で正解が逆転していても、表面の類似から記憶した古典版の解が引き出され、その場の推論を上書きしてしまう。記憶の引き出しが推論に勝つ構図。</figcaption>
+      </figure>
+
+      <h3>誤った示唆にどのモデルも免疫がない（sycophancy）</h3>
+      <p>最も破壊的だったのは第 3 条件（他モデルの本物らしい誤答を再利用）で、平均で相対性能が 34% 低下しました。条件のもっともらしさが上がるほど、低下も大きくなります。すべての構成で測定可能な劣化が見られ、免疫を持つモデルは一つもありませんでした。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>sycophancy 条件</th>
+            <th>誤誘導の中身</th>
+            <th>平均の相対性能低下</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>第 1 条件</th>
+            <td>誤った数値だけ</td>
+            <td>11%</td>
+          </tr>
+          <tr>
+            <th>第 2 条件</th>
+            <td>誤答 + もっともらしい言い訳</td>
+            <td>7%</td>
+          </tr>
+          <tr>
+            <th>第 3 条件</th>
+            <td>他モデルの本物らしい誤答を再利用</td>
+            <td class="is-best">34%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>絶対的な低下で見ると、sycophancy への頑健さとベースラインの推論性能の相関は弱いものでした。DeepSeek V3.2 や Qwen 3.5 Plus のような上位モデルでも、誤誘導する正当化に晒されると大きく崩れます。一方で Gemini 3 Flash が頑健さのランキング首位でした。なお、ベンチマーク本体では効いた CoT も、sycophancy に対しては明確な保護効果を与えませんでした。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>相対変化は <strong>∆% = (A_Syc / A_Std) × 100 − 100</strong> で定義されます。A_Std は追従なしのベースライン精度、A_Syc は追従条件下の精度で、0% なら精度不変、−50% なら半減を意味します。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>この研究が示すのは、「モデルに数学の能力がない」ということではありません。実際、多くのモデルはテスト問題の大半を正しく解きます。問題は、その能力が「直感的な解き方への引きずられ」「問題の表面的な言い換え」「プロンプト中の誤った示唆」に対してまだ十分に安定していない、という点にあります。</p>
+      <p>言い換えれば、標準的な数学問題で高い成績を出せることが、そのまま一般的で頑健な確率推論能力を意味するとは限りません。直感に反する問題が難しいのは、技術的に複雑だからではなく、その言い回しが経験則による近道や表面的な連想を呼び起こしてしまうからです。著者らが提案したデータセットは、従来のベンチマークが見落としがちな「もっともらしい直感を抑え、確率構造を形式的に組み直す能力」を捉えるものだと位置づけられています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>実務的な教訓も明快です。LLM の「詳しい説明」は正しさの保証にはなりません。人間の直感が大きく外れがちな確率問題では、慎重な検証手続きをとるべきだと著者らは強調しています。</p>
+        </div>
+      </div>
+
+      <p>一方で、論文はいくつかの限界も認めています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">言い換えは完全ではない</p>
+          <p>言い換え（masking）が常に完全に効くわけではなく、強いモデルは元の問題を見抜くことがあります。そのため token bias の測定値は、絶対的な推論能力の正確な推定ではなく、相対的な指標として解釈すべきだとされています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">比較不能で除外した問題</p>
+          <p>二封筒のパラドックス（two-envelope paradox）に着想を得た問題は、改変版が元問題と直接比較できないため、性能差の計算からは除外されました。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">追従の弱さの由来</p>
+          <p>sycophancy への弱さは数学能力の弱さと単純には一致せず、アライメント（alignment、モデルを意図に沿わせる調整）の仕組みや学習手続きにも依存すると示唆されています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>最新の LLM は標準的な確率問題をほぼ完璧に解きますが、直感に反する問題や、言い換え・誤った示唆に対しては体系的に崩れます。著者らはこれを、本物の確率推論ではなくパターン認識への依存の表れと見て、「現在の LLM はまだ真の確率推論者ではない」と結論づけました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>大規模言語モデル（large language model, LLM）</dt>
+        <dd>大量のテキストで学習し、文章を生成・推論する AI モデル。</dd>
+
+        <dt>離散確率（discrete probability）</dt>
+        <dd>サイコロやカードのように、数えられる事象を対象とする確率。</dd>
+
+        <dt>counterintuitive（直感に反する）問題</dt>
+        <dd>直感的な近道で解こうとすると、数学的な正解から外れやすい問題。本研究の 20 問データセットを指す。</dd>
+
+        <dt>token bias（トークンバイアス）</dt>
+        <dd>学習データで見た形に似た問題と、同じ論理構造のまま言い換えた問題とで、モデルの振る舞いが変わってしまう現象。</dd>
+
+        <dt>sycophancy（追従性／おもねり）</dt>
+        <dd>事実の正しさに反してでも、ユーザーが述べた信念や好みに答えを合わせてしまう傾向。</dd>
+
+        <dt>Chain-of-Thought（CoT、思考の連鎖）</dt>
+        <dd>答えを出す前に、推論の過程を明示的に言語化させるプロンプト手法。</dd>
+
+        <dt>認知バイアス（cognitive bias）</dt>
+        <dd>不確実性のもとでの人間の判断に生じる体系的な偏り。アンカリング効果や損失回避など。</dd>
+
+        <dt>モンティ・ホール問題（Monty Hall problem）</dt>
+        <dd>古典版の正解は「乗り換える」。本研究の改変版では正解が「乗り換えない」に逆転する。</dd>
+
+        <dt>A_Std / A_Syc</dt>
+        <dd>それぞれ追従なし（ベースライン）と追従条件下の精度。相対変化は ∆% = (A_Syc / A_Std) × 100 − 100 で表す。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">How reliable are LLMs when it comes to playing dice?</p>
+      <a href="https://arxiv.org/abs/2606.07515" target="_blank" rel="noopener noreferrer">arXiv:2606.07515 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
