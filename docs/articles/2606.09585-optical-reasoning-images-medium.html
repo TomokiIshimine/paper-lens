@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>考えるのに「言葉」はいらない？ 画像を推論の媒体にする optical reasoning — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09585-optical-reasoning-images-medium-cover.png"
+           alt="言葉で書き出していた途中の考えを画像に置き換え、画像そのものを推論の媒体として使う optical reasoning を表したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">考えるのに「言葉」はいらない？ 画像を推論の媒体にする optical reasoning</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09585</span>
+      <span>カテゴリ：cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>大規模言語モデルの推論は、これまで「途中の考え（思考過程）を言葉で書き出す」やり方が主流でした。この論文は、その途中の考えを<strong>画像として表現し、画像そのものを推論の媒体にする</strong> optical reasoning（光学的推論）を提案します。言葉で考える従来手法と同等以上の精度を保ちつつ、言語タスクで推論トークンを平均 28.57%、マルチモーダルタスクで 16% 削減し、トークンあたりの効率では 1.96 倍を達成したと報告しています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">28.57%</span>
+          <span class="stat__label">言語タスクの<br>推論トークン削減（平均）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">16%</span>
+          <span class="stat__label">マルチモーダルタスクの<br>推論トークン削減（平均）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">1.96×</span>
+          <span class="stat__label">トークンあたりの効率<br>（MAG 指標、テキスト推論比）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">5 モデル</span>
+          <span class="stat__label">評価に使った最先端 MLLM<br>（クローズド 3 + オープン 2）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>近年の言語モデルは、答えを出す前に途中の考えを順を追って書き出すことで精度を上げています。これは思考の連鎖（Chain-of-Thought, CoT）と呼ばれる手法です。さらに高性能な推論モデルは、より長い思考過程を生成して難しい問題に対応しています。</p>
+      <p>ただし、この「長く考える」方針には代償があります。途中の考えを書き出すほど消費するトークン（モデルが処理する文字の単位）が増え、計算コストと処理時間がかさみます。賢くなるほど、ひとつの問題に多くのトークンを使うわけです。</p>
+      <p>この論文は、その途中の考えを「言葉」ではなく「画像」で表してはどうか、と問いかけます。もし画像のほうがコンパクトに同じ情報を運べるなら、精度を落とさずにコストを下げられる可能性があります。専門外の読者にとっても、「考える効率」を上げる新しい切り口として興味深いテーマです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>思考の連鎖（CoT）は当初テキストの世界の手法でしたが、画像も扱えるマルチモーダル大規模言語モデル（MLLM）へと広がってきました。最近では、途中の考えのなかに「言葉による説明（textual rationale）」と「視覚的な根拠（visual evidence）」の両方を交互に含められる、交互モーダル推論（interleaved-modal reasoning）へと発展しています。</p>
+      <p>ただし、論文の整理によると、こうした既存手法はあくまで「言葉による説明を視覚情報で補強する」ものであり、推論の中心は依然としてテキストにありました。画像は補助役にとどまっていたのです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">既存 1</span> 交互モーダル推論</p>
+          <p>言葉による説明を視覚情報で補強する手法。両方を交互に含められるが、推論の中心は依然としてテキストにあり、画像は補助役にとどまる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">既存 2</span> 光学的圧縮</p>
+          <p>長いテキストを画像にエンコードして入力トークンを減らす流れ（代表例 DeepSeek-OCR）。画像は「テキストを圧縮して詰め込む容れ物」として扱われ、推論の主役とは見ていない。</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>そこで著者らは率直な問いを立てます。すなわち「<strong>画像だけ</strong>で、言語タスクとマルチモーダルタスクの両方の推論媒体になり得るか？」という問いです。この論文は、画像を補助でも容れ物でもなく、単独（standalone）の推論媒体として扱う点に新しさがあります。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>中核となる考え方は、途中の考え（rationale）を画像として表現し、その画像を推論の媒体として使うことです。仕組みを大まかな流れで示すと次のようになります。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 820 170" role="img" aria-label="言葉と視覚要素が混ざった途中の考えをレンダラーが 1 枚の画像に描き、視覚エンコーダが視覚推論トークン列に変換し、モデルが元の質問とそのトークンだけで最終的な答えを導く流れの図">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="12" y="55" width="160" height="60" rx="8"></rect>
+          <text class="node-label" x="92" y="80" text-anchor="middle">途中の考え</text>
+          <text class="edge-label" x="92" y="100" text-anchor="middle">説明＋視覚要素</text>
+
+          <path class="edge" d="M172,85 L202,85" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="204" y="55" width="160" height="60" rx="8"></rect>
+          <text class="node-label" x="284" y="80" text-anchor="middle">レンダラー</text>
+          <text class="edge-label" x="284" y="100" text-anchor="middle">1 枚の画像に描く</text>
+
+          <path class="edge" d="M364,85 L394,85" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="396" y="55" width="170" height="60" rx="8"></rect>
+          <text class="node-label" x="481" y="80" text-anchor="middle">視覚エンコーダ</text>
+          <text class="edge-label" x="481" y="100" text-anchor="middle">視覚推論トークン列へ</text>
+
+          <path class="edge" d="M566,85 L596,85" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="598" y="55" width="200" height="60" rx="8"></rect>
+          <text class="node-label" x="698" y="80" text-anchor="middle">モデルが答えを導く</text>
+          <text class="edge-label" x="698" y="100" text-anchor="middle">質問＋視覚トークンだけ</text>
+        </svg>
+        <figcaption class="diagram__caption">言葉と視覚要素が混ざった途中の考えを 1 枚の画像にレンダリングし、それを視覚推論トークン列に変換。モデルは元の質問とこの視覚トークンだけを手がかりに最終的な答えを導く。</figcaption>
+      </figure>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">1. 途中の考えを用意する</p>
+          <p>言葉による説明と視覚要素が混ざった途中の考えを用意する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">2. 画像に描き出す</p>
+          <p>それをレンダラー（描画器）が 1 枚の画像に描き出す。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">3. 視覚推論トークンへ変換</p>
+          <p>その画像を視覚エンコーダ（visual encoder）が「視覚推論トークン（visual reasoning token）」の列に変換する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">4. 答えを導く</p>
+          <p>モデルは元の質問とこの視覚推論トークンだけを手がかりに、最終的な答えを導く。</p>
+        </li>
+      </ol>
+
+      <h3>画像の作り方が異なる 2 つの方式</h3>
+      <p>論文はこの考え方を、画像の作り方が異なる 2 つの方式（variant）で具体化しています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">T-OR</span> 文字組版ベース</p>
+          <p>途中の考えを、コンパクトな組版画像にレンダリングします。描画には組版ソフトの XeLaTeX を使い、元の考えの順序を保ったまま、テキストは文章・数式・表として、視覚要素は画像ブロックとして配置します。</p>
+          <p>ポイントは「推論トークンの予算（budget）」を決め、その範囲内で最適なレイアウト（文字幅・フォントサイズ・行間・余白）を探索する点です。各候補レイアウトは、画像をどれだけ無駄なく埋めているか（fill ratio）から余白の過不足などのペナルティを引いたスコアで評価し、最良のものを選びます。つまり「限られたトークン量に、読める範囲で情報を一番濃く詰める」工夫です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">G-OR</span> 図解ベース</p>
+          <p>途中の考えを、テキスト・図形要素・空間的なレイアウトで整理した 1 枚の統一的な図に変換します。描画には画像生成モデル Nano Banana 2（論文の脚注では Gemini-3-1-Flash-Image として参照）を構造化したプロンプトで用います。</p>
+          <p>考えを推論ステップごとに分解し、各ステップを対応する図のパネルに割り当てる「ステップ整合構成（step-aligned composition）」を採り、重要な説明文や数式は注釈として残しつつ、図形と配置で考えを視覚的に再編成します。T-OR が元の順序をそのまま保つのに対し、G-OR は 1 枚のキャンバスの中で考えを組み直す点が違いです。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価には 5 つの最先端 MLLM（クローズドな GPT-5.1・Gemini 2.5 Flash・Claude Sonnet 4.5、オープンな Kimi K2.5・Qwen3-VL-235B）と、数学推論・科学推論・交互モーダル推論の各データセットが使われました。比較の基準（ベースライン）は、入力だけで直接答える「推論なし（No reasoning）」と、言葉による説明を与える「テキスト推論（Text reasoning）」の 2 つです。テキスト推論がこの設定での上限（upper bound）にあたります。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＊</span>
+        <div class="callout__body">
+          <p>トークン効率の指標には <strong>Marginal Accuracy Gain（MAG）</strong>が使われます。これは「推論なしと比べてどれだけ精度が上がったか」を、使った推論トークン数で割った値で、論文の表では 1,000 トークンあたりの精度向上として示されています。</p>
+        </div>
+      </div>
+
+      <h3>精度を保ちつつ大幅にトークンを削減</h3>
+      <p>主な結果は次のとおりです。</p>
+      <ul>
+        <li><strong>言語タスク</strong>：T-OR は 7 つの「モデル×ベンチマーク」の組み合わせでテキスト推論に並ぶか上回り、平均で推論トークンを 28.57% 削減しました。下回るケースでも、最良設定での平均精度差は 0.027 にとどまり、それでも 20% のトークン削減を達成しています。</li>
+        <li><strong>マルチモーダルタスク</strong>：T-OR は 5 つの組み合わせで並ぶか上回り、平均 16% のトークン削減を実現しました。下回る場合でも平均精度差はわずか 0.014 で、32% の削減です。</li>
+        <li><strong>トークンあたりの効率</strong>：MAG 指標のもとで、視覚推論トークン 1 個はテキスト推論トークン 1 個の 1.96 倍の効率を示しました。</li>
+      </ul>
+
+      <p>代表的な数値として、トークンを 80% 削減した T-OR でも精度をほぼ保ちつつ MAG（トークンあたりの効率）が大きく向上しています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル / 設定</th>
+            <th>平均精度</th>
+            <th>推論トークン</th>
+            <th>MAG</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>GPT-5.1：テキスト推論</th>
+            <td>0.7715</td>
+            <td>257.8</td>
+            <td>1.27</td>
+          </tr>
+          <tr>
+            <th>GPT-5.1：T-OR（80% 削減）</th>
+            <td>0.7404</td>
+            <td>51.8</td>
+            <td class="is-best">5.72</td>
+          </tr>
+          <tr>
+            <th>Gemini 2.5 Flash：テキスト推論</th>
+            <td>0.8309</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <th>Gemini 2.5 Flash：T-OR（80% 削減）</th>
+            <td>0.8279</td>
+            <td>—</td>
+            <td class="is-best">5.95</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>図解ベース G-OR は精度でも上回る</h3>
+      <p>図解ベースの G-OR についても興味深い結果があります。数学データセット AquaRat での比較（Table 2）では、G-OR の精度 0.8150 が最も高く、テキスト推論（0.7323）や T-OR の最良値（0.7835）を上回りました。著者らはこれを、画像が単なるテキストの圧縮容器ではなく、表現力を持つ（expressive）推論媒体であることの示唆だとしています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法（AquaRat）</th>
+            <th>精度</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>テキスト推論</th>
+            <td>0.7323</td>
+          </tr>
+          <tr>
+            <th>T-OR（最良値）</th>
+            <td>0.7835</td>
+          </tr>
+          <tr>
+            <th>G-OR（図解ベース）</th>
+            <td class="is-best">0.8150</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>細かい分析から見えた傾向</h3>
+      <p>さらに細かい分析からは次のような傾向が見えています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">レイアウトの作り方が効く</p>
+          <p>Table 3（GPT-5.1 / GPQA Diamond）。高コントラストな色（赤が最高で 0.7929、緑が最低で 0.7525）やクリーンなフォント、適度に小さい文字幅（2.0 インチが最高）のほうが精度が上がりました。文字が小さすぎる（8pt で 0.7222）と大きく下がります。コンパクトでも読みやすいレイアウトが鍵です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">極端な圧縮にも耐える</p>
+          <p>Table 4（Gemini 2.5 Flash / AquaRat）。1 例あたり平均 1.2 トークン（98.75% 削減）まで切り詰めても精度 0.7008 で推論なし（0.6890）を上回り、平均 7.2 トークン（92.50% 削減）では 0.7992 とテキスト推論を上回る最良値になりました。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">描画エンジンとモデルの相性がある</p>
+          <p>Table 5。最適なレンダラーはモデルごとに異なり、Qwen3-VL-235B と Claude Sonnet 4.5 は XeLaTeX、Gemini 2.5 Flash は Matplotlib が最良でした。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">既存の効率化手法より強い</p>
+          <p>Table 6（AquaRat / Gemini 2.5 Flash）。テキストを切り詰める手法 LLMLingua-2 に対し、T-OR は一貫して上回りました（約 57 トークンで T-OR 0.7835 対 LLMLingua-2 0.6929）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">現実的な設定でも有効</p>
+          <p>Table 7（GPT-5.1 / GPQA Diamond）。モデル自身が途中の考えを生成する「自由推論（free reasoning, 0.6869）」に対し、T-OR は 0.6919 と同等以上でした。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、画像を「補助」や「圧縮容器」ではなく、それ自体が推論を担える媒体として位置づけ、複数の最先端モデルと多様なタスクでその有効性と効率性を実証した点にあります。とくに G-OR の結果は、画像がテキスト・図形・空間配置を 1 枚に統合できる「統一ビジュアルキャンバス」として、推論の構造化に独自の強みを持つ可能性を示しています。</p>
+      <p>一方で、論文は限界も率直に認めています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">モデルごとの見え方の違い</p>
+          <p>Model-dependent perception。optical reasoning の挙動は MLLM ごとに異なり、解像度・レイアウトの密度・描画スタイル・視覚トークンの予算に対する感度がモデル固有です。モデルに合わせて描画方法を変える戦略が今後の課題とされています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">図解の信頼性</p>
+          <p>Reliability of graphical rationales。生成された図には不正確さ（図形の幻覚, graphical hallucination）が混じり得ます。微調整や、視覚的な正しさ・答えの正しさをフィードバックする強化学習による信頼性向上が今後の方向として挙げられています。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>倫理面では、公開済みの推論ベンチマークのみを使い、新規の被験者データは収集していないと明記されています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>この論文は、言葉で書き出していた途中の考えを画像に置き換え、画像そのものを推論の媒体とする optical reasoning を提案しました。組版ベースの T-OR と図解ベースの G-OR の 2 方式を通じて、テキスト推論と同等以上の精度を保ちながら推論トークンを大きく削減できることを、複数の最先端モデルで示しています。「考えるのに必ずしも言葉が最適とは限らない」という発想の転換が、この研究の核心です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>思考の連鎖（Chain-of-Thought, CoT）</dt>
+        <dd>最終回答の前に途中の推論ステップを順に生成させ、モデルの性能を高める手法。</dd>
+
+        <dt>大規模推論モデル（Large Reasoning Models, LRMs）</dt>
+        <dd>より長い推論の道筋を生成して難しいタスクに対応するモデル。</dd>
+
+        <dt>マルチモーダル大規模言語モデル（MLLM）</dt>
+        <dd>テキストに加えて画像なども扱える大規模言語モデル。</dd>
+
+        <dt>交互モーダル推論（interleaved-modal reasoning）</dt>
+        <dd>途中の考えに、言葉による説明と視覚的根拠の両方を交互に含めるマルチモーダル推論。</dd>
+
+        <dt>optical reasoning（光学的推論）</dt>
+        <dd>本論文の中核概念。途中の考えを画像として表し、それを単独の推論媒体として使う考え方。</dd>
+
+        <dt>T-OR（Typographic-based optical reasoning）</dt>
+        <dd>途中の考えをコンパクトな組版画像に描き、トークン予算内で情報密度を最大化する方式（XeLaTeX で実装）。</dd>
+
+        <dt>G-OR（Graphical-based optical reasoning）</dt>
+        <dd>途中の考えをステップごとの複数パネルの図に再編成し、1 枚の統一画像にまとめる方式（Nano Banana 2 で実装）。</dd>
+
+        <dt>光学的圧縮（optical compression）</dt>
+        <dd>長いテキストを画像にエンコードして入力トークンを減らす考え方。</dd>
+
+        <dt>推論トークン</dt>
+        <dd>モデルが推論のために処理する文字の単位。多いほど計算コストと時間がかかる。</dd>
+
+        <dt>Marginal Accuracy Gain（MAG）</dt>
+        <dd>推論なしと比べた精度向上を、使った推論トークン数で割った指標。トークンあたりの効率を測る。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Optical Reasoning: Rethinking Images as an Expressive Reasoning Medium Beyond Text</p>
+      <a href="https://arxiv.org/abs/2606.09585" target="_blank" rel="noopener noreferrer">arXiv:2606.09585 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>最適化手法「Muon」はAdamより頑健で転移しやすい特徴を学ぶ——その正体はロジットマージンと実効ランク — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09658-muon-robust-transferable-features-cover.png"
+           alt="最適化手法 Muon が Adam・SGD より大きなロジットマージンと高い実効ランクを生み、頑健で転移しやすい特徴を学ぶことを示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">最適化手法「Muon」はAdamより頑健で転移しやすい特徴を学ぶ——その正体はロジットマージンと実効ランク</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09658</span>
+      <span>カテゴリ：cs.LG / cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>近年、大規模言語モデル（large language model、以下 LLM）や画像分類器の事前学習で注目されている最適化手法が <strong>Muon（ミューオン）</strong> です。本研究は、この Muon が Adam や SGD よりも「質の良い特徴」を学ぶことを、実験と理論の両面から示しました。ここでいう「質の良い」とは、2 つの性質を指します。1 つは、入力が劣化しても性能が崩れにくい<strong>頑健性（robustness）</strong>。もう 1 つは、別の下流タスクへ移し替えても効きやすい<strong>転移性（transferability）</strong> です。著者らは、この優位性がモデルの隠れ状態（hidden state）における「より大きな<strong>ロジットマージン（logit margin）</strong>」と「より高い<strong>実効ランク（effective rank）</strong>」として現れることを突き止めました。そして、代表的な分類問題で理論的にも証明しています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">約 2 倍</span>
+          <span class="stat__label">Adam・SGD に対する Muon の実時間（wall-clock）高速化<br>（効率の優位性）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">6.88</span>
+          <span class="stat__label">ViT-S での Muon の平均実効ランク<br>（Adam 1.86 の 3 倍超、SGD 3.39 の約 2 倍）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">3.29</span>
+          <span class="stat__label">ViT-S 最終層での Muon のロジットマージン<br>（Adam 3.13 より 5%、SGD 2.74 より 20% 大）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">ρ</span>
+          <span class="stat__label">表現の不均衡比。Muon が最小に抑え<br>大きなマージンと高い実効ランクを得る</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>Muon は、各パラメータを行列として扱い、その勾配行列を「直交化」して更新方向に使う最適化手法です。この行列を意識した設計により、Adam や SGD に対しておよそ 2 倍速い実時間（wall-clock）の高速化を達成し、本番規模の LLM 学習でも実際に使われるようになっています。</p>
+      <p>ただし、これまで Muon の研究は主に「学習が速い」という<strong>効率の優位性</strong>に注目してきました。一方で、「Muon は本当に良い特徴を学ぶのか？ もしそうなら、その良さの正体は何で、モデルの中のどこに現れるのか？」という<strong>特徴学習（feature learning）の優位性</strong>は、はっきりしていませんでした。</p>
+      <p>この研究は、まさにこの空白を埋めるものです。「速いだけでなく、学んだ中身も良い」ことを示し、しかもその良さを、誰でも測れる具体的な量（ロジットマージンと実効ランク）に結びつけた点が重要です。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>最適化手法によって、学習されたモデルの「特徴の質」が変わりうる——この見立て自体は新しくありません。問題は、それを公平かつ定量的に確かめる枠組みが整っていなかったことです。</p>
+      <p>具体的には、次の 3 つを区別して測る必要があります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">課題 1</span> 手法そのものの効果を分離する</p>
+          <p>アーキテクチャやデータ、学習量が違えば、特徴の質が変わるのは当たり前です。最適化手法の違いだけを取り出すには、それ以外の条件を揃える必要があります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">課題 2</span> 頑健性をどう測るか</p>
+          <p>「劣化した入力に強い」とは何を意味するのか、画像と言語の両方で一貫して測れる劣化データが要ります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">課題 3</span> 転移性をどう測るか</p>
+          <p>事前学習で得た特徴が、別タスクへどれだけ効くのかを切り分けて評価する必要があります。</p>
+        </div>
+      </div>
+
+      <p>本研究は、これらを揃えたうえで Muon・Adam・SGD を横並びに比較し、観測された差を理論で裏付けるところまで踏み込みました。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>本研究は新しい最適化手法を提案するものではありません。Muon の特徴学習上の優位性を「頑健性」と「転移性」という 2 つの性質で特徴づけ、それぞれを隠れ状態の具体量（ロジットマージン・実効ランク）に結びつける、解析・評価のフレームワークを提示します。中核は、比較する 3 手法の整理、特徴の質を測る道具立て、公平に比べるための実験設定、そして観測を裏付ける理論解析からなります。以下、順に見ていきます。</p>
+
+      <h3>前提：3つの最適化手法のちがい</h3>
+      <p>まず、比較される 3 つの手法を押さえておきます（重み行列を <code>W</code>、勾配を <code>G</code> とします）。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">SGD</span> 素の勾配降下</p>
+          <p><code>W</code> を勾配の向きにそのまま動かします（<code>W_{t+1} = W_t − η_t G_t</code>）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Adam</span> 成分ごとの適応</p>
+          <p>勾配の移動平均を、その二乗の移動平均で<strong>座標ごと（element-wise）</strong>に割って正規化します。各成分を個別にスケーリングする、いわば「成分単位の適応」です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">Muon</span> スペクトルごとの直交化</p>
+          <p>勾配（のモメンタム推定 <code>M_t</code>）を特異値分解（SVD）<code>M_t = U_t Σ_t V_t^⊤</code> し、特異値 <code>Σ_t</code> を捨てて方向だけを残します（<code>W_{t+1} = W_t − η_t U_t V_t^⊤</code>）。全非ゼロ特異値を 1 に揃える「直交化」を、少数回の Newton–Schulz 反復で近似します。</p>
+        </div>
+      </div>
+
+      <p>特異値分解とは、行列を「どの向きに作用するかを表す成分（<code>U_t</code>・<code>V_t</code>）」と「各方向にどれだけ強く作用するかを表す成分（特異値 <code>Σ_t</code>）」に分解する操作です。Muon はこのうち向きだけを残し、各方向の強さ（特異値）を捨てます。名前の Muon は Momentum Orthogonalized by Newton-Schulz（ニュートン・シュルツによって直交化されたモメンタム）の略です。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 220" role="img" aria-label="Muon の更新方向の作り方を示す図。勾配のモメンタム推定を特異値分解し、特異値を捨てて方向成分だけを残し、Newton–Schulz 反復で直交化した行列を更新方向に使う流れ">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="14" y="80" width="150" height="60" rx="8"></rect>
+          <text class="node-label" x="89" y="106" text-anchor="middle">モメンタム M_t</text>
+          <text class="edge-label" x="89" y="126" text-anchor="middle">勾配の推定</text>
+
+          <path class="edge" d="M164,110 L196,110" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="198" y="80" width="160" height="60" rx="8"></rect>
+          <text class="node-label" x="278" y="102" text-anchor="middle">特異値分解 (SVD)</text>
+          <text class="edge-label" x="278" y="122" text-anchor="middle">M_t = U_t Σ_t V_t⊤</text>
+
+          <path class="edge" d="M358,110 L390,110" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="374" y="98" text-anchor="middle">Σを捨てる</text>
+
+          <rect class="node" x="392" y="80" width="160" height="60" rx="8"></rect>
+          <text class="node-label" x="472" y="102" text-anchor="middle">方向だけ残す</text>
+          <text class="edge-label" x="472" y="122" text-anchor="middle">全特異値を 1 に直交化</text>
+
+          <path class="edge" d="M552,110 L584,110" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="568" y="98" text-anchor="middle">N–S 反復で近似</text>
+
+          <rect class="node" x="586" y="80" width="160" height="60" rx="8"></rect>
+          <text class="node-label" x="666" y="102" text-anchor="middle">更新方向 U_t V_t⊤</text>
+          <text class="edge-label" x="666" y="122" text-anchor="middle">W を更新</text>
+        </svg>
+        <figcaption class="diagram__caption">Muon の更新方向の作り方。Adam が「成分ごと」に正規化するのに対し、Muon は「行列のスペクトル（特異値の構造）」ごとに正規化する。この正規化の単位の違いが、後で見る特徴の質の差につながる。</figcaption>
+      </figure>
+
+      <h3>測る道具：頑健性と転移性、そして隠れ状態の2つの量</h3>
+      <p>著者らは特徴の質を 2 軸で測り、それぞれを隠れ状態の具体量に結びつけました。</p>
+
+      <h3>評価の2軸</h3>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">頑健性</p>
+          <p>劣化させた入力に対して、事前学習済みモデルがどれだけ性能を保てるか。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">転移性</p>
+          <p>事前学習済みモデルを、別の下流タスクへ適応させたときの性能。</p>
+        </div>
+      </div>
+
+      <h3>隠れ状態を覗く2つの量</h3>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">ロジットマージン（logit margin）</p>
+          <p>tuned-lens（Belrose et al., 2023）で各層の隠れ状態を「クラス（語彙）ごとのスコア」へ翻訳し、<strong>正解のスコアと、最も惜しい競合のスコアとの差</strong>をマージンと定義します（<code>γ = 正解のlogit − 正解以外で最大のlogit</code>）。この差が大きいほど、入力が乱れても正解が揺るがない、つまり頑健だと解釈できます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">実効ランク（effective rank, eRank）</p>
+          <p>層の隠れ状態行列の特異値分布から計算する「実際に使われている特徴方向の数」の連続的な尺度です。あわせて <strong>Top-k エネルギー分率</strong>も使います。実効ランクが高く Top-k エネルギーが低いほど、表現が少数の方向に偏らず、多様で均一に分散していることを意味します。多様な表現は別タスクへ移したときに効きやすい、という発想です。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＊</span>
+        <div class="callout__body">
+          <p>公平に比べるため <strong>matched-budget protocol（予算を揃えた手続き）</strong> を使います。アーキテクチャ・データパイプライン・学習予算（エポック数やトークン数）・評価手順をすべての手法で固定し、各手法ごとに<strong>学習率とスケジューラだけ</strong>を独立にチューニングします。これにより「最適化手法そのものの違い」を取り出しています。</p>
+        </div>
+      </div>
+
+      <h3>実験設定</h3>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">画像</span></p>
+          <p>ResNet-18（11M パラメータ）と ViT-S（22M）を ImageNet-1K で物体分類の事前学習。ResNet-18 は 100 エポック、ViT-S は 300 エポック（DeiT に準拠）。評価指標は Top-1 精度です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">言語</span></p>
+          <p>nanoGPT スタイルの因果言語モデル（causal LM）を FineWeb で次トークン予測により事前学習。主設定は 12 層（124M、GPT-2 相当）、大規模化検証として 24 層（354M、GPT-2 Medium 相当）も使用。評価指標は perplexity（パープレキシティ、小さいほど予測が当たっている）。SGD は GPT スタイルをうまく学習できないため、言語実験は <strong>Muon と Adam の比較のみ</strong>です。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>頑健性——劣化した入力に強いのはMuon</h3>
+      <p>頑健性の評価には、劣化させた入力データを使います。画像は <strong>ImageNet-C</strong>（検証画像に Noise・Blur・Weather・Digital の 4 系統 15 種の劣化を 5 段階の強度で適用）、言語は本論文が新しく作った <strong>FineWeb10B-C</strong>（クリーンな検証テキストに Add・Drop・Key・Swap の文字レベルの誤字攻撃を加えたもの、Pruthi et al. 2019 に基づく）です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">ResNet-18</span></p>
+          <p>Muon が平均精度で最高。Noise・Weather で最良ですが、Blur・Digital ではわずかに SGD を下回ります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">ViT-S</span></p>
+          <p>Muon が平均精度で最高、かつ<strong>すべての劣化系統で最良</strong>。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">GPT-2 / GPT-2 Medium</span></p>
+          <p>Muon が一貫して最低の平均 perplexity、かつ<strong>すべての劣化タイプで最低</strong>。</p>
+        </div>
+      </div>
+
+      <p>ここから著者らは、<strong>Muon は画像・言語の両方で、劣化入力に対し最良の全体性能を達成する</strong>（学んだ特徴が頑健である）と結論づけています。なお、CNN では SGD が Adam を上回り、Transformer では Adam が SGD を上回るという、アーキテクチャ依存の傾向も観察されており、これは既存研究（Zhang et al. 2024）と整合します。</p>
+      <p>この頑健性は、隠れ状態のロジットマージンにも現れます。Muon は ViT-S・GPT-2 の大半の層で、Adam・SGD より大きいマージンを得ます。たとえば ViT-S の最終層では、Muon のマージンは 3.29 で、Adam（3.13）より 5%、SGD（2.74）より 20% 大きい値でした。マージンが大きいほど、入力が多少乱れても正解が崩れにくい、というわけです。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>GPT は語彙サイズが 50,257 と非常に大きいため、十分に学習されたモデルではクリーンな評価データでもマージンが負になりうる、と論文は注記しています。</p>
+        </div>
+      </div>
+
+      <h3>転移性——別タスクへ移してもよく効くのはMuon</h3>
+      <p>次に転移性です。評価方法は次のように設計されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">画像</span> 凍結バックボーン上の線形分類</p>
+          <p>事前学習したバックボーン（ResNet-18 / ViT-S）を<strong>凍結</strong>し、その最終手前の層の隠れ状態の上に線形分類器だけを学習。下流タスクは EuroSAT・Food-101・Oxford Flowers-102・Stanford Cars の 4 つ。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">言語</span> 全パラメータ微調整</p>
+          <p>事前学習モデルの全パラメータを supervised fine-tuning（教師あり微調整）。データは Stanford Alpaca・Databricks Dolly 15K・WizardLM Evol-Instruct。<strong>Muon 事前学習モデルも Adam 事前学習モデルも微調整は同じ Adam で行う</strong>ことで、「事前学習に使った最適化手法」の効果だけを切り出しています。</p>
+        </div>
+      </div>
+
+      <p>結果はこうです。</p>
+      <ul>
+        <li><strong>画像</strong>：Muon は両バックボーン × 4 タスクの計 8 通りすべてで、Adam・SGD に匹敵または凌駕しました。ここでも、SGD 事前学習の CNN は Adam 事前学習より転移が良く、Transformer では逆という傾向が見られます。</li>
+        <li><strong>言語</strong>：Muon 事前学習モデルは、3 つの指示チューニングデータすべて・異なるモデルサイズで、Adam より一貫して低い perplexity を達成しました。</li>
+      </ul>
+
+      <p>つまり、<strong>Muon の事前学習表現は、別タスクへより効果的に転移する</strong>という観察です。この転移性は、隠れ状態の実効ランクに現れます。Muon は ViT-S・GPT-2 の大半の層で、Adam より高い実効ランクと低い Top-10 エネルギーを示しました。層ごとに見ると、ViT-S の層 7〜10 では SGD が Muon を上回る区間もありますが、それは深い層では続かず、最終的には Muon が再び上回ります。</p>
+
+      <p>12 層分を平均したスペクトル指標が下表です（eRank は高いほど、Top-10 E は低いほど良い）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル</th>
+            <th>指標</th>
+            <th>Adam</th>
+            <th>SGD</th>
+            <th>Muon</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>GPT-2</th>
+            <td>eRank</td>
+            <td>11.12</td>
+            <td>—</td>
+            <td class="is-best">16.00</td>
+          </tr>
+          <tr>
+            <th>GPT-2</th>
+            <td>Top-10 E</td>
+            <td>0.863</td>
+            <td>—</td>
+            <td class="is-best">0.827</td>
+          </tr>
+          <tr>
+            <th>ViT-S</th>
+            <td>eRank</td>
+            <td>1.86</td>
+            <td>3.39</td>
+            <td class="is-best">6.88</td>
+          </tr>
+          <tr>
+            <th>ViT-S</th>
+            <td>Top-10 E</td>
+            <td>0.964</td>
+            <td>0.920</td>
+            <td class="is-best">0.890</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>（GPT-2 で SGD が「—」なのは、前述のとおり SGD が GPT スタイルを学習できず比較対象外のためです。）特に ViT-S では、Muon の平均実効ランクは Adam の 3 倍超、SGD の約 2 倍に達しています。著者らは、<strong>Muon は Transformer の各層で、よりスペクトル的に多様な（少数の方向に偏らない）表現を学ぶ</strong>とまとめています。</p>
+
+      <h3>理論：なぜMuonが勝つのか</h3>
+      <p>実験で見えた「マージンが大きい・実効ランクが高い」を、著者らは簡単化したモデルで証明しました。</p>
+
+      <h3>理論の設定</h3>
+      <p>題材は、<strong>多成分特徴（multi-component features）</strong>を持つ 1 層の分類問題です。クラスを <code>m</code> ブロック × ブロック内 <code>n</code> クラスに分け、各クラスの特徴を「ブロック共通の成分（強度 a）」と「クラス固有の成分（強度 b）」の 2 成分で表します（<code>0 &lt; a ≤ b</code>）。これは、ImageNet の粗い上位カテゴリ（例：dog）と細かいクラス（例：golden retriever, beagle）のような階層構造を反映した設定です。実際、ViT-S・GPT-2 の入力埋め込みの類似度行列にはブロック状の構造が現れており、この仮定を経験的に裏付けています。</p>
+      <p>学習は重みをゼロから始め、GD・Adam・Muon で最適化します。解析を簡単にするため、ステップ幅を無限小、モメンタムをゼロとし、Muon はスペクトル正規化、Adam は座標ごとの符号正規化に帰着させます。比較は「学習損失がある閾値 ε に最初に到達した時点（matched-loss、損失を揃えた比較）」の分類器で行います。</p>
+
+      <h3>2つの定理</h3>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">Theorem 5.2</span> マージン優位</p>
+          <p>（1）任意の ε で、損失を揃えた時点の Muon は Adam より厳密に大きい平均マージンを得る。（2）学習の大半の区間で、Muon は GD より厳密に大きいマージンを得る。実験で見た「Muon のマージンが大きい」の理論的裏付けです。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Theorem 5.3</span> 実効ランク優位</p>
+          <p>同じ条件で、（1）任意の ε で Muon の表現は Adam より厳密に高い実効ランクを得る。（2）学習の大半で Muon は GD より厳密に高い実効ランクを得る。「Muon の表現が多様」の理論的裏付けです。</p>
+        </div>
+      </div>
+
+      <h3>証明の核心：「不均衡比 ρ」が勝負を決める</h3>
+      <p>カギは <strong>representation imbalance ratio（表現の不均衡比、<code>ρ = v/u</code>）</strong> という 1 つの量です。これは、2 つの補完的な表現成分のバランスを表す比です。ここで <code>u</code> はブロック内成分（クラス固有の方向）の強さ、<code>v</code> はブロック間成分（ブロック共通の方向）の強さで、<code>ρ</code> はこの 2 つの比にあたります。3 手法とも、表現は同じ 2 次元の部分空間に留まります。</p>
+      <p>著者らが示したのは、損失を揃えた時点でのマージンも実効ランクも、この <code>ρ</code> について<strong>厳密に単調減少する</strong>ということです。つまり、<code>ρ</code> が小さい手法ほど、マージンが大きく実効ランクも高くなります。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 280" role="img" aria-label="3 手法の表現の不均衡比 ρ を比べる図。Muon の ρ が最小となり、ρ が小さいほどマージンと実効ランクが大きくなるため Muon が最良となる流れ">
+          <defs>
+            <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="20" width="220" height="56" rx="8"></rect>
+          <text class="node-label" x="130" y="44" text-anchor="middle">Adam：座標ごと正規化</text>
+          <text class="edge-label" x="130" y="63" text-anchor="middle">ρ_Adam = 1 + a·n / b</text>
+
+          <rect class="node" x="20" y="112" width="220" height="56" rx="8"></rect>
+          <text class="node-label" x="130" y="136" text-anchor="middle">GD：素の勾配降下</text>
+          <text class="edge-label" x="130" y="155" text-anchor="middle">ρ_GD(t)（時間変化）</text>
+
+          <rect class="node" x="20" y="204" width="220" height="56" rx="8"></rect>
+          <text class="node-label" x="130" y="228" text-anchor="middle">Muon：特異値レベル正規化</text>
+          <text class="edge-label" x="130" y="247" text-anchor="middle">ρ_Muon = s / b（固定・最小）</text>
+
+          <path class="edge" d="M240,48 L330,130" marker-end="url(#arrow2)"></path>
+          <path class="edge" d="M240,140 L330,140" marker-end="url(#arrow2)"></path>
+          <path class="edge" d="M240,232 L330,150" marker-end="url(#arrow2)"></path>
+
+          <rect class="node" x="332" y="108" width="180" height="64" rx="8"></rect>
+          <text class="node-label" x="422" y="132" text-anchor="middle">不均衡比 ρ で比較</text>
+          <text class="edge-label" x="422" y="152" text-anchor="middle">ρ_Muon が最小</text>
+
+          <path class="edge" d="M512,140 L590,140" marker-end="url(#arrow2)"></path>
+          <text class="edge-label" x="551" y="128" text-anchor="middle">ρ↓ で単調増加</text>
+
+          <rect class="node" x="592" y="108" width="150" height="64" rx="8"></rect>
+          <text class="node-label" x="667" y="132" text-anchor="middle">最大マージン</text>
+          <text class="node-label" x="667" y="152" text-anchor="middle">最高実効ランク</text>
+        </svg>
+        <figcaption class="diagram__caption">いずれの場合も ρ_Muon が最小になる。マージンと実効ランクは ρ について厳密に単調減少するため、最小の ρ を持つ Muon が最大のマージンと最高の実効ランクを得る。直交化という Muon の設計が、表現の不均衡を最も小さく抑える。</figcaption>
+      </figure>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、Muon の「速い」という効率の優位性とは<strong>別軸</strong>で、「学んだ特徴の質が良い」という優位性を実証・理論化した点にあります。しかもその良さを、ロジットマージンと実効ランクという測定可能な隠れ状態の量に結びつけました。同じアーキテクチャ・同じ学習予算でも、最適化手法の選び方によって特徴の質が系統的に変わることを示した、ともいえます。</p>
+      <p>一方、限界として著者ら自身が次の点を挙げています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">対象モデルファミリーの限定</p>
+          <p>本研究は主に LLM と画像分類器に焦点を当てており、diffusion model のような他のモデルファミリーでの Muon の挙動やメカニズムは扱っていません。これは今後の課題とされています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">常勝ではない</p>
+          <p>ResNet-18 の頑健性では Blur・Digital で SGD がわずかに上回るなど、Muon が常にすべての条件で勝つわけではありません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">理論は簡単化した設定</p>
+          <p>理論はあくまで簡単化した 1 層分類問題での証明であることは押さえておくべきでしょう。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>Muon は、Adam や SGD よりも頑健で転移しやすい特徴を学ぶ——本研究はこれを画像・言語の両方の実験で示し、その正体が「大きなロジットマージン」と「高い実効ランク」であることを突き止めました。さらに、それらが表現の不均衡比 <code>ρ</code> を Muon が最も小さく抑えることから生じることを理論的に証明しています。「速いから使う」だった Muon に、「中身も良いから使う」という新しい根拠を与えた研究といえます。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>Muon</dt>
+        <dd>勾配行列を直交化（全非ゼロ特異値を 1 に）して更新方向とする最適化手法。実装では Newton–Schulz 反復で近似する。</dd>
+
+        <dt>Adam / SGD</dt>
+        <dd>比較対象の最適化手法。Adam は座標ごとに適応的に正規化、SGD は素の勾配降下。</dd>
+
+        <dt>頑健性（robustness）</dt>
+        <dd>劣化させた入力に対して性能を保てる度合い。画像は ImageNet-C、言語は本論文構築の FineWeb10B-C で評価。</dd>
+
+        <dt>転移性（transferability）</dt>
+        <dd>事前学習で得た特徴が下流タスクへ適応しやすい度合い。画像は凍結バックボーン上の線形分類、言語は全パラメータ微調整で評価。</dd>
+
+        <dt>perplexity（パープレキシティ）</dt>
+        <dd>言語モデルが次のトークンをどれだけ言い当てられているかを表す指標。小さいほど予測が当たっている。</dd>
+
+        <dt>ロジットマージン（logit margin）</dt>
+        <dd>正解クラス（トークン）のスコアと、最大の競合スコアの差。大きいほど頑健。</dd>
+
+        <dt>実効ランク（effective rank, eRank）</dt>
+        <dd>隠れ状態行列の特異値分布から計算する、実際に使われている特徴方向の数の連続的尺度。高いほど多様な表現。</dd>
+
+        <dt>Top-k エネルギー分率</dt>
+        <dd>上位 k 個の特異値が捉えるスペクトルエネルギーの割合。低いほど少数の主方向に偏らない。</dd>
+
+        <dt>tuned-lens</dt>
+        <dd>各層の隠れ状態をクラス／語彙の分布へ翻訳する、訓練済みプローブの枠組み（Belrose et al., 2023）。</dd>
+
+        <dt>matched-budget / matched-loss</dt>
+        <dd>手法間でアーキテクチャ・データ・学習予算・評価を揃えて比べる手続き（matched-budget）／同じ損失閾値に達した時点で比べる解析（matched-loss）。</dd>
+
+        <dt>representation imbalance ratio（ρ）</dt>
+        <dd>理論解析で 2 つの補完的な表現成分の不均衡を表す比。Muon が最小になる。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Muon Learns More Robust and Transferable Features than Adam</p>
+      <a href="https://arxiv.org/abs/2606.09658" target="_blank" rel="noopener noreferrer">arXiv:2606.09658 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

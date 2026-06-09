@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>サブエージェントへの「委譲」をモデルに教え込む：SearchSwarm の深層リサーチ手法 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09730-searchswarm-delegation-deep-research-cover.png"
+           alt="メインエージェントがタスクを分解してサブエージェントに brief を渡して委譲し、要約された report だけを受け取る SearchSwarm の「main-distributes, sub-executes」パラダイムと、その軌跡を学習データにして委譲知能をモデルに内在化させる手法を示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">サブエージェントへの「委譲」をモデルに教え込む：SearchSwarm の深層リサーチ手法</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09730</span>
+      <span>カテゴリ：cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>長い手順を要する調査タスクを LLM（大規模言語モデル）に解かせるとき、限られたコンテキストウィンドウ（モデルが一度に扱えるテキスト量）が壁になります。この論文は、メインのエージェントがタスクを分解してサブエージェントに「委譲」し、要約された結果だけを受け取るという進め方に着目しました。著者らはこの委譲をうまく行う能力を <strong>委譲知能（delegation intelligence）</strong> と定義し、それを引き出す仕組み（ハーネス）と、その動作の記録をデータとしてモデルに学習させる方法を提案しています。得られたモデル <strong>SearchSwarm-30B-A3B</strong> は、複数の調査ベンチマークで同規模のモデルの中で最良の結果を達成しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">68.1</span>
+          <span class="stat__label">BrowseComp スコア<br>同規模の従来最良 67.9 を上回る</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">82.5</span>
+          <span class="stat__label">GAIA スコア<br>GPT-5（76.4）を上回る</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+24.7pt</span>
+          <span class="stat__label">BrowseComp のベースからの改善<br>（コンテキスト管理なしの 43.4 比）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">30B-A3B</span>
+          <span class="stat__label">モデル規模<br>総 30B・活性 3B のスパース系</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>LLM をエージェントとして使い、Web 検索やページ閲覧を繰り返しながら答えを探す「深層リサーチ（deep research）」は、近年急速に注目を集めている使い方です。しかし、調査が長くなるほど、検索結果やページの内容がコンテキストにどんどん溜まっていきます。</p>
+      <p>コンテキストウィンドウには上限があるため、何らかの形で情報を整理し続けなければなりません。この「コンテキスト管理（context management）」をどう設計するかが、長い調査タスクの成否を分けます。</p>
+      <p>この論文は、コンテキスト管理を「委譲」という形で能動的に行い、しかもその能力をモデル自身に学習させる、という一貫したレシピを示した点で実用的な意味を持ちます。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>従来のコンテキスト管理は、著者らの言葉では「受動的（passive）」でした。たとえば、履歴が一定の長さを超えてから要約する、ツールの出力を一部だけ残す、といった方法です。</p>
+      <p>これらは事前の計画を持たず、コンテキストの容量が尽きそうになってから慌てて圧縮したり、固定ルールで過去の情報を無差別に捨てたりします。必要な情報まで失われたり、無駄な情報を抱え続けたりしかねません。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>コンテキスト管理の方式</th>
+            <th>性質</th>
+            <th>進め方</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>従来手法</th>
+            <td>受動的（passive）</td>
+            <td>容量が尽きそうになってから圧縮、固定ルールで無差別に破棄</td>
+          </tr>
+          <tr>
+            <th>SearchSwarm（本研究）</th>
+            <td class="is-best">能動的（active）</td>
+            <td class="is-best">あらかじめタスクを分解し、サブに委譲して要約結果だけ受け取る</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>一方で、メインのエージェントが「あらかじめ」タスクを分解し、小さなサブタスクをサブエージェントに割り振り、要約された結果だけを受け取る方式は、より「能動的（active）」で賢いコンテキスト管理だと著者らは位置づけます。</p>
+      <p>ただし、関連する既存研究はアーキテクチャや訓練アルゴリズムといった高レベルの話に焦点があり、仕組みの設計から訓練データの作り方、モデルの訓練までを通したレシピは提供されていませんでした。さらに、委譲の振る舞いを学ばせる訓練データは、自然な文章の中にはほとんど現れません（人が書いた文章に明示的なマルチエージェント協調はまず登場しないため）。そうしたデータをどう作りモデルに獲得させるかは、著者らの知る限りオープンソースの界隈ではほぼ未開拓だったといいます。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>基本となる進め方：「メインが配り、サブが実行する」</h3>
+      <p>この手法の中心は、「main-distributes, sub-executes（メインが配り、サブが実行する）」と呼ぶ進め方です。メインのエージェントが計画を立て、区切られたサブタスクをサブエージェントに委譲します。サブエージェントはそれぞれ独立したコンテキストで作業し、最後に凝縮したレポートを返します。メインはそのレポートだけを受け取り、統合していきます。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 320" role="img" aria-label="メインエージェントが計画を立て、brief（サブタスク説明と関連文脈）を渡してサブエージェントに委譲し、サブエージェントは独立コンテキストで search・visit などのツールを使って作業し、凝縮した report だけをメインに返す main-distributes, sub-executes パラダイムの流れを示した図">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="280" y="20" width="200" height="64" rx="8"></rect>
+          <text class="node-label" x="380" y="46" text-anchor="middle">メインエージェント</text>
+          <text class="edge-label" x="380" y="66" text-anchor="middle">計画・統合・中核判断を保持</text>
+
+          <rect class="node" x="40" y="200" width="200" height="80" rx="8"></rect>
+          <text class="node-label" x="140" y="228" text-anchor="middle">サブエージェント A</text>
+          <text class="edge-label" x="140" y="248" text-anchor="middle">独立コンテキスト</text>
+          <text class="edge-label" x="140" y="266" text-anchor="middle">search / visit / python …</text>
+
+          <rect class="node" x="520" y="200" width="200" height="80" rx="8"></rect>
+          <text class="node-label" x="620" y="228" text-anchor="middle">サブエージェント B</text>
+          <text class="edge-label" x="620" y="248" text-anchor="middle">独立コンテキスト</text>
+          <text class="edge-label" x="620" y="266" text-anchor="middle">search / visit / python …</text>
+
+          <path class="edge" d="M330,84 L155,196" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="200" y="135" text-anchor="middle">brief を渡す</text>
+
+          <path class="edge" d="M430,84 L605,196" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="560" y="135" text-anchor="middle">brief を渡す</text>
+
+          <path class="edge" d="M180,200 L350,88" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="300" y="175" text-anchor="middle">report を返す</text>
+
+          <path class="edge" d="M580,200 L410,88" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="478" y="175" text-anchor="middle">report を返す</text>
+        </svg>
+        <figcaption class="diagram__caption">メインは brief（サブタスク説明と関連文脈）を渡して委譲し、サブは独立したコンテキストで作業して凝縮した report だけを返す。メインの履歴はサブには見えない。</figcaption>
+      </figure>
+
+      <p>ここで重要なのは、サブエージェントが別のモデルや追加のモデルではなく、「新しい独立したコンテキストで呼び出された同じモデル」だという点です。サブに渡す指示も、サブが返すレポートも、どちらも固定ルールではなくモデル自身が生成します。</p>
+      <p>このため著者らは、本手法はマルチエージェントシステムではなく「単一エージェントのコンテキスト管理」の一形態だと主張します。これにより、従来のコンテキスト管理手法と同じ土俵で比較できる、というわけです。</p>
+      <p>エージェントの各ステップは、ReAct（Yao et al., 2022）という枠組みに沿って、Thought（思考）・Action（行動）・Observation（観測）の 3 要素で整理されます。委譲が起きるとき、メインはサブタスクの説明と関連する文脈をまとめた「brief（ブリーフ、指示書）」を渡します。サブエージェントはこの brief だけを手がかりに作業し、メインの履歴は見えません。完了すると report（レポート）を生成し、メインはそのレポートだけを観測します。</p>
+
+      <h3>サブエージェントが使うツール</h3>
+      <p>サブエージェントは、検索エンジンに問い合わせる search、指定した URL のページ内容を取り出す visit、学術文献を探す google_scholar、コードを実行して数値計算やデータ処理を行う python、という標準ツールを持ちます。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>これらの上に、メインだけが使える中核ツール <code>call_sub_agent</code>（サブエージェントを呼び出す委譲ツール）が加わります。サブエージェントは <code>call_sub_agent</code> を持たないため、<strong>委譲は 1 段階に限定</strong>されます。</p>
+        </div>
+      </div>
+
+      <h3>委譲を引き出す「ハーネス」の 4 つの原則</h3>
+      <p>著者らは、モデルを良い委譲行動へ導く仕組みを「ハーネス（harness）」と呼びます。ハーネスはツールセットと、メイン・サブ用のシステムプロンプトから成り、次の 4 原則で設計されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">原則 1</span> 委譲の奨励</p>
+          <p>メインのコンテキストは有限なので、生の検索・閲覧結果にトークンを使うと、計画・検証・統合に使える分が削られます。トークンを大量に消費するが認知的には浅い情報収集はサブに任せ、サブが自分のコンテキストで探索コストを払い、凝縮した結果だけを返します。サブタスクが十分に浅く、委譲の手間が節約分を上回る場合だけ、メインが自分で集めます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">原則 2</span> 包括的なブリーフィング</p>
+          <p>brief はサブがコンテキストを受け取る唯一の経路です。単なる作業指示だけでは、サブが当てもなく検索したり、すでに分かっている事実を調べ直したりします。そこで「なぜこのサブタスクが全体の問いに重要か」「これまでに確立されたこと」「未解決の点」「試した／除外した方向」を含めるよう求めます。新しく加わる協力者に説明するイメージです。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">原則 3</span> メインが中核判断を保持</p>
+          <p>全サブタスクを横断する完全な視野を持つのはメインだけです。サブには証拠集めと特定の仮説の検証に集中させ、どの仮説を追うか、いつ調査を終えるか、矛盾するレポートをどう裁定するか、といった方向性はすべてメインが独立に決めます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">原則 4</span> 引用に基づく報告</p>
+          <p>メインはサブの途中の作業を見られないため、レポートに出典がないと、裏付けのある結論と hallucination（もっともらしい作り話）を区別できません。そこでサブのレポートには、重要な結論ごとに具体的な出典 URL のインライン引用を付けさせます。メインの最終回答にも引用を含め、出典から結論まで追跡できるようにします。</p>
+        </div>
+      </div>
+
+      <h3>動作記録を学習データにする（教師あり微調整）</h3>
+      <p>ハーネスは推論時の振る舞いを整えますが、著者らはさらにその振る舞いをモデルの重みに埋め込みます。手順はこうです。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">軌跡を収集する</p>
+          <p>クエリ（質問）を既存のデータセットから集め、ハーネスのもとで深層リサーチを実行させます。思考・ツール呼び出し・環境からの返答を含む完全な軌跡（trajectory、一連の作業記録）を訓練データとして記録します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">2 つの構成を混ぜる</p>
+          <p>1 つは単一モデルがメインとサブ両方を担い両役割の軌跡を残す構成、もう 1 つは強いモデルをメイン・弱いモデルをサブにしてメインの軌跡だけを残す構成です。後者では、弱いサブの結果に対してメインがより慎重に分解し厳密に検証する軌跡が生まれます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">強制回答も残す</p>
+          <p>コンテキスト長はメイン 128K トークン・サブ 64K トークンに設定。上限に近づくと即座に最終回答を出すよう促し、その「強制回答（forced-answer）」の軌跡も捨てずに残します。テスト時に同じ機構が働いたときにも良い回答を出せるよう学習させるためです。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">厳しくフィルタリングする</p>
+          <p>最終回答が正しいメイン軌跡だけを残し、サブ軌跡は対応するメイン軌跡が正しい場合だけ残します。同じツール呼び出しの繰り返し、存在しない出典への引用、python から Web にアクセスしようとするツールの誤用など、望ましくない挙動を含むサンプルは除去します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">環境マスキングで微調整する</p>
+          <p>環境からの返答（サブのレポートを含むツール結果）をマスクする「環境マスキング（environment masking）」を使い、モデル自身の出力だけで損失を計算します。これを base model（土台となる事前学習済みモデル）に適用して微調整（SFT）します。</p>
+        </li>
+      </ol>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>ベースモデルには Tongyi DeepResearch-30B-A3B を使い、これを微調整しました（30B-A3B は総パラメータ 30B・活性 3B のスパース系を指す表記です）。評価には BrowseComp、BrowseComp-ZH、GAIA、xbench-DeepSearch-2505 という 4 つの調査ベンチマークを使っています。</p>
+      <p>得られた SearchSwarm の主要スコアは次のとおりで、著者らによれば、これら 4 つすべてで、同じ 30B-A3B 規模のオープンソース軽量モデルの中で最良です。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">68.1</span>
+          <span class="stat__label">BrowseComp</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">73.3</span>
+          <span class="stat__label">BrowseComp-ZH</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">82.5</span>
+          <span class="stat__label">GAIA</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">80.8</span>
+          <span class="stat__label">xbench-DeepSearch-2505</span>
+        </div>
+      </div>
+
+      <h3>同規模の従来最良との比較</h3>
+      <p>MiroThinker-1.7-mini と比べ、BrowseComp・BrowseComp-ZH・GAIA でいずれも上回りました。xbench でも 80.8 が LongSeeker の 78.0、Tongyi DeepResearch の 75.0 を上回ります。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ベンチマーク</th>
+            <th>SearchSwarm</th>
+            <th>同規模の従来最良</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>BrowseComp</th>
+            <td class="is-best">68.1</td>
+            <td>67.9（MiroThinker-1.7-mini）</td>
+          </tr>
+          <tr>
+            <th>BrowseComp-ZH</th>
+            <td class="is-best">73.3</td>
+            <td>72.3（MiroThinker-1.7-mini）</td>
+          </tr>
+          <tr>
+            <th>GAIA</th>
+            <td class="is-best">82.5</td>
+            <td>80.3（MiroThinker-1.7-mini）</td>
+          </tr>
+          <tr>
+            <th>xbench-DeepSearch-2505</th>
+            <td class="is-best">80.8</td>
+            <td>78.0（LongSeeker）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>ベースモデルからの改善と大規模モデルとの競争力</h3>
+      <p>コンテキスト管理なしの base model（BrowseComp 43.4）に対し、訓練後は BrowseComp で +24.7 ポイントの絶対改善が得られました。さらに、はるかに大きなモデルとも張り合えると著者らは主張します。BrowseComp では DeepSeek V3.2（671B-A37B、67.6）に匹敵し、GPT-5.2-Thinking（65.8）を上回りました。GAIA（82.5）では GPT-5（76.4）と Seed-2.0-Pro（78.6）を上回り、Step-3.5-Flash（84.5）にのみ及びませんでした。</p>
+
+      <h3>委譲行動はハーネスだけでは生まれない</h3>
+      <p>興味深いのは、base の Tongyi DeepResearch にハーネスを適用しただけ（微調整なし）では、<code>call_sub_agent</code> を「一度も」呼ばず、ハーネスなしと同じ挙動だった点です。つまり、委譲する振る舞いはハーネス単独では自然発生せず、明示的な訓練が必要だと確認されました。</p>
+      <p>ハーネス自体の有効性は、別途アブレーション（要素を外した比較実験）でも示されています。BrowseComp の 200 問サブセットで DeepSeek V3.2 を 3 構成で比較したところ、次のとおりでした。フルハーネスではサブエージェント呼び出しの頻度も有意に増えています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>構成（BrowseComp 200 問サブセット・DeepSeek V3.2）</th>
+            <th>スコア</th>
+            <th>元フレームワーク比</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>元のフレームワーク</th>
+            <td>47.7</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <th>委譲ツールをスキーマ記述だけ追加</th>
+            <td>50.0</td>
+            <td>+2.3</td>
+          </tr>
+          <tr>
+            <th>フルハーネス</th>
+            <td class="is-best">57.7</td>
+            <td class="is-best">+10.0</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>他のモデル・他の設定への汎化</h3>
+      <p>この手法は特定のモデルや設定に縛られないことも示されています。同じデータで Qwen3-30B-A3B-Thinking-2507 を微調整すると、BrowseComp 200 問サブセットで 66.5、BrowseComp-ZH で 64.0 を達成しました。</p>
+      <p>また、<code>call_sub_agent</code> を無効にして単一エージェント（コンテキスト管理なしの 128K コンテキスト）として動かしても、BrowseComp 200 問サブセットと BrowseComp-ZH で 52.0／53.3 を達成し、Tongyi DeepResearch（43.5／46.5）を両方で上回りました。訓練データにはサブエージェントツールなしの軌跡が一切含まれていないにもかかわらず、です。</p>
+      <p>さらに、短答型のクエリだけで訓練したにもかかわらず、オープンエンド（自由記述型）の深層リサーチタスクにも汎化しました。ScholarQA-v2／HealthBench／ResearchQA／DeepResearchBench で評価すると、それぞれ 79.2／52.8／80.2／44.4、平均 64.2 でした。base の Tongyi DeepResearch（平均 50.0）に対し平均 +14.2 ポイントの改善です。オープンソースモデルの中では Dr.Tulu（平均 65.6）に次ぐ 2 位で、クローズドソースの OpenAI DeepResearch（64.9）にも迫りました。</p>
+
+      <h3>メインは「指揮者」として動く</h3>
+      <p>モデルの挙動分析では、メインエージェントが主にオーケストレーター（指揮者）として動くことが分かりました。<code>call_sub_agent</code> がすべてのデータセットで最も使われるツールで、BrowseComp と BrowseComp-ZH では 70% を超えます。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＊</span>
+        <div class="callout__body">
+          <p>メインが自分でツールを使う場合は検証志向です。たとえば GAIA では、メインの visit 使用率 26.4% が search 11.1% を大きく上回ります。これはサブのレポートにある引用 URL を辿って結論を確かめるためと説明されています。一方サブエージェントは search が支配的（46.5〜76.6%）でした。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>この研究は、長い手順を要するエージェントタスク向けに「委譲知能」を訓練する一貫したレシピ、すなわちハーネスの設計・訓練データの合成・モデルの訓練を通して示した点に意義があります。得られた SearchSwarm-30B-A3B は同規模で 4 ベンチマークすべて最良であり、獲得した能力が単一エージェント設定やオープンエンドリサーチにも汎化することが確認されました。著者らはハーネス・モデル重み・訓練データをオープンソース化するとしています。</p>
+      <p>一方で、論文自身がいくつかの前提と限界を明示しています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">予備的探索という位置づけ</p>
+          <p>本研究は一貫して「予備的探索（preliminary exploration）」と位置づけられています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">委譲は 1 段階に限定</p>
+          <p>サブエージェントは <code>call_sub_agent</code> を持たないため、委譲は 1 段階に限定されます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">一部はサブセット評価</p>
+          <p>リソース制約のため、HealthBench と ResearchQA は 200 問のサブセットで評価されています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">比較の前提に注意</p>
+          <p>主結果は完全な BrowseComp を使う一方、比較対象のモデルは異なる問題集合（完全な 1266 問、または 200 問サブセット）で報告しており、比較の前提が完全には一致しない場合がある旨が脚注で明記されています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>SearchSwarm は、メインがサブタスクを委譲し要約結果だけを受け取るという能動的なコンテキスト管理を、ハーネスで引き出し、その軌跡を学習データとしてモデルに内在化させる手法です。委譲行動はハーネスだけでは生まれず明示的な訓練を要すること、そして獲得した能力が単一エージェント設定やオープンエンドタスクにも汎化することが示されました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>委譲知能（delegation intelligence）</dt>
+        <dd>メインエージェントが複雑なタスクを分解し、いつ・何を委譲するかを判断し、返ってきた結果を進行中の作業に統合する能力。</dd>
+
+        <dt>main-distributes, sub-executes パラダイム</dt>
+        <dd>メインがサブタスクを配り、サブが実行する委譲の進め方。</dd>
+
+        <dt>ハーネス（harness）</dt>
+        <dd>ツールセットとメイン／サブ用のシステムプロンプトから成り、LLM を良い委譲行動へ導く仕組み。</dd>
+
+        <dt>call_sub_agent</dt>
+        <dd>メインが brief を渡してサブエージェントを独立したコンテキストで起動する中核ツール。</dd>
+
+        <dt>brief（ブリーフ）</dt>
+        <dd>サブエージェントに渡すサブタスク説明と関連文脈。サブがコンテキストを受け取る唯一の経路。</dd>
+
+        <dt>report（レポート）</dt>
+        <dd>サブの作業全体を凝縮した要約。メインのコンテキストに戻される唯一の出力。</dd>
+
+        <dt>ReAct</dt>
+        <dd>思考（Thought）と行動（Action）を交互に行うエージェントの枠組み（Yao et al., 2022）。</dd>
+
+        <dt>コンテキスト管理（context management）</dt>
+        <dd>有限なコンテキストウィンドウに収めるため、情報を選んで残し凝縮する戦略。</dd>
+
+        <dt>環境マスキング（environment masking）</dt>
+        <dd>教師あり微調整の損失計算で環境からの返答を除外し、モデル自身の出力だけで損失を取る手法。</dd>
+
+        <dt>強制回答（forced-answer）</dt>
+        <dd>コンテキスト上限に近づいたとき即時に最終回答を出させる機構。その軌跡も訓練に残す。</dd>
+
+        <dt>30B-A3B</dt>
+        <dd>モデル規模の表記。総パラメータ 30B・活性パラメータ 3B のスパース系を指す。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">SearchSwarm: Towards Delegation Intelligence in Agentic LLMs for Long-Horizon Deep Research</p>
+      <a href="https://arxiv.org/abs/2606.09730" target="_blank" rel="noopener noreferrer">arXiv:2606.09730 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

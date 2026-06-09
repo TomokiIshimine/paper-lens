@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>動画AIは直感物理を理解しているか：表現を層ごとに探るプロービング分析 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09646-video-foundation-models-intuitive-physics-cover.png"
+           alt="大量の動画で事前学習された動画基盤モデル（V-JEPA・VideoMAE・LTX-Video）を凍結したままプローブを取り付け、直感物理の知識が内部表現にどれだけ取り出しやすい形で符号化されているかを IntPhys2 と MVP の 2 ベンチマークで層ごとに調べた研究を示すインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">動画AIは直感物理を理解しているか：表現を層ごとに探るプロービング分析</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09646</span>
+      <span>カテゴリ：cs.CV / cs.AI / cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>大量の動画で事前学習された動画基盤モデル（video foundation model）が、「物はぶつかると止まる」「物体は突然消えない」といった直感物理（intuitive physics）の知識を内部表現に持っているかを調べた研究です。著者らは <strong>V-JEPA・VideoMAE・LTX-Video</strong> という学習方式の異なる 3 系統のモデルを凍結したまま、その内部表現を読み出す「プローブ（probe）」を取り付けて 2 つのベンチマークで検証しました。その結果、直感物理の知識は事前学習表現に確かに現れるものの、どれだけ取り出しやすいかは学習方式・表現の深さ・読み出し方法に大きく左右され、なかでも予測型の埋め込み学習（V-JEPA）が最も強くロバストだと結論づけています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">3 系統</span>
+          <span class="stat__label">比較した学習パラダイム<br>（予測型埋め込み・マスク再構成・拡散生成）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">3 種類</span>
+          <span class="stat__label">表現を読み出すプローブ<br>（線形・MLP・時間的注意）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">94.03%</span>
+          <span class="stat__label">MVP ペア整合性の最良値<br>（V-JEPA・時間的注意プローブ）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">66.67%</span>
+          <span class="stat__label">IntPhys2 VOE の最良値<br>（V-JEPA 2.1・時間的注意プローブ）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>動画基盤モデルは、行動認識や将来予測、テキストからの動画生成など多くのタスクで高い性能を示しています。多くの動画モデルは、世界の仕組みを内部にモデル化した「世界モデル（world model）」として位置づけられたり、そう動機づけられたりしてきました。</p>
+      <p>しかし、ベンチマークで高得点を取れることと、モデルが「世界の物理を本当に理解している」ことは別の問題です。高い成績が、真の物理理解ではなく、見た目の統計的な特徴やベンチマーク特有の抜け道（ショートカット）に支えられている可能性があるからです。もし動画モデルが本当に世界モデルなら、その内部表現には直感物理の構造が刻まれているはずです。本研究は、その「内部に何が入っているか」を正面から問い直す試みです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>動画モデルが直感物理を理解しているかを評価するのは、見かけ以上に難しい課題です。ベンチマークでの成功が、一般的な動き（モーション）への感度や意味認識、データセットの偏りを反映しているだけかもしれず、物理理解そのものを測れているとは限りません。</p>
+      <p>加えて、これまでの研究では、主要な動画の事前学習方式を「統一された条件のもとで層ごとに比較する」枠組みがほとんどありませんでした。本研究は、表現の深さ（層の位置）と読み出し方法をそろえた共通の手続きで、複数の事前学習パラダイムを横並びに比べる点に新しさがあります。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>本研究の核は、<strong>凍結特徴プロービング（frozen-feature probing）</strong>という手法です。事前学習済みのモデル本体（バックボーン）は重みを固定したまま一切学習させず、その中間表現に小さな読み出し器（プローブ）だけを取り付けて学習させます。これにより問うのは「モデルが直感物理タスクを解けるように追加学習で適応できるか」ではなく、「事前学習の結果として、すでに物理に関連する構造を表現の中に符号化しているか」です。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 250" role="img" aria-label="凍結したバックボーンの中間表現に小さなプローブだけを取り付けて学習させ、直感物理タスクの妥当性スコアを出す凍結特徴プロービングの流れを示す図">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="95" width="180" height="60" rx="8"></rect>
+          <text class="node-label" x="110" y="120" text-anchor="middle">動画クリップ</text>
+          <text class="edge-label" x="110" y="140" text-anchor="middle">入力</text>
+
+          <rect class="node" x="270" y="85" width="210" height="80" rx="8"></rect>
+          <text class="node-label" x="375" y="115" text-anchor="middle">事前学習バックボーン</text>
+          <text class="edge-label" x="375" y="137" text-anchor="middle">凍結（重み固定・学習しない）</text>
+
+          <rect class="node" x="550" y="95" width="190" height="60" rx="8"></rect>
+          <text class="node-label" x="645" y="120" text-anchor="middle">プローブ</text>
+          <text class="edge-label" x="645" y="140" text-anchor="middle">ここだけ学習</text>
+
+          <text class="node-label" x="375" y="50" text-anchor="middle">25% / 50% / 75% / 100% の深さから中間表現を抽出</text>
+          <path class="edge" d="M375,68 L375,83" marker-end="url(#arrow)"></path>
+
+          <text class="edge-label" x="645" y="200" text-anchor="middle">物理妥当性スコア</text>
+          <path class="edge" d="M645,157 L645,185" marker-end="url(#arrow)"></path>
+
+          <path class="edge" d="M200,125 L268,125" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M480,125 L548,125" marker-end="url(#arrow)"></path>
+        </svg>
+        <figcaption class="diagram__caption">凍結したバックボーンの中間表現に小さなプローブだけを取り付けて学習させ、事前学習表現に物理情報がどれだけ取り出しやすい形で符号化されているかを測る。</figcaption>
+      </figure>
+
+      <h3>比較した 3 つの学習パラダイム</h3>
+      <p>異なる思想で学習された 3 系統のモデルを比べています。各系統では利用可能な最大規模のモデルを使っています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">予測型</span> 予測型の結合埋め込み</p>
+          <p>V-JEPA 系（V-JEPA、V-JEPA 2、V-JEPA 2.1）。ピクセルを再構成するのではなく、共有された埋め込み空間の中で、文脈から目標の表現を予測するように学習します（predictive joint-embedding）。抽象的で意味的、かつ時間に紐づいた表現を促すとされます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">再構成</span> マスク再構成</p>
+          <p>VideoMAE 系（VideoMAE、VideoMAE-v2）。動画の一部を隠し、隠された時空間の内容を残りから再構成するように学習します（masked video reconstruction）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">生成</span> 拡散ベースの動画生成</p>
+          <p>LTX-Video。ノイズを多段階で除去（denoising）しながら動画を生成するモデルで、表現は生成の副産物として暗黙的に得られます。表現学習が目的ではありませんが、ノイズ除去の途中経過という追加の分析軸を提供します。</p>
+        </div>
+      </div>
+
+      <h3>表現を「読み出す」3 種類のプローブ</h3>
+      <p>内部表現から情報を取り出す方法（プローブ）も 3 種類を比べ、情報がどれだけ取り出しやすい形で存在するかを区別しています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>プローブ</th>
+            <th>構造</th>
+            <th>何を測るか</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>線形プローブ（linear probe）</th>
+            <td>単層のみ</td>
+            <td>情報がそのまま線形に取り出せるか</td>
+          </tr>
+          <tr>
+            <th>MLP プローブ</th>
+            <td>隠れ層を加えた多層パーセプトロン</td>
+            <td>線形ではない形で潜んでいる信号</td>
+          </tr>
+          <tr>
+            <th>時間的注意プローブ<br>（temporal attentive probe）</th>
+            <td>トークン列に直接作用する自己注意・交差注意</td>
+            <td>フレーム間の時間的なやり取り</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>線形プローブと MLP プローブは入力に 1 本のベクトルを要するため、本研究では CLS トークン（系列全体を代表させる特別なトークン）ではなく、時空間トークンの平均プーリング（average pooling）を入力に使っています。時間的注意プローブは、プールした 1 本のベクトルではなく、トークン埋め込みの列に直接作用し、自己注意（self-attention）と交差注意（cross-attention）でフレーム間の時間的なやり取りを明示的にモデル化します。</p>
+
+      <h3>表現の「深さ」とコントロール条件</h3>
+      <p>各モデルのバックボーンの約 25%・50%・75%・100% にあたる 4 段階の深さから特徴を抽出し、どの層に物理情報が現れるかを調べます。LTX-Video についてはさらに、0.1〜1.0 の 10 段階のノイズレベルでもプローブし、ノイズ除去の途中経過に沿った変化を見ています。</p>
+      <p>時間情報が本当に効いているかを確かめるため、2 つのコントロール条件も用意しました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">フレームシャッフル（frame-shuffled）</p>
+          <p>各クリップのフレーム順をランダムに並べ替えます。動きの軌道や因果的なイベント構造を壊しますが、フレームの集合や個々の見た目は保たれます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">単一フレーム（single-frame）</p>
+          <p>クリップから 1 フレームだけを取り出し、それを全長ぶん繰り返します。時間変化を完全に取り除きつつ、入力の形式は維持します。</p>
+        </div>
+      </div>
+
+      <h3>2 つのベンチマーク</h3>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">IntPhys2</span></p>
+          <p>永続性・不変性・時空間連続性・固体性という直感物理の 4 原則を評価します。各シーンは「物理的にあり得る」2 クリップと「あり得ない」2 クリップの 4 本組で構成されます。主指標は<strong>期待違反（Violation of Expectation、VOE）精度</strong>で、シーン内のあり得るクリップ全てが、あり得ないクリップ全てより高い妥当性スコアを得たときだけ正解とする厳しい基準です。データは計 253 シーン・1,012 クリップ（シーン単位で 60/20/20 に分割）です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">MVP</span></p>
+          <p>Minimal Video Pairs。見た目はよく似ているのに答えが逆になる動画ペアを使い、抜け道による点数の水増しを抑えます。主指標は<strong>ペア整合性（pair consistency）</strong>で、ペアの両方の動画を正しく分類できたときだけ正解とします。本研究では元の動画質問応答タスクを二択の物理妥当性タスクへ変換して評価しています。直感物理サブセットへ絞り込んだ 9,886 サンプル（あり得る・あり得ないが各 4,943 でバランス、ペア単位で 60/20/20 に分割）を使います。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>モデル系統の比較：V-JEPA が最も強い</h3>
+      <p>表現力の高い時間的注意プローブで測ったとき、V-JEPA 系が両ベンチマークで一貫して最良でした。IntPhys2 では V-JEPA 2.1 が 66.67%（VOE）で先頭、MVP ではベースの V-JEPA が 94.03%（ペア整合性）で先頭です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル系統</th>
+            <th>MVP（ペア整合性）</th>
+            <th>IntPhys2（VOE）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>V-JEPA 系（予測型埋め込み）</th>
+            <td class="is-best">94.03%</td>
+            <td class="is-best">66.67%（V-JEPA 2.1）</td>
+          </tr>
+          <tr>
+            <th>VideoMAE 系（マスク再構成）</th>
+            <td>92.01%</td>
+            <td>IntPhys2 では差が大きく開く</td>
+          </tr>
+          <tr>
+            <th>LTX-Video（拡散生成）</th>
+            <td>84.33%</td>
+            <td>47.06%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>VideoMAE 系は MVP では 92.01% と僅差（約 2% 差）まで迫りますが、IntPhys2 では差が大きく開きます。拡散ベースの LTX-Video は一貫して遅れ、MVP で 84.33%、IntPhys2 で 47.06% にとどまりました。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>VideoMAE-v2 は IntPhys2 で 15.69% と極端に低い値を示しましたが、著者らはこれを学習が不安定だったことによるアーティファクト（人為的な乱れ）と推測しています。学習エポックを 60 まで延ばすと 31.37%（VOE）まで回復したため、初期の低スコアは少なくとも一部が学習不足によるもので、慎重に解釈すべきだとしています。また著者らは、この比較が学習目的の違いだけでなく、モデルの規模・新しさ・学習設定といった交絡要因も含んでいることを明記しています。</p>
+        </div>
+      </div>
+
+      <h3>物理情報はどの層に現れるか</h3>
+      <p>物理に関連する情報が取り出しやすくなる深さは、ベンチマークによって大きく異なりました。</p>
+      <p>MVP では V-JEPA 系・VideoMAE 系とも後段の層ほど性能が上がる傾向が明確です。たとえば MLP プローブで V-JEPA は 25% 深さの 59.45% から最終層の 87.26% へと改善します。一方 IntPhys2 では中間〜後段に依存するものの単調ではなく、モデル間でも一貫しません。50〜75% の深さでピークを迎え、その後最終層で下がる例が多く見られました。LTX-Video もノイズ除去を進めるほど良くなるわけではなく、最も強い信号はバックボーンの中間に集中していました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">59.45% → 87.26%</span>
+          <span class="stat__label">MVP・V-JEPA の MLP プローブ<br>（25% 深さ → 最終層へ単調に改善）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">50〜75%</span>
+          <span class="stat__label">IntPhys2 で性能がピークになる深さ<br>（最終層では下がる例が多い）</span>
+        </div>
+      </div>
+
+      <p>総じて、物理関連情報は初期層で最も弱く、中間から後段で最も取り出しやすくなります。</p>
+
+      <h3>線形か非線形か：読み出し方法の影響</h3>
+      <p>読み出し方法の影響もベンチマークで大きく違いました。</p>
+      <p>MVP では、プローブの表現力が決定的に効きます。線形プローブはどの系統でも低性能ですが、MLP、さらに時間的注意プローブで大きく改善します。V-JEPA 系のペア整合性は、線形では低いままなのに対し、時間的注意プローブでは大きく跳ね上がります。つまり MVP の物理情報は凍結表現から直接そのまま読み出せず、非線形で時間を扱える読み出しが必要だということです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>V-JEPA 系（MVP ペア整合性）</th>
+            <th>線形プローブ</th>
+            <th>時間的注意プローブ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>V-JEPA</th>
+            <td>48.7%</td>
+            <td class="is-best">94.03%</td>
+          </tr>
+          <tr>
+            <th>V-JEPA 2</th>
+            <td>47.3%</td>
+            <td class="is-best">93.33%</td>
+          </tr>
+          <tr>
+            <th>V-JEPA 2.1</th>
+            <td>43.9%</td>
+            <td class="is-best">93.73%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>一方 IntPhys2 では、表現力への依存はより弱く不均一でした。線形プローブでも複数のモデルが中程度の信号を回収でき（V-JEPA で 50.98%、LTX-Video で 49.02% など）、より多くの情報が単純な読み出しでも利用可能でした。それでも、表現力の高いプローブを使うと、特に最も強い V-JEPA 系でさらに性能が伸びました。</p>
+
+      <h3>時間情報は本当に効いているか</h3>
+      <p>コントロール条件の結果は、プローブが読み出している信号が静止画的なものではないことを示しました。指標は相対変化 ∆% = 100 ×（コントロール − 本来）/ 本来 で報告されます。</p>
+      <p>MVP では時間情報を壊すと性能が明確に崩れます。MLP プローブでフレームシャッフルはペア整合性を −39%〜−61% 低下させ、単一フレーム化は −86%〜−100% も低下させました。LTX-Video の時間的注意プローブはシャッフルで −96%、単一フレーム化で −97% と最も壊滅的でした。MVP は、回収された信号が静的でないことの最もクリーンな証拠だと著者らは述べています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">−39%〜−61%</span>
+          <span class="stat__label">MVP・フレームシャッフルによる低下<br>（MLP プローブ・ペア整合性）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">−86%〜−100%</span>
+          <span class="stat__label">MVP・単一フレーム化による低下<br>（MLP プローブ・ペア整合性）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.00%</span>
+          <span class="stat__label">IntPhys2 でシャッフルしても落ちない例<br>（順序非依存の手がかりの示唆）</span>
+        </div>
+      </div>
+
+      <p>IntPhys2 では時間構造への依存がより混在していました。単一フレーム化は依然として大きく性能を損ないますが、フレームシャッフルは一様に破壊的ではなく、V-JEPA の時間的注意プローブと V-JEPA 2.1 の線形プローブではちょうど 0.00% の低下、つまり順序を壊しても性能が落ちないケースがありました。著者らはこれを、一部の VOE 性能が因果的な物理の軌道を捉えているのではなく、データセットの偏りや順序に依存しない見た目の手がかりに頼っている強い示唆だと解釈しています。</p>
+
+      <h2>意義と限界</h2>
+      <p>本研究は、直感物理の知識が事前学習済みの動画表現に確かに現れることを示しました。ただし、その取り出しやすさは学習目的・表現の深さ・読み出し機構に強く依存します。評価した範囲では、予測型の結合埋め込み（V-JEPA 系）が、現世代の大規模動画モデルの中で最も強くロバストな物理関連特徴を持っていました。</p>
+      <p>一方で、いくつかの留保もあります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">交絡要因の切り分け</p>
+          <p>著者ら自身が認める最大の課題は、この比較が学習目的だけでなくモデル規模・新しさ・学習設定の交絡を切り分けていない点です。重要な次のステップとして、各系統の中でより小さく条件をそろえたバックボーンに同じプローブ分析を繰り返し、目的の違いだけを取り出すことが挙げられています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">評価指標の解釈</p>
+          <p>IntPhys2 のフレームシャッフル結果は、一部の性能がロバストな時間的物理推論ではなく順序非依存の手がかりに由来しうることも示しており、評価指標の解釈には注意が必要です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">再現性</p>
+          <p>実験を再現するためのコードは GitHub で公開されています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>動画基盤モデルの内部には直感物理の知識が確かに刻まれていますが、それがどれだけ取り出しやすいかは学習方式・層の深さ・読み出し方法に大きく依存します。なかでも予測型の埋め込み学習を行う V-JEPA 系が、最も強くロバストな物理関連表現を持っていました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>直感物理（intuitive physics）</dt>
+        <dd>物体やイベントが時間とともにどう変化するかについての基礎的な理解。本研究では永続性・不変性・時空間連続性・固体性の 4 原則で評価する。</dd>
+
+        <dt>動画基盤モデル（video foundation model）</dt>
+        <dd>インターネット規模の大量の動画で事前学習され、多様なタスクに使える大規模モデル。</dd>
+
+        <dt>凍結特徴プロービング（frozen-feature probing）</dt>
+        <dd>事前学習モデルを固定したまま、その中間表現に小さな読み出し器（プローブ）を取り付け、どの情報がどれだけ取り出せるかを測る手法。</dd>
+
+        <dt>V-JEPA</dt>
+        <dd>ピクセルを再構成せず、共有埋め込み空間で文脈から目標表現を予測する潜在空間予測モデル。</dd>
+
+        <dt>VideoMAE</dt>
+        <dd>隠した時空間内容を残りから再構成するマスク再構成型のモデル。</dd>
+
+        <dt>LTX-Video</dt>
+        <dd>多段階のノイズ除去で動画を生成する拡散ベースのモデル。</dd>
+
+        <dt>期待違反精度（Violation of Expectation、VOE）</dt>
+        <dd>IntPhys2 の主指標。あり得るクリップ全てがあり得ないクリップ全てより高いスコアを得たときだけ正解とする厳しい基準。</dd>
+
+        <dt>ペア整合性（pair consistency）</dt>
+        <dd>MVP の主指標。見た目が似て答えが逆の動画ペアの両方を正しく分類できたときだけ正解とする基準。</dd>
+
+        <dt>時間的注意プローブ（temporal attentive probe）</dt>
+        <dd>プールした表現ではなくトークン列に直接作用し、自己注意・交差注意で時間的な相互作用を明示的にモデル化する読み出し器。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Do Video Foundation Models Understand Intuitive Physics? A Layerwise Probing Analysis</p>
+      <a href="https://arxiv.org/abs/2606.09646" target="_blank" rel="noopener noreferrer">arXiv:2606.09646 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

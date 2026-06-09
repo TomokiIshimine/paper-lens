@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>「一緒に光るヘッド」は本当に回路なのか：因果アブレーションで仮説を篩にかける — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09607-closure-validated-circuit-discovery-cover.png"
+           alt="共活性化のクラスタリングで見つけた注意ヘッドのまとまりを、アブレーションによるクロージャテストで検証する流れと、dense モデルでは合格・MoE モデルでは逆向きに失敗する対比を示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">「一緒に光るヘッド」は本当に回路なのか：因果アブレーションで仮説を篩にかける</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09607</span>
+      <span>カテゴリ：cs.LG / cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>大規模言語モデルの中身を理解しようとするとき、「一緒に発火する注意ヘッドのまとまり」を統計的に見つけ、それを機能の単位（回路）とみなす安価な手法が広まっています。この論文は、その「まとまり」が本当に機能を担う回路なのかを、ヘッドを取り除いて挙動の変化を測る因果的な検証（クロージャテスト）で確かめました。その結果、密なモデル（dense model）では候補がきちんと検証を通過する一方、Mixture-of-Experts（MoE）モデルでは統計的に強いシグナルが出ても検証に失敗する（しかも逆向きに）ことを示しました。著者は「安価なシグナルは回路の『提案』であって『確認された回路』ではない。両者を分けるのがクロージャである」と結論づけています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">4 / 4</span>
+          <span class="stat__label">dense モデルのクロージャ合格数<br>（Pythia 1B・OLMo 1B の 4 テスト）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">1</span>
+          <span class="stat__label">MoE モデルの失敗テスト<br>（逆向きに失敗した中心的な反例）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">3 モデル</span>
+          <span class="stat__label">検証対象（いずれも 1B 規模）<br>Pythia 1B・OLMo 1B・OLMoE-1B-7B</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">3 指標</span>
+          <span class="stat__label">判定に使う評価指標<br>損失・top-1 正解率・正解ロジット</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>ChatGPT のような大規模言語モデルは、なぜそう答えるのかが外からは見えない「ブラックボックス」です。これを開けて、モデルのどの部品が何の機能を担っているかを突き止める研究分野を、機械的解釈可能性（mechanistic interpretability）と呼びます。</p>
+      <p>ここで主役になる部品が、注意ヘッド（attention head）です。これは Transformer の自己注意機構を構成する小さな処理単位で、入力のどの位置に注目するかをそれぞれ担当しています。本研究はこの注意ヘッドを単位として、モデルの内部を読み解きます。</p>
+      <p>近年この分野では、機能の最小単位を個々のニューロンではなく「部品のまとまり（グループ）」として捉える見方が主流になってきました。そして「まとまりは、一緒に活動する部品を統計的にクラスタリングすれば見つかる」という方法論が自然に導かれます。計算が安価で手軽なため魅力的です。</p>
+      <p>しかしここに落とし穴があります。「一緒に活動している」ことと「協力して機能を実装している」ことは、必ずしも同じではありません。本研究は、その安価な発見手法が本当に信頼できるのかを正面から問い直し、信頼性を担保するための検証手続きを提示している点で重要です。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>統計的なクラスタリングで部品のまとまりを見つける手法は、たしかに「何か」を見つけてくれます。問題は、見つかったまとまりが次の 3 つのまったく異なる実態のどれなのか、出力だけでは区別できないことです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">実態 1</span> 本物の回路</p>
+          <p>協力して機能を実装しており、取り除くと関連する入力でモデルの挙動が大きく損なわれるヘッド群。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">実態 2</span> 共活性コミュニティ</p>
+          <p>上流の共通の要因（共有入力やルーティング、位置のバイアスなど）で一緒に発火するだけで、出力への寄与は冗長または限定的なまとまり。回路ではありません（co-active community）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">実態 3</span> 打ち消し合うコミュニティ</p>
+          <p>似たバイアス信号を加えているものの、出力では他の部品が補償してしまうまとまり。取り除くとむしろ性能が上がることすらあります（cancellable community）。</p>
+        </div>
+      </div>
+
+      <p>クラスタリングの出力は、この 3 つのどれとも矛盾なく解釈できてしまいます。つまり「一緒に光るヘッドの集まり」を見つけただけでは、それが load-bearing（機能を担っている）かどうかは分からない、というのがこの研究の出発点です。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>中核となる考え方は、タイトルにもなっている「co-activation proposes, ablation disposes（共活性化が提案し、アブレーションが処分する）」です。共活性化のクラスタリングで回路を<strong>提案</strong>し、因果的なアブレーション（ablation、特定のヘッドの出力をゼロにして取り除く介入）による<strong>クロージャテスト（closure test）</strong>で採否を<strong>判定</strong>します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 220" role="img" aria-label="共活性化のクラスタリングが回路候補を提案し、回路に期待される挙動の劣化を予測し、実際のアブレーションとランダム対照との比較で採否を判定する、提案・予測・クロージャの 3 段階の流れの図">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="80" width="200" height="66" rx="8"></rect>
+          <text class="node-label" x="120" y="106" text-anchor="middle">提案 (proposal)</text>
+          <text class="edge-label" x="120" y="126" text-anchor="middle">共活性化でクラスタリング</text>
+
+          <path class="edge" d="M220,113 L268,113" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="270" y="80" width="200" height="66" rx="8"></rect>
+          <text class="node-label" x="370" y="106" text-anchor="middle">予測 (prediction)</text>
+          <text class="edge-label" x="370" y="126" text-anchor="middle">「回路だ」と宣言</text>
+
+          <path class="edge" d="M470,113 L518,113" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="520" y="80" width="220" height="66" rx="8"></rect>
+          <text class="node-label" x="630" y="106" text-anchor="middle">クロージャ (closure)</text>
+          <text class="edge-label" x="630" y="126" text-anchor="middle">アブレーションで検証</text>
+
+          <text class="edge-label" x="370" y="40" text-anchor="middle">co-activation proposes, ablation disposes</text>
+          <text class="edge-label" x="630" y="190" text-anchor="middle">同サイズのランダム対照 5 組と比較</text>
+        </svg>
+        <figcaption class="diagram__caption">安価な共活性化シグナルは候補を「提案」するだけ。実際にヘッドを取り除き、ランダム対照と比べて採否を「処分」するのがクロージャである。</figcaption>
+      </figure>
+
+      <p>各クロージャテストは 3 段階で進みます。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">提案（proposal）</p>
+          <p>モデルと入力バッチを与え、注意ヘッドを共活性化の統計でクラスタリングし、最もきれいな候補コミュニティを選ぶ。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">予測（prediction）</p>
+          <p>そのコミュニティを取り除いたとき、回路に期待される向き（損失が増え、正解率が下がる）にモデルが損なわれるなら「回路だ」と宣言する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">クロージャ（closure）</p>
+          <p>実際に取り除き、同じサイズのランダムなヘッド集合 5 組と例ごとの被害を比較し、複数指標の z スコアを報告する。</p>
+        </li>
+      </ol>
+
+      <h3>提案フェーズの組み立て</h3>
+      <p>提案フェーズの具体的な仕組みは次のように組み立てられています。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">テンプレートフリーな信号抽出</p>
+          <p>各例・各ヘッドについて、注意パターンの「最大の注意重み」（任意のキー位置への最大値）を信号とします。特定のキー位置を特別扱いしない、ヘッドの「集中度」だけを見る信号です。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">中央値による二値化</p>
+          <p>各ヘッドの信号を、自身の中央値で +1／−1 に変換します。これでどのヘッドもちょうど半数の例で +1 になり、単体ヘッドの発火率の偏りが消え、ヘッド同士の共活性化だけが結合の推定を駆動します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">ペアワイズ Ising モデルのフィット</p>
+          <p>ヘッドを二値スピンとみなし、ヘッド間の結合の強さを擬似尤度（pseudolikelihood、各スピンを他の全スピンに回帰して結合を推定する安価な手法）で推定します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">コミュニティの復元</p>
+          <p>推定した結合行列をスペクトラルクラスタリング（spectral clustering）でいくつかのコミュニティに分割します。分割数 k は、先行研究の教師ありプローブ分類との一致度（ARI、adjusted Rand index）が最大になるように選びます。教師ラベルは k の選択と候補の同定にのみ使い、クラスタリング自体には使いません。</p>
+        </li>
+      </ol>
+
+      <p>判定フェーズ（クロージャ）では、ベースライン → 候補コミュニティのアブレーション → 同サイズのランダム対照 5 組、という順で挙動を測ります。評価には<strong>クロスエントロピー損失</strong>・<strong>top-1 正解率</strong>・<strong>正解トークンのロジット（target-token logit）</strong>の 3 指標を使います。合格条件は、損失が増え正解率と正解ロジットが下がるという正しい向きであり、かつその効果が同サイズのランダムなヘッド集合の分布の外にあること、です。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＊</span>
+        <div class="callout__body">
+          <p>MoE モデルでは、入力ごとに使うエキスパートが切り替わるため、例をルーティングの重みでグループ分け（ルート条件付きクラスタリング）してから層ごとに Ising をフィットします。さらに、検出されたシグナルが本物かサンプル数による見かけのものかを、ルーティング情報を使わないランダム分割の帰無分布と比較して確かめています。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>検証対象は 1B（10 億パラメータ）規模の 3 モデル、Pythia 1B・OLMo 1B（いずれも dense）と OLMoE-1B-7B（MoE）です。入力は合成の induction バッチ（induction は、直前に現れたパターンを繰り返す単純な系列課題）と自然テキストの 2 種で、それぞれ 2000 例です。著者は 5 つのクロージャテストを主たる証拠として提示しました。結論を先に言うと、dense の 4 テストはすべて合格し、MoE の 1 テストは失敗しました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>テスト（モデル・入力）</th>
+            <th>コミュニティ</th>
+            <th>損失の変化</th>
+            <th>判定</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>OLMo 1B（自然テキスト）</th>
+            <td>L0–L1 にまたがる 10 ヘッド</td>
+            <td>6.030 → 7.466（+1.435）</td>
+            <td class="is-best">合格（最もきれい）</td>
+          </tr>
+          <tr>
+            <th>OLMo 1B（合成）</th>
+            <td>層 0 の 5 ヘッド</td>
+            <td>9.474 → 11.327（+1.853）</td>
+            <td class="is-best">合格（最小性）</td>
+          </tr>
+          <tr>
+            <th>Pythia 1B（合成）</th>
+            <td>7 層にまたがる 25 ヘッド</td>
+            <td>9.92 → 12.61（+2.69）</td>
+            <td>弱い合格（拡散）</td>
+          </tr>
+          <tr>
+            <th>Pythia 1B（自然テキスト）</th>
+            <td>9 ヘッド</td>
+            <td>5.955 → 6.005（+0.050）</td>
+            <td>合格（下流冗長性）</td>
+          </tr>
+          <tr>
+            <th>OLMoE-1B-7B（自然・ルート条件付き）</th>
+            <td>22 ヘッド</td>
+            <td>−0.647 / 層外 −1.245</td>
+            <td>失敗（逆向き）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>OLMo 1B（自然テキスト）— 最もきれいな結果</h3>
+      <p>L0 と L1 にまたがる 10 ヘッドのコミュニティを取り除くと、損失は 6.030 → 7.466（+1.435）、正解率は 0.278 → 0.104（約 2.67 倍の悪化）、正解ロジットは 11.44 → 6.56 と低下しました。同サイズのランダム対照はすべて損失をわずかに下げる方向だったため、z スコアは損失 +36.4σ、正解率 −50.6σ、正解ロジット −50.9σ という極端な値になります。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">+36.4σ</span>
+          <span class="stat__label">損失の z スコア<br>（対照分布の外への逸脱度）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">−50.6σ</span>
+          <span class="stat__label">正解率の z スコア</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.043</span>
+          <span class="stat__label">自然テキストの対照分布の標準偏差<br>（巨大な z の主因）</span>
+        </div>
+      </div>
+
+      <p>ただし著者は、この 36σ は最強の因果効果を意味しないと注意しています。絶対的な損失の増加（+1.44）はむしろ合成 OLMo（+1.85）より小さく、巨大な z は自然テキストでの対照分布のばらつきが非常に小さい（標準偏差 0.043）ことを反映したものだと説明しています。</p>
+
+      <h3>OLMo 1B（合成）— 最小性のシグネチャ</h3>
+      <p>層 0 の 5 ヘッドからなる、研究中で最もきれいな幾何を持つコミュニティです。取り除くと損失は 9.474 → 11.327（+1.853）。この被害は層 0 の全 16 ヘッドを取り除いた上限（+1.78）をわずかに超えており、16 ヘッド中わずか 5 ヘッドで層全体の効果を飽和させる「最小性のシグネチャ（minimality signature）」を示しました。判定は合格です。</p>
+
+      <h3>Pythia 1B（合成）— 拡散したケース</h3>
+      <p>7 層にまたがる 25 ヘッドという広がったコミュニティで、損失は 9.92 → 12.61（+2.69）。方向テストには合格しますが、25/56 = 45% のヘッドが被害の 72% を担うなど拡散しすぎており、標準的な意味の「回路」とは呼びにくい弱い合格（weak pass）と判定されました。</p>
+
+      <h3>Pythia 1B（自然テキスト）— 下流冗長性のシグネチャ</h3>
+      <p>ここは興味深い結果です。9 ヘッドを取り除いても損失はほとんど動きません（5.955 → 6.005、+0.050）。ところが正解ロジットは 12.19 → 9.19（−3.00）と確かに下がり、z スコアは正解ロジット −52.51σ（研究中で最大）に達します。同じテストの同じアブレーションで、損失の z（+1.95σ）と正解ロジットの z（−52.51σ）が 25 倍も食い違うのです。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>著者の解釈は、これらのヘッドは正解の次トークンのロジットを確かに下げる意味で機能を担っているが、下流の冗長な経路が出力分布をほぼ元通りに保ってしまうため、集約された損失はほとんど動かない（下流冗長性、downstream redundancy）というものです。複数指標で見たからこそ拾えた合格です。</p>
+        </div>
+      </div>
+
+      <h3>OLMoE-1B-7B（自然テキスト・ルート条件付き）— 中心的な反例</h3>
+      <p>MoE では自然テキストでの素朴な Ising は ARI 0.006 まで崩壊しました（dense は 0.199〜0.350）。ルート条件付きにすると、最大のルート層のクラスタで層内 ARI が 0.191 まで回復します。これはランダム分割の帰無分布（平均 0.085）から +3.05σ 外れており、シグナル自体は統計的に実在し、サンプル数由来ではないことが確認されました。</p>
+      <p>ところがクロージャは失敗します。22 ヘッドの候補を取り除くと、ルート層クラスタで損失は −0.647、層外では −1.245 と、どちらも<strong>負</strong>でした。つまりアブレーションが損失を<strong>改善</strong>してしまい、しかも層外のほうが効果が大きいという、回路の定義と逆向きの結果です。正解ロジットも誤った向き、正解率はほぼ変化なしで、判定は失敗（統計的には強いが方向が誤り）となりました。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>MoE の失敗は、統計的なシグナルが強い（+3.05σ で実在）にもかかわらず、因果検証では回路の定義と<strong>逆向き</strong>に出た点が重要です。指標や閾値の選び方では救済できないため、単に検出力が足りないという説明よりも重く受け止められます。</p>
+        </div>
+      </div>
+
+      <h3>形と機能は別物：2 つの代理指標</h3>
+      <p>著者はさらに、別の 2 つの安価な代理指標（proxy）も導入しました。注意の選択性（selectivity）は、注意が特定の位置にどれだけ集中しているかを測る指標です。参加比（participation ratio）は、注意がおおよそ何個の位置に広がっているかを測る指標です。著者はこの 2 指標を訓練の途中チェックポイントで検証しました。その結果、「機能はあるが形がない（function without form）」「形はあるが機能がない（form without function）」の両方が起きることを観測しました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">機能はあるが形がない</p>
+          <p>OLMo 1B の学習初期（約 20 億トークン時点）では、BOS（系列の先頭トークン、beginning-of-sequence）に注目するヘッドの注意パターンはまだ形になっていません（選択性は閾値の約 1/50）。ところが、このヘッドを取り除くと正解率が −6.1σ 下がります。形がなくても機能はすでに load-bearing でした。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">形はあるが機能がない</p>
+          <p>逆に Pythia の別の段階では、選択性も参加比も十分高いヘッドが、取り除いても予測を損なわない例も見つかっています。注意パターンの形と機能は、感度の違う同じものではなく、別個の概念だというのが著者の主張です。</p>
+        </div>
+      </div>
+
+      <p>なお著者は、3 指標それぞれに固有の弱点があることから、複数指標での報告を推奨しています。損失は集約のスラックで真の効果を過小評価したり、対照のばらつきが小さいと過大評価したりします。正解率は精度が低い領域で飽和します。最も安定なのは正解トークンのロジットだとしています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の価値は、むしろ「うまくいかなかった結果」にあります。拡散したケースや MoE の失敗例は、安価な統計的シグナルだけでは回路を確定できないことを具体的に示しています。とくに MoE の失敗は方向が逆向きであり、指標や閾値の選び方では救済できないため、単に検出力が足りないという説明よりも重く受け止められます。著者によれば、dense と MoE で共活性化の解釈可能性を体系的に比較したのは、知る限り初めてとのことです。</p>
+      <p>著者は「主張しないこと」も明確にしています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">SAE は対象外</p>
+          <p>スパースオートエンコーダ（SAE）の特徴多様体については何も主張しない（検証法が異なるため）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">dense 一般化はしない</p>
+          <p>「dense で一般に機能する」とは主張しない。検証は 2 つの dense 1B モデルと 2 分布に限られ、他のモデル系列やコード・数学・非英語テキストは未検証。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">MoE 否定はしない</p>
+          <p>「MoE が解釈可能性を壊す」とは主張しない。1 つの MoE モデル・1 分布・1 つのルート条件付き拡張での負例にとどまる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">発達的説明はしない</p>
+          <p>単一チェックポイントのスナップショットであり、発達的な説明は主張しない。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">介入法に依存しうる</p>
+          <p>アブレーションはヘッド出力をゼロ化する破壊的な介入であり、平均アブレーションや activation patching など別の介入では結果が変わりうる。</p>
+        </div>
+      </div>
+
+      <p>これらの限定は、結論を過度に一般化しないための誠実な線引きと言えます。</p>
+
+      <h2>まとめ</h2>
+      <p>この論文は、「一緒に発火するヘッドのまとまり」を見つける安価な手法が回路の発見手法なのかを、ヘッドを取り除く因果検証で問い直しました。dense モデルでは候補が検証を通過する一方、MoE では統計的に強いシグナルでも逆向きに失敗することを示し、共活性化クラスタリングは回路の「提案」であって「発見」ではない、確認するのはクロージャだ、と結論づけています。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>注意ヘッド（attention head）</dt>
+        <dd>Transformer の自己注意機構を構成する小さな処理単位。入力のどの位置に注目するかをそれぞれ担当する。本研究で内部を読み解く単位。</dd>
+
+        <dt>機械的解釈可能性（mechanistic interpretability）</dt>
+        <dd>モデルのどの部品が何の機能を担うかを内部から突き止める研究分野。</dd>
+
+        <dt>回路（circuit）</dt>
+        <dd>協力して機能を実装し、取り除くとその機能に関わる入力でモデルの挙動が劣化する部品群（load-bearing なまとまり）。</dd>
+
+        <dt>アブレーション（ablation）</dt>
+        <dd>特定のヘッドの出力をゼロ化して取り除く因果的な介入。</dd>
+
+        <dt>クロージャテスト（closure test）</dt>
+        <dd>見つけたコミュニティを取り除き、同サイズのランダム対照と被害を比較して、被害が回路に期待される向きか、かつランダム集合の効果分布の外かを問う検証。</dd>
+
+        <dt>共活性化（co-activation）</dt>
+        <dd>固定した入力バッチにわたる、部品同士の同時発火の統計。</dd>
+
+        <dt>ペアワイズ Ising モデル</dt>
+        <dd>二値スピン（ここではヘッド）間の結合を表すモデル。擬似尤度で安価に推定する。</dd>
+
+        <dt>ARI（adjusted Rand index）</dt>
+        <dd>教師ありの分類結果とクラスタリング結果の一致度。分割数 k の選択に使う。</dd>
+
+        <dt>z スコア</dt>
+        <dd>候補の効果から対照の平均を引き、対照の標準偏差で割った値。ランダム対照分布からの逸脱度を σ 単位で表す。</dd>
+
+        <dt>下流冗長性（downstream redundancy）</dt>
+        <dd>取り除いたコミュニティの出力を後続層が部分的に再構成し、正解ロジットが崩れても集約損失は保たれる現象。</dd>
+
+        <dt>MoE（Mixture-of-Experts）</dt>
+        <dd>入力ごとに一部のエキスパートだけを使うアーキテクチャ。本研究の MoE 対象は OLMoE-1B-7B。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Closure-Validated Circuit Discovery in Attention Heads: Co-activation Proposes, Ablation Disposes</p>
+      <a href="https://arxiv.org/abs/2606.09607" target="_blank" rel="noopener noreferrer">arXiv:2606.09607 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

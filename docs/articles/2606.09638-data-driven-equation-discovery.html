@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>データから支配方程式を見つける研究を地図に整理する——「発見可能性の相図」と「REO」という2つの視点 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09638-data-driven-equation-discovery-cover.png"
+           alt="観測データから支配微分方程式を見つける「データ駆動型方程式発見」を、構造の複雑さ×係数の複雑さの相図と、表現・評価・最適化（REO）の3要素という2つの視点で地図化する総説のインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">データから支配方程式を見つける研究を地図に整理する——「発見可能性の相図」と「REO」という2つの視点</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09638</span>
+      <span>カテゴリ：cs.LG / cs.SC / math-ph / physics.comp-ph / stat.AP</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>観測データから物理現象を支配する微分方程式を直接見つけ出す「データ駆動型の微分方程式発見（data-driven equation discovery）」は、近年さまざまな手法が一気に増えた一方で、分野全体を見渡す共通の視点を欠いていました。この論文は新しいアルゴリズムを提案するのではなく、分野を整理する総説（Review）として 2 つの視点を示します。1 つは、問題の難しさを「構造の複雑さ」と「係数の複雑さ」の 2 軸で位置づける<strong>「発見可能性の相図（phase diagram of discoverability）」</strong>。もう 1 つは、発見の過程を「表現・評価・最適化」の 3 要素に分解する<strong>「REO フレームワーク」</strong>です。そのうえで、応用例と「方程式を復元するその先」にある科学的概念の形成という課題を展望します。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">2 つ</span>
+          <span class="stat__label">本論文が示す整理の視点<br>（発見可能性の相図 ＋ REO）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">3×3</span>
+          <span class="stat__label">相図のグリッド<br>（構造の複雑さ × 係数の複雑さ）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">3 要素</span>
+          <span class="stat__label">REO による発見の分解<br>（表現・評価・最適化）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">第 4 の次元</span>
+          <span class="stat__label">新たに提案した評価軸<br>「可解性（solvability）」</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>微分方程式は、物理現象を記述するための基本的な言葉です。流体の運動を表す Navier–Stokes 方程式、化学のパターン形成を表す Gray–Scott 方程式、天体の動きを表す重力 N 体方程式など、科学の発見はしばしば「正しい方程式を見つけること」と結びついてきました。</p>
+      <p>従来の科学では、こうした方程式を第一原理（first principles）、つまり基本法則からの理論的な導出によって組み立ててきました。しかしこのやり方は、対象の系が十分に単純なときにしかうまく働きません。気候のダイナミクスのように高次元で強い非線形性を持ち、複数のスケールが絡み合う現実の系では、人間の直観だけで支配方程式を書き下すのは困難です。</p>
+      <p>一方で現代の機械学習は、複雑な挙動を高い精度でフィットできます。ただし、入力と出力をつなぐ近似器として働くため、中身が見えにくく、解釈可能性に欠けるという弱点があります。</p>
+      <p>そこで登場したのが、データから解釈可能な支配則を直接取り出す「データ駆動型の微分方程式発見」です。この分野は AI ベースの手法とともに急速に拡大しましたが、論文の著者らは「研究を整理する明確な視点が欠けている」と指摘します。本研究は、その地図を描こうとする試みです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>データ駆動型の方程式発見には、歴史的な流れがあります。線形モデルや多項式展開のフィットから始まり、遺伝的アルゴリズムによる非線形系の同定、スパース回帰（特に SINDy）を経て、近年は偏微分方程式（PDE）の発見へと進んできました。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">線形モデル・多項式展開のフィット</p>
+          <p>最初期。あらかじめ用意した形に観測データを当てはめる。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">遺伝的アルゴリズムによる非線形系の同定</p>
+          <p>探索的に非線形な構造を組み立てる方向へ。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">スパース回帰（特に SINDy）</p>
+          <p>候補項の辞書から「効いている項」だけを選び出す。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">偏微分方程式（PDE）の発見へ</p>
+          <p>時間と空間が結合した、より厄介な対象へと拡張。</p>
+        </li>
+      </ol>
+
+      <p>しかし、この発見問題は本質的に難しい性質を持ちます。論文では次のように整理されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">不良設定</span> 逆問題としての難しさ</p>
+          <p>微分方程式発見は、方程式の「形（form）」と「係数（parameters）」の両方を観測データから推定する逆問題であり、一般に強い不良設定（highly ill-posed）です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">非一意性</span> 観測では区別できない</p>
+          <p>異なる支配方程式が、有限時間の観測ではまったく区別できない軌道を生むことがあります。これは「観測の非一意性（non-uniqueness）」と呼ばれ、特にノイズや不完全な観測のもとで顕著になります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">複合的</span> 単なる代数関係を超える</p>
+          <p>時間と空間の結合、ノイズを含むデータの微分、隠れた変数、境界の影響、系の状態の一部しか見えない部分観測（partial observability）など、厄介な要素が絡みます。</p>
+        </div>
+      </div>
+
+      <p>これに加えて、著者らは既存のレビューの限界も挙げます。多くのレビューは手法を「アルゴリズムの系列」か「応用ドメイン」で分類してきました。しかしそれでは、「与えられたデータから実際にどの方程式が発見可能なのか」「何がその方程式を科学的に意味あるものにするのか」という、より深い問いが見えにくくなってしまう、というのが著者らの問題意識です。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>繰り返しになりますが、この論文は新しいアルゴリズムではなく、分野を整理する 2 つの概念的な枠組みを提示します。</p>
+
+      <h3>問題の書き方</h3>
+      <p>まず出発点として、微分方程式を陰的な作用素の形 <code>F(z, u, ∇u, ∇²u, …) = 0</code> で書きます。ここで z は時間 t と空間座標 s をまとめた独立変数、u はその点での系の状態です。式の中の ∇u・∇²u は、u の空間方向の 1 階・2 階の微分（勾配・ラプラシアン、つまり「u が空間的にどれだけ変化しているか」とその変化のさらなる変化）を表します。要するにこの式は、状態 u とその各種の微分のあいだに成り立つ関係を「＝0」という形でまとめて書いたものです。u が時間だけに依存すれば常微分方程式（ODE）、時間と空間の両方に依存すれば偏微分方程式（PDE）になります。</p>
+      <p>実際の多くの手法は、これを「進化形式（evolution form）」 <code>ut = Σ θk Φk(u, ∇u, ∇²u, …)</code> に書き換えます。左辺の ut は u の時間微分（∂u/∂t、つまり u が時間とともにどう変化するか）を表します。右辺の Σ θk Φk は、候補となる構造の部品（項）Φk に、それぞれの係数 θk を掛けて足し合わせたものです。言い換えれば「u の時間変化は、いくつかの候補項を係数つきで足し合わせたもので説明できる」と仮定する書き方です。この書き方をすると、難しさの主要な源が 2 つに見えてきます。すなわち、どんな項 {Φk} を候補に並べるかという<strong>「構造の複雑さ」</strong>と、その係数 {θk} がどれだけ複雑かという<strong>「係数の複雑さ」</strong>です。</p>
+
+      <h3>視点1：発見可能性の相図</h3>
+      <p>1 つ目の視点は、この 2 つの難しさを 2 軸にとった「相図（phase diagram）」です。著者らは既存の手法を、構造の複雑さ（横軸）と係数の複雑さ（縦軸）からなる概念的な 3×3 グリッドに配置しました。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 420" role="img" aria-label="横軸に構造の複雑さ（閉形式から開形式へ）、縦軸に係数の複雑さ（定数から表現不能へ）をとった相図。左下は良設定でスパース回帰が有効、右上は開形式の構造と表現できないほど複雑な係数が交わる現在の未開拓フロンティアであることを示す図">
+          <defs>
+            <marker id="arrow-eq" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <!-- 軸 -->
+          <path class="edge" d="M110,360 L660,360" marker-end="url(#arrow-eq)"></path>
+          <path class="edge" d="M110,360 L110,40" marker-end="url(#arrow-eq)"></path>
+          <text class="edge-label" x="385" y="395" text-anchor="middle">構造の複雑さ：閉形式 → 開形式</text>
+          <text class="edge-label" x="40" y="200" text-anchor="middle" transform="rotate(-90 40 200)">係数の複雑さ：定数 → 表現不能</text>
+
+          <!-- 左下：良設定 -->
+          <rect class="node" x="130" y="270" width="190" height="78" rx="8"></rect>
+          <text class="node-label" x="225" y="300" text-anchor="middle">左下：構造も係数も単純</text>
+          <text class="edge-label" x="225" y="322" text-anchor="middle">well-posed（良設定）</text>
+          <text class="edge-label" x="225" y="340" text-anchor="middle">スパース回帰が有効</text>
+
+          <!-- 中央：ill-posed へ -->
+          <rect class="node" x="270" y="166" width="190" height="78" rx="8"></rect>
+          <text class="node-label" x="365" y="196" text-anchor="middle">複雑さが増すと</text>
+          <text class="edge-label" x="365" y="218" text-anchor="middle">ill-posed になり、強い</text>
+          <text class="edge-label" x="365" y="236" text-anchor="middle">表現・制約・最適化が必要</text>
+
+          <!-- 右上：フロンティア -->
+          <rect class="node" x="450" y="58" width="220" height="86" rx="8"
+                fill="#eaf0fc" stroke="#2f5fd0" stroke-width="2.5"></rect>
+          <text class="node-label" x="560" y="86" text-anchor="middle">右上：開形式 × 表現不能</text>
+          <text class="edge-label" x="560" y="108" text-anchor="middle">現在のフロンティア</text>
+          <text class="edge-label" x="560" y="126" text-anchor="middle">未開拓（underexplored）</text>
+
+          <path class="edge" d="M320,300 L270,232" marker-end="url(#arrow-eq)"></path>
+          <path class="edge" d="M460,196 L450,134" marker-end="url(#arrow-eq)"></path>
+        </svg>
+        <figcaption class="diagram__caption">相図のポイントは、領域ごとに推論のレジーム（取り組み方の性質）が質的に異なる点にある。なお論文は、グリッドのセル内での相対位置が定量的な性能比較を意味するものではないと明記している。</figcaption>
+      </figure>
+
+      <ul>
+        <li><strong>横軸（構造の複雑さ）</strong>: 事前に定義された項のライブラリを使う「閉形式（closed-form）」から、演算子と変数を自由に組み合わせて任意の構造を作れる「開形式（open-form）」へと複雑さが増していきます。</li>
+        <li><strong>縦軸（係数の複雑さ）</strong>: 定数の係数から始まり、空間・時間・確率的な実現にわたって変化する係数へ、さらには明示的な関数関係では書けない（inexpressible）係数へと複雑さが増します。</li>
+      </ul>
+
+      <p>構造の複雑さの段階は、おおまかに 3 つに分かれます。以下では各段階の代表的な手法名を挙げますが、これらは「どんな手法がどの段階に属するか」の例であり、個々の名前を覚える必要はありません。段階のイメージだけつかめれば十分です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>構造の段階</th>
+            <th>考え方</th>
+            <th>代表的な手法</th>
+            <th>限界</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>閉ライブラリ手法</th>
+            <td>候補項を辞書として事前に用意</td>
+            <td>SINDy / PDE-FIND / WeakSINDy / DeepMoD / PINN-SR</td>
+            <td>真の項が辞書の外だと見つけられない</td>
+          </tr>
+          <tr>
+            <th>拡張可能ライブラリ手法</th>
+            <td>候補ライブラリを動的に拡張</td>
+            <td>EPDE / DLGA-PDE</td>
+            <td>部品が有限で、関数空間全体は張れない</td>
+          </tr>
+          <tr>
+            <th>開形式手法</th>
+            <td>演算子と変数を記号として階層的に合成</td>
+            <td>SPL / DSR / ODEFormer / LLM4ED / LLM-SR / EqGPT</td>
+            <td>最適構造の探索が NP 困難</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>補足すると、論文は強い非線形性を持つ「砕波直前の表面重力波」について、これまで報告されていなかった支配方程式を実験データから復元したと報告する EqGPT にも言及しています。</p>
+
+      <p>係数の複雑さの段階も、3 つに分かれます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">定数</span> 定数係数（constant）</p>
+          <p>最も単純で、線形なら最小二乗回帰、非線形なら Newton 型や勾配法で扱えます。多くの手法はここで止まりますが、現実の問題では係数が空間・時間・確率的に変動するため、適用範囲が限られます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">表現可能</span> 方程式で表現可能な係数</p>
+          <p>空間や時間で系統的に変化し、明示的な関数関係で書ける係数です。項と係数の関数形の両方を同時に同定しようとする点でより野心的です。grouped sparse regression や Stepwise-DLGA などが該当します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">表現不能</span> 方程式で表現不能な係数</p>
+          <p>確率的で不規則な場（汚染物質拡散の透水係数や熱伝導率など）。Karhunen–Loève 展開（KLE）で表されることが多く、従来手法は苦戦します。数少ない対応手法として HIN-PDE が挙げられています。</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>著者らはさらに、<strong>「構造（項）・係数・ノイズ」という分割そのものが、系本来の性質ではなく、現在のアルゴリズムの問題の立て方の帰結だ</strong>と指摘します。たとえば、ある表現での「係数」は、制御変数やレジームを追加すると発見可能な構造関係に変わりうる（実効拡散率や Reynolds 数依存の閉包などがその例です）。「ノイズ」とされるものの一部も、測定誤差ではなく、いまの表現では復元できていない構造かもしれない、というのです。</p>
+        </div>
+      </div>
+
+      <h3>視点2：REOフレームワーク</h3>
+      <p>2 つ目の視点は、発見の目的を 3 つの基本的な問いに抽象化する「REO フレームワーク」です。REO は representation（表現）・evaluation（評価）・optimization（最適化）の頭文字で、特定の手法のワークフローではなく、発見タスクそのものの抽象的な分解です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">R</span> Representation（表現）</p>
+          <p>方程式の候補がなす空間を、計算で扱える形にどう表すか。表現が仮説空間を決めます。代表的な形式は、候補項を並べた「構造化行列」、演算子を木やグラフで表す「シンボリック」、方程式を高次元ベクトルに写す「埋め込み」、方程式をトークン列として扱う「系列」。表現が柔軟になるほど最適化は難しくなる「no-free-lunch（ただ飯はない）」のトレードオフが本質的に存在します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">O</span> Optimization（最適化）</p>
+          <p>表現された仮説空間をどう効率よく探索するか。構造の単純さとデータ適合のバランスをとるスパース回帰、組合せ的な空間に強い遺伝的アルゴリズム（GA）、方程式の構成を逐次決定問題とみなす強化学習（RL）、微分可能な埋め込みに向く勾配法、そして LLM の登場で生まれた、重みではなくプロンプトを反復的に洗練するプロンプト最適化があります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">E</span> Evaluation（評価）</p>
+          <p>候補の方程式の良し悪しをどう判定するか。表現と最適化をつなぐインターフェースにあたります。指標を (1) データ適合精度、(2) 数学的な簡潔さ（Occam の剃刀と整合）、(3) 物理的整合性（次元の同次性など）の 3 次元に整理し、さらに第 4 の次元として「可解性（solvability）」を新たに提案しています。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＊</span>
+        <div class="callout__body">
+          <p>新たに提案された<strong>可解性（solvability）</strong>は、発見された方程式が実際に解析的・数値的に解けるかという観点で、既存の文献では論じられていないと明記されています。データに合っていても、過度に複雑で硬い（stiff な）方程式は、意味のある解を生まないからです。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>総説のため新規の実験はありませんが、論文は既存研究の俯瞰と評価実務の現状を整理しています。出典のある主な内容は次のとおりです。</p>
+
+      <h3>ベンチマークの現状</h3>
+      <p>ODE 発見では、細胞系を対象とする Gennemark &amp; Wedelin の 40 問超のベンチマーク、Feynman の物理学講義から作った AI Feynman データセット（ただし多くは代数方程式で ODE は少数）、カオス系の dysts、252 個の力学系を含む Strogatz データセット、1〜4 次元の 63 個を含む ODEBench などがあります。LLM ベースのシンボリック発見を評価する LLM-SRBench は、4 つの科学ドメインにわたる 239 個の難問題（うち 68 問が ODE 問題）を、記憶による近道を最小化するよう設計しています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">252 個</span>
+          <span class="stat__label">Strogatz データセットの力学系</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">63 個</span>
+          <span class="stat__label">ODEBench（1〜4 次元）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">239 問</span>
+          <span class="stat__label">LLM-SRBench の難問題<br>（うち 68 問が ODE 問題）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">40 問超</span>
+          <span class="stat__label">Gennemark &amp; Wedelin<br>（細胞系の ODE）</span>
+        </div>
+      </div>
+
+      <h3>PDE 発見の評価は未解決</h3>
+      <p>PDE 発見の厳密な評価は、まだ解決されていない課題です。現状は標準化された比較ではなく、個別の概念実証（proof-of-concept）に依存しています。Burgers 方程式や Kuramoto–Sivashinsky 方程式など、限られた正準 PDE で検証されることが多く、PDE 発見専用で広く採用された標準ベンチマークは現状存在しないと述べられています。汎用の PDE ベンチマーク（PDEArena、PDEBench など）が部分的に転用されているのが実情です。</p>
+
+      <h3>標準化への提言</h3>
+      <p>著者らは、実世界の多様な系を含む標準ベンチマークと標準評価プロトコルの必要性を訴えます。具体的には、ノイズロバスト性では摂動の分布（Gaussian / uniform）と注入の様式（加法的か乗法的か）、スパースデータではサンプリング方式（ランダムか Latin hypercube か）を標準化すべきだとします。LLM 関連手法では、データ漏洩を防ぐために非公開のテストセットが重要だとも述べています。</p>
+
+      <h3>応用例の整理</h3>
+      <p>応用を 4 つの繰り返し現れるパラダイムで整理しています。</p>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">(1) ノイズや不完全なデータからの発見</p>
+          <p>現実の観測が抱える不完全さのもとで方程式を取り出す。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">(2) ミクロな法則とマクロな挙動の橋渡し</p>
+          <p>細かい法則と全体の振る舞いをつなぐ。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">(3) 解釈可能な閉包モデルの発見</p>
+          <p>未解決スケールや構成則の効果を補う関係を見つける。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">(4) 新しい支配則の探索</p>
+          <p>粘性重力流について報告された方程式が、従来の理論導出モデルを短時間・長時間予測の両方のレジームで上回ったと記述されています。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>著者らの中心的なメッセージは、<strong>「次の課題は単に方程式を復元することではない」</strong>という点にあります。方程式はデータに合うだけでは科学的に重要にはならず、系の理解の仕方を変えてはじめて意味を持つ、と述べます。論文はその例として、Laplacian がまず微分作用素として現れ、後に「局所的な差が空間の変化を駆動する」という概念へと育っていった歴史を挙げています。</p>
+
+      <p>今後の展望は 2 つのレベルで整理されています。まず<strong>方法論レベル</strong>では、ノイズロバスト性、部分観測、スパースなサンプリング、高次元性、マルチスケールのモデリング、信頼できる評価プロトコルやベンチマークの設計が、残る技術的課題です。次に<strong>概念形成のレベル</strong>では、次の 3 方向が示されています。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">知識誘導型の発見（knowledge-guided discovery）</p>
+          <p>次元制約・対称性・保存則・既知の構成形を最初から探索の足場にする。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">メカニズム蒸留（mechanistic distillation）</p>
+          <p>ブラックボックスの科学機械学習モデルを、低次元の方程式ベースの代理モデルへ圧縮する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">閉ループ発見（closed-loop discovery）</p>
+          <p>候補を提案し、狙ったデータを集めてモデルを改訂する反復を回す。限定要因はデータの総量ではなく独立したレジームの数であり、次の観測は予測誤差を減らすためではなく、競合する方程式を見分けるために選ぶべきだと論じています。</p>
+        </li>
+      </ol>
+
+      <p>論文全体を通して、AI が候補の方程式を提案し、人間がそれを解釈・検証して、ともに科学的理解を前進させる「人間と AI の協働ループ」が強調されています。</p>
+
+      <p>一方で、著者らは自分たちの議論の限界も明示しています。</p>
+      <ul>
+        <li>既存のベンチマークや評価は、主に既知の方程式から生成した合成データに基づいており、実世界の発見の難しさを完全には反映していません。</li>
+        <li>表現の柔軟性が増すほど最適化が難しくなる no-free-lunch のトレードオフは、本質的に避けられません。</li>
+        <li>表現の違いがもたらす方程式空間の幾何や、競合方程式を分離する基準、理論に裏打ちされた探索原理についての研究はほとんどなく、より厳密な数学的基礎が不足しています。</li>
+        <li>本論文の応用レビューは網羅的なサーベイを意図しておらず、各分野の代表例の提示にとどまります。</li>
+      </ul>
+
+      <h2>まとめ</h2>
+      <p>この総説は、急拡大したデータ駆動型の微分方程式発見を、「構造の複雑さ × 係数の複雑さ」の相図と「表現・評価・最適化（REO）」という 2 つの問題志向の視点で地図化しました。そして、方程式を復元するだけでなく、それを使って理論を改訂し、メカニズムを蒸留し、新しい科学的概念を形作ることが次の目標だと展望します。個々のアルゴリズムの優劣ではなく、「何が発見可能で、何が科学的に意味あるものにするのか」という基本原理へ議論を引き上げようとする点に、この論文の狙いがあります。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>支配微分方程式（governing differential equation）</dt>
+        <dd>系の時間的・空間的な発展を規定する微分方程式。本論文が発見の対象とするもの。</dd>
+
+        <dt>データ駆動型方程式発見（data-driven equation discovery）</dt>
+        <dd>観測やシミュレーションのデータから、方程式の形と係数を直接推定すること。</dd>
+
+        <dt>不良設定 / 非一意性（ill-posed / non-uniqueness）</dt>
+        <dd>観測上は区別できない異なる方程式が存在しうるという、発見問題の中心的な困難。</dd>
+
+        <dt>進化形式（evolution form）</dt>
+        <dd>ut = Σ θk Φk(…) の形（ut は u の時間微分、Σ θk Φk は候補項 Φk に係数 θk を掛けて足し合わせたもの）。発見の問題を、項の選択と係数の推定に分解する定式化。</dd>
+
+        <dt>SINDy / PDE-FIND</dt>
+        <dd>スパース回帰による方程式発見の代表手法と、その偏微分方程式（PDE）版。</dd>
+
+        <dt>閉形式 / 開形式（closed-form / open-form）</dt>
+        <dd>事前定義の有限な候補項を使うか、演算子と変数の合成で任意の構造を作れるか、という構造表現の違い。</dd>
+
+        <dt>REO フレームワーク</dt>
+        <dd>発見の過程を representation（表現）・evaluation（評価）・optimization（最適化）の 3 要素に抽象分解する、本論文の枠組み。</dd>
+
+        <dt>可解性（solvability）</dt>
+        <dd>発見された方程式が実際に解けるかという、本論文が新たに提案した第 4 の評価次元。</dd>
+
+        <dt>閉包モデル（closure model）</dt>
+        <dd>既知の枠組みに対し、未解決スケールや構成則の効果を補う追加の関係。例として RANS の Reynolds 応力。</dd>
+
+        <dt>メカニズム蒸留 / 閉ループ発見（mechanistic distillation / closed-loop discovery）</dt>
+        <dd>ブラックボックスモデルが学んだ内容を解釈可能な方程式へ取り出すことと、提案・データ収集・改訂を反復する発見の進め方。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Data-driven discovery of governing differential equations across physical systems</p>
+      <a href="https://arxiv.org/abs/2606.09638" target="_blank" rel="noopener noreferrer">arXiv:2606.09638 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

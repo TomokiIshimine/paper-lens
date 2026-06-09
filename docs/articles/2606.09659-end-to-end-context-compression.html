@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>長文をそのまま読ませない――入力を「潜在埋め込み」へ圧縮する大規模言語モデル群 LCLMs — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09659-end-to-end-context-compression-cover.png"
+           alt="入力トークン列を encoder で短い潜在埋め込み（soft token）へ end-to-end 圧縮し、decoder が通常の LLM と同じように生成する Latent Context Language Models（LCLMs）の仕組みと、KV cache 圧縮を上回る精度・速度・メモリのトレードオフを示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">長文をそのまま読ませない――入力を「潜在埋め込み」へ圧縮する大規模言語モデル群 LCLMs</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09659</span>
+      <span>カテゴリ：cs.CL</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>大規模言語モデル（large language model、以下 LLM）に長い文章を読ませると、メモリと処理時間が膨らんで実用上のボトルネックになります。この論文は、入力のトークン列を「短い潜在埋め込み列」へ end-to-end（端から端まで一気通貫）で圧縮するモデル群 <strong>Latent Context Language Models（LCLMs）</strong> を、大規模な学習で構築しました。その結果、精度・圧縮速度・ピークメモリのトレードオフにおいて、従来主流だった KV cache の圧縮手法を上回るバランスを実現したと報告しています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">8.8 倍</span>
+          <span class="stat__label">圧縮が速い<br>（RULER の 4k コンテキスト、Figure 1）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">5.2 倍</span>
+          <span class="stat__label">圧縮が速い<br>（LongBench の 64k コンテキスト、Figure 1）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">1:16</span>
+          <span class="stat__label">主に扱う圧縮率<br>（16 トークン → 潜在トークン 1 個）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">350B+</span>
+          <span class="stat__label">継続事前学習トークン数<br>（各圧縮率ごと）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>ChatGPT のような LLM は、与えられた文章（コンテキスト）を手がかりに答えを作ります。近年は数百万トークンに及ぶ長大な入力を扱う用途が増えていますが、入力が長くなるほど推論はメモリと遅延（レイテンシ）で律速されます。</p>
+      <p>その主因が KV cache です。これは推論中にモデルが内部で保持する中間データで、コンテキストが長くなるほど線形に膨らみ、GPU のメモリを食いつぶします。長文を扱いたいのにメモリが足りない、という板挟みが起きるわけです。</p>
+      <p>さらに、入力がモデルの扱える上限に収まっていても、長文の中に散らばった情報をモデルが確実に拾えるとは限らないことが知られています。「長く読ませれば良い」という単純な話ではないのです。この研究は、入力そのものを賢く圧縮することでこの問題に正面から取り組みます。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>長文のメモリ問題に対する従来のアプローチは、大きく分けて二つあります。論文はそれぞれの限界を整理しています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>アプローチ</th>
+            <th>やり方</th>
+            <th>論文が指摘する限界</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>KV cache 圧縮</th>
+            <td>膨らんだ KV cache から重要でないエントリを捨てる、あるいはコンパクトな cache を事前に学習する。</td>
+            <td>圧縮前にフルのコンテキストを処理（prefill）する必要がある手法が多く、追加の時間・メモリを要する。捨てた位置を「無視」扱いにするだけで実際には場所を空けず、節約効果が出にくい。</td>
+          </tr>
+          <tr>
+            <th>encoder-decoder の soft-token 手法</th>
+            <td>長いトークン列を短い連続埋め込み列（soft token）に符号化し、元コンテキストの代わりに LLM へ渡す。</td>
+            <td>圧縮を並列化でき推論エンジンとの相性も良いが、既存手法はモデル本来の能力を大きく損なうか、特定ドメイン向け学習に頼り、タスクをまたいで使い回せない。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>KV cache 圧縮系には、ほかにも次のような難しさがあると論文は整理しています。</p>
+      <ul>
+        <li>クエリに依存する手法（例: SnapKV）は、対話のターンをまたいで再利用しにくい cache を作ってしまう。</li>
+        <li>attention head（注意ヘッド。入力のどこに注目するかを担う内部ユニット）や層ごとに cache を捨てる量を変える手法（例: KVzip）は、cache 長がそろっている前提で組まれた近代的な推論エンジン（vLLM や SGLang）に組み込みにくい。</li>
+        <li>別系統の Cartridges（Eyuboglu et al. 2025）はコーパスごとに固定サイズの KV cache を蒸留するが、コーパスあたりの学習コストが大きく、8B モデルでは 8 台の H100 を使って約 30 分かかると報告されている。</li>
+      </ul>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">？</span>
+        <div class="callout__body">
+          <p>そこで論文が掲げる根本の問いは、<strong>「モデル本来の能力を保ったまま、汎用かつタスクに依存しない圧縮器を学習できるか」</strong>というものです。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>提案する LCLM は、次の三つの部品からなる encoder-decoder 構成です（Section 3）。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">encoder</span> 符号化器</p>
+          <p>入力トークンのまとまりを soft token に写す。pooling（プーリング、複数の隠れ状態を 1 個に集約する演算）を備える。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">adapter</span> アダプタ</p>
+          <p>encoder 側の次元を decoder 側の埋め込み次元へ射影する。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">decoder</span> 復号器</p>
+          <p>soft token を「潜在コンテキスト」として受け取り、通常の LLM と同じように文章を生成する。</p>
+        </div>
+      </div>
+
+      <p>仕組みはこうです。入力トークン列と圧縮率 N が与えられると、encoder は連続する N トークンのブロックごとに 1 個の潜在トークンへまとめます。実装上は、encoder が 1 回の処理で扱うトークン数（encoder window size W）で入力を区切り、各区間の隠れ状態を pooling で集約して潜在トークンを得ます。adapter がそれを decoder の次元へ射影し、decoder は元のトークンの代わりにこれを消費します。N=16 なら、16 トークンが 1 個の潜在トークンに圧縮されるイメージです。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 240" role="img" aria-label="入力トークン列が encoder で pooling により短い潜在トークンへ圧縮され、adapter が decoder の次元へ射影し、decoder が潜在コンテキストを消費して文章を生成する LCLM の処理フロー図。圧縮率 N=16 では 16 トークンが 1 個の潜在トークンになる">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="16" y="90" width="150" height="60" rx="8"></rect>
+          <text class="node-label" x="91" y="116" text-anchor="middle">入力トークン列</text>
+          <text class="edge-label" x="91" y="136" text-anchor="middle">N トークンごとに区切る</text>
+
+          <rect class="node" x="206" y="90" width="130" height="60" rx="8"></rect>
+          <text class="node-label" x="271" y="116" text-anchor="middle">encoder</text>
+          <text class="edge-label" x="271" y="136" text-anchor="middle">pooling で集約</text>
+
+          <rect class="node" x="376" y="90" width="130" height="60" rx="8"></rect>
+          <text class="node-label" x="441" y="116" text-anchor="middle">adapter</text>
+          <text class="edge-label" x="441" y="136" text-anchor="middle">次元を射影</text>
+
+          <rect class="node" x="546" y="90" width="130" height="60" rx="8"></rect>
+          <text class="node-label" x="611" y="116" text-anchor="middle">decoder</text>
+          <text class="edge-label" x="611" y="136" text-anchor="middle">文章を生成</text>
+
+          <text class="edge-label" x="271" y="64" text-anchor="middle">潜在トークン（soft token）</text>
+          <text class="edge-label" x="611" y="64" text-anchor="middle">潜在コンテキストとして消費</text>
+
+          <path class="edge" d="M166,120 L204,120" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M336,120 L374,120" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M506,120 L544,120" marker-end="url(#arrow)"></path>
+        </svg>
+        <figcaption class="diagram__caption">LCLM の処理フロー。入力を N トークンごとに区切り、encoder が pooling で潜在トークンへ圧縮、adapter が decoder の次元へ射影し、decoder が潜在コンテキストとして消費して生成する。</figcaption>
+      </figure>
+
+      <h3>多段の学習レシピ</h3>
+      <p>LCLM の肝は、大規模かつ慎重に設計された学習手順にあります（Section 4）。学習データは 3 種類をキュレーションしています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">継続事前学習データ</p>
+          <p>Common Crawl のテキスト、コード、科学・推論、長文、指示型データを混ぜた高品質データ。圧縮セグメントと通常トークンのセグメントを交互に並べる「interleaved（インターリーブ）」形式を採用し、損失は非圧縮トークンに対してだけ計算します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">SFT（教師あり微調整）データ</p>
+          <p>推論、長文の指示追従、一般的な指示追従・マルチターン会話の 3 成分。一部の completion は Qwen3-30B-A3B-Instruct-2507 と Qwen3-235B-A22B-Instruct-2507 で付け直しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">補助 reconstruction データ</p>
+          <p>圧縮したテキストから元の内容を復元させる補助タスク。潜在表現に細かい情報を保たせる狙いがあります。プロンプトの過適合を抑えるため、ソースごとに 100 種類のテンプレートを使います。</p>
+        </div>
+      </div>
+
+      <p>学習は一気に全部を動かすのではなく、学習対象のパラメータを段階的に増やしていきます（Section 4.2）。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">Stage 0：adapter のウォームアップ</p>
+          <p>encoder と decoder は凍結し、adapter だけ更新する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">Stage 1：encoder の学習</p>
+          <p>encoder を解凍し、decoder は凍結したまま学習する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">Stage 2：end-to-end の継続事前学習</p>
+          <p>小さな学習率で decoder も解凍し、全体を一気通貫で学習する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">Stage 3：教師あり微調整</p>
+          <p>SFT 混合で学習し、decoder の学習率を上げる。</p>
+        </li>
+      </ol>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＊</span>
+        <div class="callout__body">
+          <p>論文によれば、最初から全体を end-to-end で学習すると学習初期に勾配が大きくなりモデルが劣化し、この多段レシピに劣ったとのことです。decoder を完全に凍結する案や、LoRA（少数のパラメータだけを追加学習する手法）のような省パラメータな変種も検討しましたが、全パラメータ学習に大きく及ばなかったため、最終的に end-to-end の全パラメータ学習に注力しています。</p>
+        </div>
+      </div>
+
+      <h3>アーキテクチャの探索</h3>
+      <p>どの設計が良いかは、事前学習済みモデルの影響を排した「cleanroom（クリーンルーム）」設定で比べています。Qwen3-0.6B を基底にして全重みをランダム初期化し、各変種を 38B トークン・圧縮率 N=16 でゼロから学習し、事前学習の損失を比較しました（Section 5）。主な知見は次のとおりです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">pooling</p>
+          <p>mean pooling（平均プーリング）はトークンベースの pooling より一貫して損失が低い。ただし concatenation（連結）とは経験的に区別がつかない。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">符号化の粒度</p>
+          <p>W を 16 から 256 へ増やすと大きく改善し、256 から 1024 への増加でさらに小幅改善。1024 を既定値に採用。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">encoder の attention マスク</p>
+          <p>causal masking（因果マスク）が bidirectional（双方向）より一貫して低い損失。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">adapter</p>
+          <p>軽量な MLP 射影が attention ベースのものより低い損失かつ低計算。</p>
+        </div>
+      </div>
+
+      <p>主要な実験では、encoder に Qwen3-Embedding-0.6B、decoder に Qwen3-4B-Instruct-2507 を使い、主に 16× 圧縮を扱うため mean pooling を既定としています。</p>
+
+      <h3>エージェント向けの足場</h3>
+      <p>論文は、LCLM をエージェント（自律的にツールを使う AI）に組み込む仕組みも示しています（Section 7）。入力を 512 トークンずつのチャンクに分けて各々を圧縮し、整数 ID を付けます。モデルには圧縮済みの系列全体と <code>EXPAND</code> という 1 つのツールが渡され、<code>EXPAND(i)</code> を呼ぶと該当セグメントの原文が非圧縮で返ります。普段は圧縮版で読み、必要な箇所だけ原文を「展開」する、という使い方です。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価は主に長文ベンチマークの RULER、LongBench、LongHealth で行い、細かい圧縮品質の分析には GSM8K も使っています（Section 6）。比較対象は KV cache 圧縮の代表手法（Expected Attention、Attention Matching、KVzip、FastKVzip、SnapKV）で、いずれも同じ decoder（Qwen3-4B-Instruct-2507）を土台にして公平に比べています。圧縮の速さは time-to-first-token（TTFT、最初のトークンを生成できるまでの時間）で測り、ピークメモリと合わせて H200 GPU（メモリ 141GB）上で計測しています。</p>
+
+      <p>モデル群そのものは 0.6B の encoder と 4B の decoder の組み合わせで、圧縮率 1:4、1:8、1:16 のそれぞれを 350B トークン超で継続事前学習しています。圧縮速度の主な数値は以下のとおりで、いずれも同等以上の精度を保ちつつ高速に圧縮できたとしています（Figure 5）。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">8.8 倍</span>
+          <span class="stat__label">RULER 4k で速い<br>（Figure 1）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">6.4 倍</span>
+          <span class="stat__label">RULER 8k で速い<br>（Figure 5）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">4.7 倍</span>
+          <span class="stat__label">RULER 16k で速い<br>（Figure 5）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">5.2 倍</span>
+          <span class="stat__label">LongBench 64k / LongHealth 約 64k で速い<br>（Figure 1・Figure 5）</span>
+        </div>
+      </div>
+
+      <p>そのほかの主な結果は次のとおりです。</p>
+
+      <ul>
+        <li>LCLM は RULER・LongBench・LongHealth で、圧縮時間と精度の新しいパレートフロンティア（どちらか一方を犠牲にせず両立できる境界）を引いた。KV cache 圧縮手法は圧縮時間が圧縮率にほとんど依存しないため、これらのプロット上ではほぼ垂直な線として現れる。</li>
+        <li>メモリと時間のスケーリング（コンテキスト長 4K〜1M、Figure 4）では、LCLM が最速の圧縮時間を達成し、長いコンテキストで大幅に低いピーク GPU メモリを示した。</li>
+        <li>細かい粒度の圧縮（GSM8K でプロンプトとコンテキスト全体を圧縮、Figure 12）では、LCLM が全ての圧縮率で最高精度を達成し、特に高圧縮率での差が大きい。</li>
+        <li>エージェント設定（RULER の「干し草の山から針を探す」課題、Figure 6）では、<code>EXPAND</code> ツールを持つエージェントが 16× 圧縮した素の LCLM を大幅に上回り、一部設定では非圧縮コンテキストの性能に匹敵した。</li>
+      </ul>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>メモリ面の対比は顕著です。対する Attention Matching は 1M トークンでメモリ不足（OOM）に陥り、512K では数値的な不安定さで失敗。他の手法はすべて 512K と 1M で OOM になっています（Figure 4）。</p>
+        </div>
+      </div>
+
+      <p>学習規模の感触として、16× 設定では Stage 0〜3 の合計トークンがそれぞれ 38.83B、77.65B、182.51B、51.05B、バッチサイズは 400 万トークン、系列長は 16384、最適化手法は AdamW（学習に広く使われる最適化手法）を用いています（Table 1）。</p>
+
+      <h2>意義と限界</h2>
+      <p>論文は、長文ベンチマーク・標準的な知識/指示追従タスク・エージェント設定にわたり、学習された圧縮が「強い文脈内能力（in-context 能力）を保ったまま大幅な効率向上をもたらす」ことを示したと結論づけています。LCLM は、入力を大規模に削減することで、大きく永続的な作業メモリを持つ長期間のエージェントの基盤になりうると位置づけています。</p>
+      <p>一方で、著者自身が次の限界・今後の課題を挙げています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">トレードオフの改善余地</p>
+          <p>複数の粒度での圧縮や、情報密度に応じた容量の動的割り当てによる、品質と効率のトレードオフの一層の改善。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">生成中の状態への拡張</p>
+          <p>静的な入力コンテキストだけでなく、生成中の状態（長い思考過程、ツールの観測結果、エージェントが蓄積した作業履歴）への圧縮の拡張。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">window 境界の分断</p>
+          <p>encoder window を入力長より小さく取ると入力が複数の window に分割され、境界をまたぐ情報が二つの処理に分かれてしまう。境界を重ねる変種も試したが損失は改善せず計算が増えたため、既定では重ねていない。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">推論エンジンとの整合</p>
+          <p>一部の KV cache 手法は、専用カーネル（未公開・未実装）なしには標準的な推論エンジンで実時間の高速化やメモリ削減に必ずしも結びつかない、と著者は注意喚起している。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>LCLMs は、長文をそのまま読ませる代わりに、入力を短い潜在埋め込みへ end-to-end で圧縮する大規模学習済みモデル群です。多段の学習レシピと丁寧なアーキテクチャ探索によって、モデル本来の能力を保ちつつ、精度・速度・メモリのバランスで従来の KV cache 圧縮を上回るフロンティアを示しました。長期間動くエージェントの「作業メモリ」を効率化する実用的な部品として期待されます。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>KV cache</dt>
+        <dd>推論中にモデルが保持する key/value の中間データ。コンテキストが長いほど増え、長文推論のメモリ律速要因になる。</dd>
+
+        <dt>KV cache 圧縮（KV cache compression）</dt>
+        <dd>不要な cache を捨てたりコンパクトな cache を学習したりして、メモリ使用量を減らす手法群。</dd>
+
+        <dt>soft token</dt>
+        <dd>生の入力トークンを符号化した短い連続埋め込み。元コンテキストの代わりに LLM へ渡す。</dd>
+
+        <dt>LCLMs（Latent Context Language Models）</dt>
+        <dd>本論文が提案する、end-to-end で大規模学習した encoder-decoder 圧縮モデル群。</dd>
+
+        <dt>圧縮率 N</dt>
+        <dd>入力トークン数 ÷ 潜在トークン数。本論文では 1:4、1:8、1:16（= 4×、8×、16×）を扱う。</dd>
+
+        <dt>encoder window size W</dt>
+        <dd>encoder が 1 回の処理で扱う入力トークン数。既定は 1024。</dd>
+
+        <dt>pooling</dt>
+        <dd>encoder の隠れ状態を潜在トークンへ集約する演算。平均プーリングなどがある。</dd>
+
+        <dt>TTFT（time-to-first-token）</dt>
+        <dd>最初のトークンを生成できるまでの時間。本論文では「圧縮時間」の指標に用いる。</dd>
+
+        <dt>EXPAND ツール</dt>
+        <dd>エージェントが圧縮済みセグメントを原文へ展開するためのツール。</dd>
+
+        <dt>interleaved 圧縮</dt>
+        <dd>系列全体に圧縮スパンを分散配置し、損失を非圧縮トークンだけで計算する継続事前学習のデータ形式。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">End-to-End Context Compression at Scale</p>
+      <a href="https://arxiv.org/abs/2606.09659" target="_blank" rel="noopener noreferrer">arXiv:2606.09659 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

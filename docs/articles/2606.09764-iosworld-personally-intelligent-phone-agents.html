@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>iPhoneの中で「あなたを知る」AIは作れるか — 26アプリ横断ベンチマーク iOSWorld — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09764-iosworld-personally-intelligent-phone-agents-cover.png"
+           alt="ネイティブ iOS を対象に 26 個の自作アプリへ架空ユーザー Jordan Avery を共有させ、アプリ横断で個人データを推論できるかを 133 タスクで測る対話型ベンチマーク iOSWorld の仕組みと、最良構成でも全体正答率 52%・複数アプリ横断 37% にとどまる結果を示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">iPhoneの中で「あなたを知る」AIは作れるか — 26アプリ横断ベンチマーク iOSWorld</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09764</span>
+      <span>カテゴリ：cs.LG / cs.CL</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>スマートフォンを自動で操作する AI エージェントを評価する新しいベンチマーク <strong>iOSWorld</strong> を提案した論文です。これまでのベンチマークが扱ってこなかったネイティブ iOS を対象とし、26 個の自作アプリに「Jordan Avery」という 1 人の架空ユーザー像を共有させ、アプリをまたいで個人データを推論できるかを 133 個のタスクで測ります。Claude や GPT-5.4 といった最新モデルを評価した結果、最良の設定でも全体の正答率は 52% にとどまり、複数アプリにまたがるタスクでは 37% まで落ち込みました。エージェントが「個人として知的（personally intelligent）」に振る舞えるかには、まだ大きな隔たりがあることを示しています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">26 アプリ</span>
+          <span class="stat__label">単一のユーザー像を共有する自作アプリ群<br>（10 のライフドメインにまたがる）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">133 タスク</span>
+          <span class="stat__label">3 難易度で設計<br>（1 タスク平均 4.4 アプリを使用）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">52%</span>
+          <span class="stat__label">最良構成でも全体正答率はここまで<br>（複数アプリ横断では 37%）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">37%</span>
+          <span class="stat__label">multi-app の正答率<br>（最も難しいカテゴリ）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>スマートフォンの操作を肩代わりしてくれる AI エージェントは、実用化が期待される分野です。ただ、本当に役立つには「設定画面のボタンを正しく押せる」だけでは足りません。論文はこう指摘します。</p>
+
+      <blockquote>
+        <p>設定画面で正しいボタンをタップできても、所有者の最も一般的な通勤ルートを見つけられないエージェントは、有用な能力を示したとは言えない（§1）。</p>
+      </blockquote>
+
+      <p>つまり、私たちが日々スマートフォンに残している履歴・好み・人間関係といった「個人の文脈」を読み取って動けるかどうかが、実用性の分かれ目になります。ところが、これを測るための土台がこれまで存在しませんでした。本研究は、その評価基盤を初めて用意した点に意義があります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>既存のモバイルエージェント向けベンチマークには、2 つの空白がありました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">空白 1</span> 対象プラットフォームの偏り</p>
+          <p>これまでのベンチマークは Android・Web・デスクトップを対象にしており、ネイティブ iOS を扱う対話型のものが存在しませんでした。iOS は 25 億台を超えるアクティブデバイスがあり、米国のモバイル OS 利用の 58〜60% を占めるにもかかわらず、評価の対象外だったといいます（§1）。iOS は Android と UI の作り・画面遷移のパターン・アクセシビリティ基盤（画面要素を機械が読み取るための仕組み）が異なるため、Android 向けの知見をそのまま流用できません（§2.2）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">空白 2</span> 評価の中身</p>
+          <p>従来のベンチマークは、アプリに永続的なユーザーデータがなく、アプリ間のつながりも、実在ユーザーという概念もありませんでした。結果として、孤立したサンドボックス（隔離された箱庭）の中で指示どおり操作できるかを測るだけにとどまっていました。アプリにユーザー像を埋め込み、アプリ間に散らばった個人データへの推論を評価したものは、どのプラットフォームにもなかったのです（§2.2）。</p>
+        </div>
+      </div>
+
+      <p>なお本研究は、すでに研究が蓄積されている Web ブラウジング中心のタスクは対象外とし、ネイティブ iOS アプリと、そこに蓄えられた個人データに焦点を絞っています（§1）。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>中心となる考え方：personally intelligent</h3>
+      <p>論文の中核にあるのは <strong>personally intelligent（個人として知的）</strong> という概念です。これは、ユーザーの identity（人物像）・履歴・好みを、デバイス上に実在するデータとして推論する能力を指します。指示を箱庭の中でこなすだけの実行能力とは区別されます（§1）。</p>
+
+      <h3>26 アプリと 1 人のユーザー像</h3>
+      <p>iOSWorld は 26 個のアプリを自作し、すべてに単一のユーザー像「Jordan Avery」を共有させました。サンフランシスコ在住、Northstar Studio に勤務し、ハーフマラソンの練習中という 31 歳の人物です（§3.2）。</p>
+      <p>ポイントは、データがアプリをまたいで相互に参照される設計です。たとえば、フードデリバリーアプリで注文を入れると、銀行アプリに請求が生まれ、メールアプリに領収書が届く、といった具合です。連絡先も複数アプリに横断して登場します（§3.2）。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 230" role="img" aria-label="フードデリバリーアプリ QuickBite で Chipotle に注文すると、銀行アプリ MyBank に請求が生まれ、メールアプリ Mail に領収書が届く、というようにデータが 26 アプリをまたいで相互参照される iOSWorld の設計を示した図">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="30" y="90" width="190" height="64" rx="8"></rect>
+          <text class="node-label" x="125" y="118" text-anchor="middle">QuickBite（フード）</text>
+          <text class="edge-label" x="125" y="138" text-anchor="middle">Chipotle に注文</text>
+
+          <rect class="node" x="285" y="90" width="190" height="64" rx="8"></rect>
+          <text class="node-label" x="380" y="118" text-anchor="middle">MyBank（銀行）</text>
+          <text class="edge-label" x="380" y="138" text-anchor="middle">請求が発生</text>
+
+          <rect class="node" x="540" y="90" width="190" height="64" rx="8"></rect>
+          <text class="node-label" x="635" y="118" text-anchor="middle">Mail（メール）</text>
+          <text class="edge-label" x="635" y="138" text-anchor="middle">領収書が届く</text>
+
+          <text class="node-label" x="380" y="40" text-anchor="middle">単一ユーザー像「Jordan Avery」を 26 アプリで共有</text>
+
+          <path class="edge" d="M220,122 L283,122" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M475,122 L538,122" marker-end="url(#arrow)"></path>
+        </svg>
+        <figcaption class="diagram__caption">1 つの操作が複数アプリに波及する。アプリ間に散らばった個人データを横断して推論できるかが iOSWorld の評価対象。アプリは finance・messaging・travel・food など 10 のライフドメインにまたがり、Claude Code を補助として SwiftUI で開発したうえで人手で検証されている（§3.2）。</figcaption>
+      </figure>
+
+      <h3>エージェントはどう iOS を操作するか</h3>
+      <p>評価環境は、部分観測マルコフ決定過程（POMDP、環境の状態が完全には見えない状況を数式で表す枠組み）として定式化されています（§3.1）。実際の動作としては、macOS 上で Appium と XCUITest というツールを使い、Xcode が管理する iPhone シミュレータを制御します。各タスクは、26 アプリすべてがインストール・データ投入済みの決まった初期状態から始まります（§3.1）。</p>
+      <p>エージェントが画面から受け取る情報（観測）には、2 つのモード（モダリティ）があります（§3.1）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>観測モード</th>
+            <th>受け取る情報</th>
+            <th>位置づけ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>vision-only</th>
+            <td>各ステップでスクリーンショットだけを受け取る。</td>
+            <td>現実の運用能力を表す</td>
+          </tr>
+          <tr>
+            <th>vision+XML</th>
+            <td>スクリーンショットに加え、XCUITest 経由のアクセシビリティツリー（画面要素の種類・名前・値・座標などを構造化した木）を XML で受け取る（最大 200 要素・深さ 15 階層）。</td>
+            <td>「特権アクセス」ありの理論上限を表す</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>vision+XML は「特権アクセス（privileged access）」として扱われます。この XML を取り出すには Mac と Xcode が必要で、実際に配布されたエージェントは利用できません。そのため論文は、<strong>vision-only の数値が現実の運用能力を、vision+XML が特権ありの理論上限を表す</strong>ものと位置づけています（§3.1、限界の節）。</p>
+        </div>
+      </div>
+
+      <p>操作（アクション）は、両モードで共通の tap・type・swipe・home・wait・stop の 6 種類が基本です。vision+XML ではこれに加え、要素の識別子を指定する正確な tap や、アプリの起動・終了、URL を開く操作が使えます（§3.1, Table 1）。最新の computer-use モデル（スクリーンショットを見て操作を生成するエージェント）は、1 層の変換レイヤを挟むことで iOS に適応させています（クリックを tap に、スクロールを向きを反転した swipe に変換するなど）（§3.1）。</p>
+
+      <h3>3 種類の難易度でタスクを設計</h3>
+      <p>133 個のタスクは、3 つの難易度に分かれています（§3.3, Table 2）。1 タスクあたり平均 4.4 個のアプリを使います。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">Single-app</span> 27 個</p>
+          <p>1 つのアプリ内での基本的な操作。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Multi-app</span> 60 個</p>
+          <p>2〜8 個のアプリをまたいで情報を移す。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Memory &amp; personalization</span> 46 個</p>
+          <p>明示されていない隠れたパターンを発見する必要がある。例：「最も一般的な通勤ルートは？」「最も頻繁に注文するレストランを見つけて再注文せよ」。</p>
+        </div>
+      </div>
+
+      <p>採点は、LLM-as-a-Judge という手法を使い、GPT-5.4-Mini が操作の軌跡（スクリーンショット・アクション・最終回答）を一通り見て、合格／不合格を返します（§3.1）。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価したのは、フロンティアモデル 5 つ（Claude Opus 4.6、Claude Sonnet 4.6、GPT-5.4、GPT-5.4 Mini、Gemini 3 Flash）と、オープンソースの Qwen3.5 35B-A3B の計 6 モデルです。それぞれを vision-only と vision+XML の両方で評価し、12 構成を比較しました。各タスクは 50 ステップを上限としています（§4.1）。</p>
+
+      <h3>全体の正答率はまだ低い</h3>
+      <p>最も良い vision+XML 構成でも、全体の正答率は 52% でした。内訳は single-app が 82%、memory が 54%、multi-app が 37% で、複数アプリにまたがる multi-app が最も難しいカテゴリです（Abstract, §4.2）。最高記録としては、Sonnet が single-app で 93% を達成しています（§4.2, Table 3）。一方、オープンソースの Qwen3.5 は全体 11% で最下位でした（§5）。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">82%</span>
+          <span class="stat__label">single-app（最良 vision+XML 構成）<br>最も易しいカテゴリ</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">54%</span>
+          <span class="stat__label">memory（最良 vision+XML 構成）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">37%</span>
+          <span class="stat__label">multi-app（最良 vision+XML 構成）<br>最も難しいカテゴリ</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">11%</span>
+          <span class="stat__label">Qwen3.5（オープンソース）<br>全体で最下位</span>
+        </div>
+      </div>
+
+      <h3>「特権アクセス」XML が効くモデル・効かないモデル</h3>
+      <p>XML を追加すると、大きなモデルでは正答率が伸びました。一方、小型モデルでは XML がむしろ逆効果になります。全体スコアの変化は次のとおりです（Fig.8, §4.2, §4.3）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル</th>
+            <th>vision-only</th>
+            <th>vision+XML</th>
+            <th>変化</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Opus</th>
+            <td>26%</td>
+            <td>52%</td>
+            <td class="is-best">+25.6 pt</td>
+          </tr>
+          <tr>
+            <th>GPT-5.4</th>
+            <td>20%</td>
+            <td>40%</td>
+            <td>+19.5 pt</td>
+          </tr>
+          <tr>
+            <th>Sonnet</th>
+            <td>29%</td>
+            <td>47%</td>
+            <td>+18.0 pt</td>
+          </tr>
+          <tr>
+            <th>Gemini</th>
+            <td colspan="2">ほぼ変化なし</td>
+            <td>+0.8 pt</td>
+          </tr>
+          <tr>
+            <th>GPT-5.4 Mini</th>
+            <td>26%</td>
+            <td>16%</td>
+            <td>−10.5 pt</td>
+          </tr>
+          <tr>
+            <th>Qwen3.5</th>
+            <td>13%</td>
+            <td>11%</td>
+            <td>−2 pt</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>XML が効く理由を分析すると、vision-only で失敗し vision+XML で成功した Opus の 26 タスクのうち、約 70% にホーム画面やアプリ切り替えの失敗が含まれていました。アプリを直接起動する操作（launch app）がそれを取り除いたのです。改善幅は memory カテゴリで最大で、Opus は 9%→54% に跳ね上がりました（§4.3）。</p>
+      <p>興味深いのは、小型モデルでは XML がむしろ逆効果になる点です。GPT-5.4 Mini は vision-only で解けていた 35 タスクのうち 22 が XML 下で失敗しました。原因として論文は、GPT-5.4 Mini では 1 ステップあたり約 3,100 トークンの増加が、扱える文脈の予算を超えてしまったと説明しています（Fig.8, Fig.10, §4.3）。</p>
+
+      <h3>なぜ失敗するのか</h3>
+      <p>フロンティアモデルの vision+XML での失敗 422 件を分類すると、次のような内訳になりました（Table 6, §4.3）。budget exhausted は multi-app（55%）と memory（52%）で特に多く、エージェントが長い手順をやり切れずに息切れする様子がうかがえます。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">51%</span>
+          <span class="stat__label">budget exhausted<br>（50 ステップを使い切った）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">26%</span>
+          <span class="stat__label">gave up<br>（途中で諦めた）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">23%</span>
+          <span class="stat__label">premature stop<br>（早すぎる完了報告）</span>
+        </div>
+      </div>
+
+      <p>Qwen3.5 では、失敗 119 件の約半分が同じ操作を 3 回以上繰り返すアクションループで、最大では 38 回連続で同じ swipe を続けた例もありました（§4.3, Fig.11）。</p>
+
+      <h3>効率と、インターフェースの影響</h3>
+      <p>ステップ効率では、Gemini 3 Flash が vision-only でタスク平均 21 ステップと最も効率的でした（Anthropic / OpenAI 系は 42〜45 ステップ）（§4.2, Table 3）。</p>
+      <p>また、失敗の多くがインターフェースに起因していることを示す結果もあります。Qwen3.5 にアプリ別の構造化された操作ツール（MCP、たとえば「食事を記録する」「送金する」といった型付きの操作）を与えると、正答率は 12.8%→24.8%（+12.0 ポイント）に改善しました（Appendix E, §4.3）。画面を読んで操作する難しさそのものが、性能を大きく押し下げていたわけです。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>採点の信頼性も検証されています。LLM による採点と人間の判断を Opus 4.6 の 128 軌跡で比較したところ、タスク単位で κ=0.77（一致率 89%）と高い一致を示しました（§4.3, Appendix J）。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>iOSWorld の意義は、永続的なユーザー像を持つアプリ群を 26 個そろえ、ネイティブ iOS 上で「個人として知的」に振る舞えるかを初めて測れるようにした点にあります。環境とコードはオープンソースとして公開されており、新しいタスク・人物像・アプリを追加できます。論文は、モバイルエージェント研究の基盤を提供し、デプロイにおける個人最適化（personalization）重視への流れを後押しすると主張しています（§5）。</p>
+      <p>一方で、論文自身がいくつかの限界を認めています（Ethics Statement ほか）。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">すべて合成データ</p>
+          <p>Jordan Avery は架空の人物で、実在ユーザーのデータは使っていません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">Apple ハードウェア依存</p>
+          <p>iOSWorld は macOS と Xcode の iOS シミュレータを必要とし、再現性が Apple のハードウェアを持つ研究者に限られます。非 Mac 研究者向けには、EC2 で管理された Mac インスタンスを使う AWS-runner が公開されています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">特権アクセスの制約</p>
+          <p>iOS が非公開（closed-source）であるため、vision+XML は配布済みエージェントには使えない開発者ツール（XCUITest）に依存します。よって vision-only が現実の運用能力を、vision+XML が特権ありの上限を表します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">単一の人物像</p>
+          <p>評価は単一の人物像（Jordan Avery）に限られ、複数の人物像での評価は今後の課題とされています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">二重用途（dual-use）リスク</p>
+          <p>自律的に動く電話エージェントには監視・不正取引・ソーシャルエンジニアリング・データ流出のリスクが伴います。論文は明示的なユーザー同意の仕組みと、取り消せない操作の確認を推奨しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">デプロイ準備とは別</p>
+          <p>これらの結果は、実デバイスや実ユーザーデータへのデプロイ準備が整ったことを意味しないと明記されています。</p>
+        </div>
+      </div>
+
+      <p>ギャップを埋めるには、ループから抜け出す回復力の強化、操作と視覚のグラウンディング（画面と操作の正確な対応付け）の改善、そしてユーザー履歴を意識した計画立案が必要だと結論づけています（§5）。</p>
+
+      <h2>まとめ</h2>
+      <p>iOSWorld は、26 アプリに 1 人のユーザー像を共有させたネイティブ iOS 向けの対話型ベンチマークで、エージェントが個人の文脈を読み取れるかを 133 タスクで測ります。最新モデルでも最良で全体 52%・複数アプリ横断で 37% にとどまり、失敗の半分は手順の途中での息切れ（50 ステップ使い切り）でした。スマートフォン上で本当に「あなたを知る」AI を作るには、まだ多くの課題が残っていることを示す研究です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>personally intelligent（個人として知的）</dt>
+        <dd>ユーザーの人物像・履歴・好みを、デバイス上のデータとして推論するエージェントの能力。本論文の中心概念。</dd>
+
+        <dt>vision-only / vision+XML</dt>
+        <dd>エージェントが画面から受け取る情報のモード。前者はスクリーンショットのみ、後者はアクセシビリティツリー（XML）を追加する。XML は配布済みエージェントには使えない「特権アクセス」扱い。</dd>
+
+        <dt>アクセシビリティツリー（accessibility tree）</dt>
+        <dd>UI 要素の種類・名前・値・座標などを構造化した木。iOS では XCUITest 経由で取得する。</dd>
+
+        <dt>computer-use agent / CUA</dt>
+        <dd>スクリーンショットを理解して操作を生成するエージェント。</dd>
+
+        <dt>LLM-as-a-Judge</dt>
+        <dd>エージェントの操作の軌跡全体を、別の LLM（本論文では GPT-5.4-Mini）に合格／不合格で採点させる手法。</dd>
+
+        <dt>失敗モード（budget exhausted / gave up / premature stop）</dt>
+        <dd>それぞれ、50 ステップを使い切った失敗／途中で諦めた失敗／早すぎる完了報告による失敗。</dd>
+
+        <dt>POMDP（部分観測マルコフ決定過程）</dt>
+        <dd>環境の状態が完全には観測できない状況を扱う数学的枠組み。本論文は評価環境をこれで定式化している。</dd>
+
+        <dt>MCP（per-app structured tools）</dt>
+        <dd>アプリごとに型付きの操作を公開する構造化ツール層。Qwen3.5 の正答率を 12.8%→24.8% に改善した。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">iOSWorld: A Benchmark for Personally Intelligent Phone Agents</p>
+      <a href="https://arxiv.org/abs/2606.09764" target="_blank" rel="noopener noreferrer">arXiv:2606.09764 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
