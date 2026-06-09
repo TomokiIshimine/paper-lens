@@ -553,7 +553,7 @@ a:hover { text-decoration: underline; }
 /* ============================================================================
  * 記事一覧トップ（docs/index.html）
  * ========================================================================== */
-.index { padding-block: var(--space-lg) var(--space-xl); }
+.index { padding-block: var(--space-lg) var(--space-xl); max-width: 64rem; }
 
 .index__lead {
   color: var(--color-text-muted);
@@ -565,13 +565,12 @@ a:hover { text-decoration: underline; }
   margin: 0;
   padding: 0;
   display: grid;
-  gap: var(--space-md);
+  grid-template-columns: repeat(auto-fill, minmax(28rem, 1fr));
+  gap: var(--space-lg);
 }
 .article-card {
-  display: grid;
-  grid-template-columns: 16rem 1fr;
-  align-items: center;
-  gap: var(--space-md);
+  display: flex;
+  flex-direction: column;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
@@ -587,6 +586,7 @@ a:hover { text-decoration: underline; }
 .article-card__thumb {
   margin: 0;
   overflow: hidden;
+  border-bottom: 1px solid var(--color-border);
 }
 .article-card__thumb a {
   display: block;
@@ -598,7 +598,7 @@ a:hover { text-decoration: underline; }
   object-fit: cover;
   display: block;
 }
-.article-card__body { padding: var(--space-sm) var(--space-md) var(--space-sm) 0; }
+.article-card__body { padding: var(--space-md); flex: 1; display: flex; flex-direction: column; }
 .article-card__date {
   font-size: 0.8125rem;
   color: var(--color-text-muted);
@@ -643,11 +643,8 @@ a:hover { text-decoration: underline; }
   body { font-size: 1rem; }
   .article { padding-block: var(--space-md) var(--space-lg); }
   .article__body h2 { font-size: 1.3rem; margin-top: var(--space-lg); }
-  .article-card {
-    grid-template-columns: 1fr;   /* スマホでは縦積み */
-  }
-  .article-card__thumb img { aspect-ratio: 16 / 9; height: auto; }
-  .article-card__body { padding: 0 var(--space-md) var(--space-md); }
+  /* 記事一覧は flex 縦積み + auto-fill により狭幅で自然に 1 列化 */
+  .article-list { gap: var(--space-md); }
 
   /* ビジュアルコンポーネントの狭幅対応：カード／数値は 1 列に段組み解除 */
   .card-grid { grid-template-columns: 1fr; }
