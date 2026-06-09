@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>「動くけど最適ではない」既存ルールを足場にして強化学習を効率化する手法 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09825-agency-transferring-policy-enhancement-cover.png"
+           alt="「課題はこなせるが最適ではない」既存のルールベース制御（ベースライン方策）を強化学習の足場として組み込み、訓練が進むにつれて調停モジュールが制御の主導権をベースラインから学習方策へ少しずつ移し、最終的にベースラインを切り離して単独で動くニューラルネットワーク方策を残すエージェンシー移譲手法を示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">「動くけど最適ではない」既存ルールを足場にして強化学習を効率化する手法</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09825</span>
+      <span>カテゴリ：cs.LG / cs.AI / eess.SY / math.OC</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>すでに手元にある「課題はこなせるが性能はいまひとつ」という既存のルールベース制御（ベースライン方策）を、強化学習（reinforcement learning, RL）の訓練に組み込む手法を提案した研究です。訓練の序盤はこの既存ルールに強く頼り、学習が進むにつれて少しずつ主導権（agency）を学習中のニューラルネットワークへ移していきます。訓練が終わるころには既存ルールを完全に切り離し、それ単独で動くニューラルネットワーク方策が残ります。しかもその方策は、元のベースラインを上回る性能と、訓練の最初から最後までを通じた高いゴール到達率を両立しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">移譲</span>
+          <span class="stat__label">制御の主導権をベースラインから<br>学習方策へ少しずつ移す</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">切り離し</span>
+          <span class="stat__label">訓練後はベースラインを完全に除去<br>学習方策が単独で自立して動く</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">2 環境</span>
+          <span class="stat__label">水中ドローン（AUV）と<br>宝を集めるロボットで評価</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">最高到達率</span>
+          <span class="stat__label">両環境で比較対象すべての中で<br>最も高いゴール到達率を達成</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>強化学習をゼロから訓練するのは、想像以上に手間のかかる作業です。報酬の設計、環境のチューニング、ハイパーパラメータの調整、そして長時間の計算資源が必要で、熟練した技術者でも動くものができるまでに時間がかかります。</p>
+      <p>一方で、現実の多くの制御問題には「とりあえず動くもの」がすでに存在します。物流のヒューリスティックな経路探索、金融のルールベース戦略、安定性は保証するけれどエネルギー効率は悪いロボット制御器、ゲームのルールベース AI などです。これらは最適ではないものの、ゼロではありません。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>この論文の発想は「<strong>その既存資産を捨てずに、強化学習の足場として使い倒す</strong>」というものです。ゼロから学ぶよりも効率よく、しかも最終的には元の既存ルールを上回る方策を得ることを狙います。</p>
+        </div>
+      </div>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>既存ルールを RL に活かそうとする発想自体は新しくありません。最も近い関連手法は<strong>残差強化学習（residual RL）</strong>と呼ばれるもので、この論文でも主要な比較対象として扱われています。</p>
+      <p>残差強化学習は、実際に実行するアクションを「ベースラインのアクション＋学習した補正（残差）」という足し算で作ります。考え方はシンプルですが、ここに弱点があります。足し算で構成している以上、訓練が終わって運用（デプロイ）する段階になっても、ベースラインを呼び出し続けなければなりません。つまり既存ルールへの依存が永遠に残るのです。</p>
+      <p>この論文が目指すのは、訓練中はベースラインの力を借りつつ、訓練後にはそれをきれいに切り離し、学習方策だけで自立して動ける状態にすることです。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>手法の中心にあるのは<strong>調停モジュール（arbitration module）</strong>と呼ばれる仕組みです。各時刻で「ベースライン方策のアクション」と「学習方策のアクション」のどちらを実際に実行するかを判断します。</p>
+      <p>実行アクションは、2 つの方策の確率的な混ぜ合わせとしてサンプリングされます。混ざり具合は<strong>混合係数（mixing coefficient）</strong> α<sub>t</sub> という 0 から 1 の値で表され、これが「学習方策のアクションを採用する確率」にあたります。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 250" role="img" aria-label="調停モジュールが各時刻でベースライン方策のアクションと学習方策のアクションのどちらを実行するかを判断する図。改善が確認できたとき、または確率的にチャレンジするときは学習方策を採用し、どちらも満たさなければベースラインへフォールバックする。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="40" width="180" height="56" rx="8"></rect>
+          <text class="node-label" x="110" y="64" text-anchor="middle">ベースライン方策</text>
+          <text class="edge-label" x="110" y="84" text-anchor="middle">既存ルールのアクション</text>
+
+          <rect class="node" x="20" y="150" width="180" height="56" rx="8"></rect>
+          <text class="node-label" x="110" y="174" text-anchor="middle">学習方策</text>
+          <text class="edge-label" x="110" y="194" text-anchor="middle">学習中のアクション</text>
+
+          <rect class="node" x="300" y="95" width="180" height="56" rx="8"></rect>
+          <text class="node-label" x="390" y="119" text-anchor="middle">調停モジュール</text>
+          <text class="edge-label" x="390" y="139" text-anchor="middle">どちらを実行するか判断</text>
+
+          <rect class="node" x="580" y="95" width="160" height="56" rx="8"></rect>
+          <text class="node-label" x="660" y="119" text-anchor="middle">実行アクション</text>
+          <text class="edge-label" x="660" y="139" text-anchor="middle">確率 α で学習方策</text>
+
+          <path class="edge" d="M200,68 L260,68 L290,110" fill="none" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M200,178 L260,178 L290,136" fill="none" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M480,123 L578,123" marker-end="url(#arrow)"></path>
+        </svg>
+        <figcaption class="diagram__caption">調停モジュールは各時刻でベースラインと学習方策のアクションを受け取り、どちらを実行するかを判断する。実行アクションは混合係数 α<sub>t</sub>（学習方策を採用する確率）に応じた確率的な混ぜ合わせとしてサンプリングされる。</figcaption>
+      </figure>
+
+      <h3>どちらのアクションを採るかの判断ルール</h3>
+      <p>学習方策のアクションを採用する（α<sub>t</sub> = 1 とする）のは、次の 2 つの条件の <strong>どちらか</strong> が成り立つときです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">条件 1</span> 改善が確認できたとき</p>
+          <p>学習方策のアクションに対する critic（Q 関数。状態と行動から将来の期待報酬を見積もる補助モデル）の評価値が、そのエピソード内のこれまでの最高値を、一定のマージン ν 以上上回ったとき。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">条件 2</span> 確率的にチャレンジするとき</p>
+          <p>ある確率条件（時間とともに減衰する閾値を乱数が下回るかどうか）を満たしたとき。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>どちらも満たさなければ、<strong>安全側に倒してベースラインのアクションにフォールバック</strong>します。</p>
+        </div>
+      </div>
+
+      <p>著者らはこの設計を、最適化手法の<strong>焼きなまし法（simulated annealing）</strong>になぞらえて説明しています。改善が見込めるアクションは確実に採用し、必ずしも改善が見込めないアクションも温度（ここでは時間で変化する確率）に応じて受け入れる、という「制御されたリスクテイク」です。</p>
+
+      <h3>主導権を少しずつ移していく</h3>
+      <p>この仕組みのカギは、判断ルールの中にあるスケジュールパラメータ p<sub>rel</sub> と λ です。これらは「学習方策をどれだけ信頼するか」を表し、エピソードをまたいで少しずつ大きくしていきます。最終的に両方を 1 にすると、確率条件は常に成立するようになり、ベースラインがまったく関与しない純粋な強化学習と一致します。</p>
+      <p>その結果、訓練の流れは次のように変化します。</p>
+
+      <ul class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">序盤：ベースライン主導</p>
+          <p>ほとんどのアクションをベースラインが生成する。学習方策はまだ未熟だが、ベースラインのおかげで最初からゴールに到達できる。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">中盤：主導権が移っていく</p>
+          <p>学習方策が採用される割合が（平均的にほぼ直線的に）増えていく。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">終盤：学習方策が自立</p>
+          <p>ある有限の遷移時間 T<sub>tran</sub> を過ぎると、α<sub>t</sub> は常に 1 になる。以降ベースラインは一切呼ばれず、学習方策（単独のニューラルネットワーク）が自立して動く。</p>
+        </li>
+      </ul>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>この「主導権を渡していく」過程が、論文タイトルにある <strong>agency transfer（エージェンシー移譲）</strong> です。</p>
+        </div>
+      </div>
+
+      <h3>残差強化学習との違い</h3>
+      <p>冒頭で触れた残差強化学習との対比を整理すると、違いは明快です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>観点</th>
+            <th>残差強化学習（residual RL）</th>
+            <th>本手法（エージェンシー移譲）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>アクションの作り方</th>
+            <td>ベースライン＋補正の足し算</td>
+            <td class="is-best">どちらを実行するか切り替える（スイッチング）</td>
+          </tr>
+          <tr>
+            <th>運用時のベースライン</th>
+            <td>呼び出し続ける必要がある（依存が残る）</td>
+            <td class="is-best">完全に取り除ける（単独で自立）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>また本手法は、土台となる強化学習アルゴリズム（<strong>バックボーン</strong>と呼ばれる。TD3・SAC・PPO・DDPG など標準的なものを使える）の critic や方策の更新部分には手を加えません。アクションの選び方だけを最小限変えるだけで済むのも特徴です。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価には 2 つの環境が使われました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">環境 1</span> 汚染領域を避ける水中ドローン（AUV）</p>
+          <p>汚染された領域を避けつつ目標地点に到達する課題。ベースラインは PD 制御器（proportional-derivative control。目標との誤差とその変化の速さからゴールへ向かう、古典的で単純な制御器）でゴールへ向かうものの、汚染領域は考慮しません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">環境 2</span> 宝を集めるロボット</p>
+          <p>動く宝を回収しながらゴール領域に到達する課題。ベースラインはゴールへ直進するだけで、宝を取りに行きません。</p>
+        </div>
+      </div>
+
+      <p>いずれもバックボーンとして TD3 と SAC を使い、それぞれについて「素のバックボーン（vanilla）」「残差強化学習」「提案手法」を比較しました。全アルゴリズムを 300 万環境ステップ、10 個の独立した乱数シードで訓練しています。遷移時間 T<sub>tran</sub> は 270 万ステップに設定され、270 万〜300 万ステップの区間は学習方策が完全に単独で動作します。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">300 万</span>
+          <span class="stat__label">訓練の環境ステップ数</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">10</span>
+          <span class="stat__label">独立した乱数シードの数</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">270 万</span>
+          <span class="stat__label">遷移時間 T<sub>tran</sub><br>これ以降は学習方策が単独で動作</span>
+        </div>
+      </div>
+
+      <h3>ゴール到達率</h3>
+      <p>提案手法は両環境で、比較対象すべての中で <strong>最も高いゴール到達率</strong> を達成しました。しかも訓練を開始した直後から高い到達率を示し、ベースラインを切り離した後（270 万ステップ以降、ベースラインの影響がちょうどゼロになる区間）も、単独で動く学習方策が最高の到達率を維持しました。</p>
+      <p>水中ドローン環境の最終段階（270 万〜300 万ステップ）の結果は次のとおりです（ゴール到達率は高いほど良く、回避スコア（Avoidance score）は汚染領域への侵入の大きさを表し低いほど良い、最良は 0）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法</th>
+            <th>ゴール到達率(%)</th>
+            <th>回避スコア</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>提案手法（TD3 ベース）</th>
+            <td>99.15±0.58</td>
+            <td>0.0100±0.0031</td>
+          </tr>
+          <tr>
+            <th>残差 TD3</th>
+            <td>95.60±3.75</td>
+            <td>0.0207±0.0132</td>
+          </tr>
+          <tr>
+            <th>TD3</th>
+            <td>76.35±25.47</td>
+            <td>0.0150±0.0104</td>
+          </tr>
+          <tr>
+            <th>提案手法（SAC ベース）</th>
+            <td class="is-best">99.45±0.50</td>
+            <td class="is-best">0.0052±0.0031</td>
+          </tr>
+          <tr>
+            <th>残差 SAC</th>
+            <td>99.10±1.07</td>
+            <td>0.0115±0.0076</td>
+          </tr>
+          <tr>
+            <th>SAC</th>
+            <td>90.25±29.43</td>
+            <td>0.0065±0.0048</td>
+          </tr>
+          <tr>
+            <th>ベースライン方策</th>
+            <td>100±0</td>
+            <td>0.54±0.18</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>ベースライン方策はゴール到達こそ完璧（100%）ですが、汚染領域への侵入を表す回避スコアが 0.54 と大きく、汚染を避けられていません。提案手法はゴール到達をほぼ保ちつつ、回避スコアを 2 桁小さく抑えています。</p>
+      <p>宝を集めるロボット環境の最終段階の結果は次のとおりです（Combined はゴール到達率と宝回収率の平均）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法</th>
+            <th>ゴール到達率(%)</th>
+            <th>宝回収率(%)</th>
+            <th>Combined</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>提案手法（TD3 ベース）</th>
+            <td class="is-best">94.11±3.85</td>
+            <td>99.78±0.10</td>
+            <td class="is-best">96.95±1.92</td>
+          </tr>
+          <tr>
+            <th>残差 TD3</th>
+            <td>76.15±6.01</td>
+            <td>99.27±0.76</td>
+            <td>87.71±2.92</td>
+          </tr>
+          <tr>
+            <th>TD3</th>
+            <td>31.69±13.27</td>
+            <td>99.89±0.14</td>
+            <td>65.79±6.67</td>
+          </tr>
+          <tr>
+            <th>提案手法（SAC ベース）</th>
+            <td>85.05±11.01</td>
+            <td>99.56±0.35</td>
+            <td>92.31±5.53</td>
+          </tr>
+          <tr>
+            <th>残差 SAC</th>
+            <td>66.62±18.70</td>
+            <td>98.86±1.09</td>
+            <td>82.74±9.48</td>
+          </tr>
+          <tr>
+            <th>SAC</th>
+            <td>11.04±10.36</td>
+            <td>99.78±0.30</td>
+            <td>55.41±5.22</td>
+          </tr>
+          <tr>
+            <th>ベースライン方策</th>
+            <td>100±0</td>
+            <td>17.30±37.84</td>
+            <td>58.65±18.92</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>ここでもベースライン方策はゴールには必ず到達しますが、宝はほとんど取れていません（回収率 17.30%）。提案手法は両方を高い水準でこなし、Combined スコアで他を引き離しています。</p>
+
+      <h3>学習曲線とちょっとした注意点</h3>
+      <p>エピソードごとのリターン（学習曲線）で見ても、提案手法は他手法より優れているか、最悪でも同等でした。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>なお、訓練の終盤でゴール到達率がわずかに下がる現象も観察されています。これは<strong>想定どおりの挙動</strong>だと著者らは説明しています。終盤はベースラインの補正がほぼ消えるため、有限の長さのエピソード内で学習方策のミスを補いきれなくなるからです。</p>
+        </div>
+      </div>
+
+      <h3>理論的な裏付け</h3>
+      <p>論文は実験だけでなく理論解析も与えています。一定の仮定の下で、訓練中の合成方策がベースラインのゴール到達特性（<strong>ε-improbable goal-reaching property</strong>。任意の初期状態から確率 1 − ε 以上でゴールへ近づく性質）を受け継ぐことを示しました。さらにベースライン除去後の単独方策についても、ゴール到達確率の明示的な下界を導いています。ただし著者らは、これらを厳密な「保証」ではなく、訓練を通じて高いゴール到達率が観測される理由の理論的な解釈として位置づけています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この手法の意義は、「すでに動くベースラインがある状況」で報酬整形やハイパーパラメータ調整の手間を大きく減らせる点にあります。学習方策がまだ未熟な訓練の最初から課題をこなせるため、ゼロから学ぶよりも効率的に、かつ最終的にベースラインを上回る方策を得られます。</p>
+      <p>一方で、論文は次の限界・留意点も率直に認めています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">理論は「保証」ではなく解釈</p>
+          <p>理論解析の一部（合成方策の到達特性に関する定理）は「保証」ではなく解釈として提示されており、無限長エピソードを前提とした設定に基づいています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">終盤の性能低下</p>
+          <p>訓練終盤にゴール到達率がわずかに低下します（有限の長さのエピソードに起因する効果）。ベースライン除去後は、ゴール到達確率が軌道分布のずれに応じて多少劣化しうることが理論的にも示されています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">ベースラインを書ける問題に限る</p>
+          <p>評価環境は「ゴールが明確に定義でき、ベースライン方策を数式で書ける」よう意図的に選ばれています。複雑な歩行（Humanoid など）はベースラインを作ること自体が難しく、逆に振り子のように単純すぎる課題も除外されました。つまり、ベースラインを用意できない問題には直接は適用しづらいことを示唆します。</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>なお、実装と動作の比較動画は公開リポジトリ（<a href="https://github.com/aidagroup/calf-enhance" target="_blank" rel="noopener noreferrer">https://github.com/aidagroup/calf-enhance</a>）で参照できます。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>この研究は、「動くけれど最適ではない既存ルール」を強化学習の足場として組み込み、訓練の進行とともに主導権を学習方策へ移していく手法を提案しました。残差強化学習と違って運用時にベースラインを切り離せる点が特徴で、2 つの制御環境でベースラインも残差手法も上回るゴール到達率を、訓練の最初から最後まで達成しました。動くベースラインが手元にあるなら、それを捨てずに活かすという実践的な選択肢を示した研究といえます。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>ベースライン方策（baseline policy）</dt>
+        <dd>課題はこなせるが最適ではない、訓練に組み込む既存の制御ルール。</dd>
+
+        <dt>学習方策（learning policy）</dt>
+        <dd>訓練対象となるニューラルネットワークの方策。</dd>
+
+        <dt>調停モジュール（arbitration module）</dt>
+        <dd>各時刻にベースラインと学習方策のどちらのアクションを実行するか決める仕組み。</dd>
+
+        <dt>エージェンシー移譲（agency transfer）</dt>
+        <dd>訓練が進むにつれて、制御の主導権をベースラインから学習方策へ徐々に移すこと。</dd>
+
+        <dt>混合係数 α<sub>t</sub>（mixing coefficient）</dt>
+        <dd>学習方策のアクションを採用する度合いを表す 0〜1 の値。</dd>
+
+        <dt>critic（Q 関数 Q<sub>w</sub>）</dt>
+        <dd>状態と行動から将来の期待報酬を見積もる補助モデル。</dd>
+
+        <dt>残差強化学習（residual RL）</dt>
+        <dd>ベースラインと学習した補正の足し算でアクションを作る関連手法。運用時もベースラインに依存し続ける。</dd>
+
+        <dt>バックボーン（backbone RL）</dt>
+        <dd>本手法の土台となる標準的な強化学習アルゴリズム（TD3・SAC・PPO・DDPG など）。</dd>
+
+        <dt>T<sub>tran</sub>（遷移時間）</dt>
+        <dd>学習方策へ完全に主導権を移すまでのステップ数（実験では 270 万）。</dd>
+
+        <dt>ε-improbable goal-reaching property</dt>
+        <dd>任意の初期状態から確率 1 − ε 以上でゴール集合へ近づく方策の性質。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">An Agency-Transferring Model-Free Policy Enhancement Technique</p>
+      <a href="https://arxiv.org/abs/2606.09825" target="_blank" rel="noopener noreferrer">arXiv:2606.09825 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
