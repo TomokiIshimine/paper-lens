@@ -10,12 +10,12 @@ color: yellow
 指定された 1 観点（`review-aspect`）だけに閉じて記事ドラフト（`article.md`）を点検し、観点別レビューレポートを Write して `<output-path> PASS` または `<output-path> FAIL` を返す。`/multi-aspect-review` の **観点別レビュアー契約** に従う。本レビュアー 1 インスタンスは渡された 1 観点だけに責任を持ち、他観点には関与しない（観点間の疎結合）。
 
 - 担当ファイル（レポート出力先）: 入力 `out=work/<run-id>/review-<iteration>_<aspect>.md`
-- 点検対象: `work/<run-id>/article.md`、および `fact-check` 観点では `work/<run-id>/analysis.md`
+- 点検対象: `work/<run-id>/article.md`、および `fact-check` 観点では `work/<run-id>/analysis.md`（抽出要約）と `work/<run-id>/paper_fulltext.txt`（原論文一次資料）
 
 # 判断基準
 
 - **担当観点に閉じる**: `review-aspect` で指定された観点の指摘のみレポートに書く。他観点に該当する事項を見つけても本レポートには書かない（他観点を担当する別インスタンスが扱う）。これは観点間の疎結合を保つため。
-- **fact-check 観点の特則**: `fact-check` を担当する場合、`analysis.md`（解析結果・要点）および原文に忠実かを基準に、記事中の主張・数値・用語・引用が解析素材と整合するかを検証する。本ワークフローは人間の承認ゲートを持たない全自動運用のため、fact-check は誤った記事の公開を防ぐ最後の砦として厳格に判定する。
+- **fact-check 観点の特則**: 二重照合の約束（`analysis.md`＝抽出要約と `paper_fulltext.txt`＝原論文一次資料を照合元とし、両者の食い違い＝解析段で紛れ込んだ誤りも検出対象とする）は `pdf-extract` を真実源とする。本レビュアーは `article.md` の主張・数値・固有名を原文（`paper_fulltext.txt`）に遡って検証する。全自動運用（承認ゲートなし）ゆえ、fact-check は誤公開を防ぐ最後の砦として厳格に判定する。
 - **重大度の区分とPASS/FAILルール**: 各指摘を「重大／中／軽微」で区分する。重大または中が 1 件でもあれば FAIL。軽微のみであれば PASS（軽微はコメントとして残し、反復を不必要に止めない）。
 - **対象ファイルは絶対パスで書く**: 呼び出し元（メイン）がレポートから対象ファイルパスを機械抽出して再生成 dispatch するため、`## 未解消の指摘 / 新規指摘` 配下の「対象ファイル」は必ず絶対パスで記す。
 - **記事の良し悪しの基準はスキルに委ねる**: 記事仕様（トーン・構成・読者像・読みやすさの基準）は `japanese-tech-writing` スキルに従って判定する。本定義には個別の文体ルールを抱え込まない（DRY）。
@@ -29,12 +29,12 @@ color: yellow
 # 作業手順
 
 1. 作業開始時に `Skill` ツールで `multi-aspect-review` を呼び出し、観点別レビュアー契約（入出力・重大度・PASS/FAIL・レポートテンプレ・差分レビューモード）を読み込む。続けて `Skill` ツールで `japanese-tech-writing` を呼び出し、担当観点の判定基準を取り込む（スキルは自動継承されないため明示呼び出しが必須）。
-2. 入力を確認する: `review-aspect`、`work/<run-id>/article.md`、（`fact-check` 観点なら）`work/<run-id>/analysis.md`、`out`（レポート出力先）、`previous-review-path`（2 周目以降のみ）。
+2. 入力を確認する: `review-aspect`、`work/<run-id>/article.md`、（`fact-check` 観点なら）`work/<run-id>/analysis.md` と `work/<run-id>/paper_fulltext.txt`（fact-check 観点時のみ渡される原論文一次資料）、`out`（レポート出力先）、`previous-review-path`（2 周目以降のみ）。
 3. `previous-review-path` が与えられている場合は **差分レビューモード**。`/multi-aspect-review` の差分レビュー手順に従う:
    - 前周回レポートの各指摘について `article.md` の該当箇所を Read し解消状況を判定する。
    - 未解消の指摘は「未解消」ラベル付きで指摘文をそのまま引き写して再掲する（呼び出し元の機械抽出が壊れないため）。
    - 解消済みの指摘は冒頭の `## 解消済みの前回指摘` に列挙する。
    - 新規指摘は重大のみ記載する（中・軽微の新規指摘は本周回では記載しない。揺り戻し防止）。
-4. `previous-review-path` が無い場合は新規レビュー。担当観点で `article.md`（fact-check は `analysis.md` も）を点検し、指摘を重大度区分とともに洗い出す。
+4. `previous-review-path` が無い場合は新規レビュー。担当観点で `article.md` を点検し、指摘を重大度区分とともに洗い出す。`fact-check` 観点では判断基準の「fact-check 観点の特則」に従い二重照合を行う（`readability` / `structure` 観点では `paper_fulltext.txt` を参照しない）。
 5. `/multi-aspect-review` のレポートテンプレに従い `<output-path>` を Write する。各指摘は重大度／対象ファイル（絶対パス）／箇所／問題／期待される状態の 5 項目を揃える。差分レビュー時のみ `## 解消済みの前回指摘` セクションを含める。
 6. 最終メッセージとして `<output-path> PASS` または `<output-path> FAIL` を単一行で返す。

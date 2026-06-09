@@ -28,12 +28,20 @@ uv run .claude/skills/pdf-extract/scripts/extract_pdf.py \
   --out "work/<run-id>/paper_fulltext.txt"
 ```
 
-- 出力 `paper_fulltext.txt` はページ区切り（`--- page N ---`）付きの素のテキスト。これは中間ファイルであり、解説記事の素材は次節の `analysis.md` にまとめる。
+- 出力 `paper_fulltext.txt` はページ区切り（`--- page N ---`）付きの素のテキスト。解説記事の素材は次節の `analysis.md` にまとめる。
+
+### 一次資料と二重照合の約束（単一の真実源）
+
+本スキルが生成する 2 ファイルの位置づけと、fact-check がそれをどう使うかをここで一度だけ定義する（他節・他ファイルからはこの定義を参照する）。
+
+- `paper_fulltext.txt` = **原論文一次資料**。`work/<run-id>/` に保全し、揮発・上書き・加工しない。
+- `analysis.md` = 次節の規約に従う**抽出要約**。
+- fact-check は `analysis.md`（抽出要約）と `paper_fulltext.txt`（原文）を**二重の照合元**とし、両者が食い違う場合（＝解析段で紛れ込んだ誤り）も検出対象とする。検出対象の判定基準（重大度など）は article-reviewer 側の責務であり、本スキルでは規定しない。
 - PDF が取得できない・テキスト化できない場合はスクリプトが非ゼロ終了し理由を stderr に出す。その場合は解析を中断し、原因を呼び出し元へ返す（独断で別論文に切り替えない）。
 
 ## analysis.md のフォーマット（要点抽出の規約）
 
-`paper_fulltext.txt` を読み、以下の構造で `work/<run-id>/analysis.md` にまとめる。**要点抽出は原文への忠実性を最優先**とし、推測・誇張・原文にない主張を加えない。記事執筆と fact-check の双方がこの `analysis.md` を素材・照合元とするため、原文の主張・数値は出典が辿れる形で残す。
+`paper_fulltext.txt` を読み、以下の構造で `work/<run-id>/analysis.md` にまとめる。**要点抽出は原文への忠実性を最優先**とし、推測・誇張・原文にない主張を加えない。記事執筆と fact-check の双方がこの `analysis.md` を素材・照合元とするため、原文の主張・数値は出典が辿れる形で残す（`analysis.md` の位置づけと fact-check の二重照合については前節「一次資料と二重照合の約束」を参照）。
 
 ```markdown
 ---

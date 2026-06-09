@@ -61,6 +61,8 @@ arXiv から新着論文を取得し、未解説の 1 本を選定して日本�
 
 公開 URL（ユーザー報告用）は Step 10 の `article-html-author` 戻り値で取得するため、公開 URL のために新規ファイルを Read しない（テーブルへの行追加は不要）。
 
+`work/<run-id>/paper_fulltext.txt`（原論文一次資料）はメインは本文を Read しない。fact-check の原文照合は `article-reviewer` 内部で完結し、メインは戻り値で PASS/FAIL を取得する（テーブルへの行追加は不要）。
+
 ## 実行手順
 
 `<run-id>` は本スキル起動時に起動時刻ベースの一意 ID として 1 度採番し、以降のステップ全体で固定値として保持する。各ステップ間で受け渡す絶対パスは `<…>` 記法で内部保持する。
@@ -80,8 +82,8 @@ arXiv から新着論文を取得し、未解説の 1 本を選定して日本�
 ### Step 3 解析（paper-analyzer）
 
 - 起動: `paper-analyzer`
-- 引数: `work/<run-id>/selected.json`、out=`work/<run-id>/analysis.md`
-- 戻り値: `work/<run-id>/analysis.md`（解析結果・要点の絶対パス）
+- 引数: `work/<run-id>/selected.json`、out=`work/<run-id>/analysis.md`、out=`work/<run-id>/paper_fulltext.txt`（PDF 全文テキスト・原論文一次資料。`pdf-extract` 出力をそのまま保全し、Step 5 の fact-check 観点が原文照合に用いる）
+- 戻り値: 2 行で受け取る。1 行目 `work/<run-id>/analysis.md`（解析結果・要点の絶対パス）、2 行目 `work/<run-id>/paper_fulltext.txt`（原論文一次資料の絶対パス）。両絶対パスを内部保持する（戻り値形式は `paper-analyzer` 側の規定と一致）。
 
 ### Step 4 執筆（article-writer）
 
@@ -98,6 +100,7 @@ arXiv から新着論文を取得し、未解説の 1 本を選定して日本�
 - **反復上限**: 5 周。
 - **並列レビュー**: 各観点について `article-reviewer` を単一メッセージ内で並列 spawn する。
   - 引数: review-aspect=`<aspect>`、`work/<run-id>/article.md`、`work/<run-id>/analysis.md`、out=`work/<run-id>/review-<iteration>_<aspect>.md`、（2 周目以降）previous-review-path=`work/<run-id>/review-<前 iteration>_<aspect>.md`
+  - `fact-check` 観点に限り、上記に加えて paper_fulltext.txt=`work/<run-id>/paper_fulltext.txt`（原論文一次資料の絶対パス）を渡す。`analysis.md`（抽出要約）と二重の照合元となる。`readability` / `structure` 観点の引数は変更しない（観点間の疎結合を維持）。
   - 戻り値: `<レポート絶対パス> PASS|FAIL`
 - **再生成**（`article-writer` を再生成モードで起動）の引数: review-report-path=選定した 1 本の絶対パス（`work/<run-id>/review-<iteration>_<選定観点>.md`）、regeneration-log-path=`work/<run-id>/regeneration-<iteration>.log`。戻り値: `work/<run-id>/article.md`（再生成され上書きされた絶対パス）。
 - 全観点 PASS で Step 6 へ進む。
@@ -167,6 +170,7 @@ Step 7 で `output/<記事>.md`（Markdown・dedup 照合キー）が確定し�
 ## 失敗時のリカバリ
 
 - いずれかのサブエージェントが整合チェック失敗（入力不一致・引数 XOR 違反等）で中断レポートを返した場合、メインは後続ステップへ進まずに当該ステップで停止し、中断内容をログに残す。自動補正・自動進行はしない。
+- Step 3（解析）で PDF テキスト化が失敗（`paper_fulltext.txt` 未生成）した場合は、`pdf-extract` スクリプトが非ゼロ終了し `paper-analyzer` が中断レポートを返す既存挙動を踏襲する。メインは Step 4 以降へ進まずに Step 3 で停止し、中断内容をログに残す。`output/` への公開は行わない。
 - Step 5 が反復上限到達で打ち切られた場合は、最終周回の全観点レビューレポート絶対パスをログに残し、`output/` への公開を行わずに終了する。
 - Step 6a の画像生成が失敗（PNG 未生成・codex 終了非ゼロ・article-image-generator が中断レポートを返した）場合は、インフォグラフィックを必須要素とみなし、Step 6b・Step 7 へ進まずにパイプラインを打ち切る。未生成である旨と画像設計ログ（`work/<run-id>/image-design.log` があればその絶対パス）を最終ログに残し、`output/` への公開は行わない（合格時のみ公開の既存方針を維持）。
 - Step 6b の画像検証ループが反復上限到達で打ち切られた場合は、最終周回の全観点画像レビューレポート絶対パスをログに残し、`output/` への公開を行わずに終了する。

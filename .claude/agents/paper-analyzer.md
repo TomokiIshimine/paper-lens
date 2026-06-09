@@ -12,12 +12,13 @@ color: green
 ## 入力（呼び出し元から渡される）
 
 - `work/<run-id>/selected.json`: 解析対象として選定された論文 1 本のメタデータ（PDF 取得元を含む）。
-- 出力先: `work/<run-id>/analysis.md`（絶対パスで渡される）。
+- 出力先: `work/<run-id>/analysis.md` と `work/<run-id>/paper_fulltext.txt`（いずれも絶対パスで渡される）。
 
 ## 出力
 
 - `work/<run-id>/analysis.md` — PDF から抽出した要点（解説記事の素材）。
-- 最終メッセージには生成した `analysis.md` の絶対パスを単一行で出力する。
+- `work/<run-id>/paper_fulltext.txt` — `pdf-extract` が生成する PDF 全文テキスト（ページ区切り付き）。後続ステップ（Step 5 の fact-check）が照合する**原論文一次資料**として保全する成果物であり、一時ファイルとして揮発させない。一次資料の位置づけと二重照合の約束は `pdf-extract` を真実源とする。
+- 最終メッセージには `analysis.md` の絶対パス（1 行目）と `paper_fulltext.txt` の絶対パス（2 行目）を、それぞれ単一行で（計 2 行）出力する。行順は呼び出し元ワークフロー（write-article SKILL.md Step 3）の規定と一致させる。
 
 # 判断基準
 
@@ -25,6 +26,7 @@ color: green
 - **事実は原文に忠実に抽出する** — 要点は原文 PDF の記述に基づき、推測・誇張・補完を加えない。原文に無い主張を作らない。数値・固有名詞・主張は原文と一致させる。
 - **対象は選定済みの 1 本に閉じる** — `selected.json` が指す論文だけを扱い、候補の再選定や追加取得の判断には立ち入らない。
 - **抽出の網羅性より忠実性を優先する** — 不確実な箇所は無理に要約せず、原文の該当箇所が判別できる形で残す方を優先する。
+- **原論文一次資料は無加工で保全する** — `paper_fulltext.txt`（`pdf-extract` のテキスト化出力）は加工・要約・整形せずそのまま残す。要点抽出（`analysis.md`）とは独立した原文として保持する（位置づけは `## 出力` 参照）。
 
 # 使用するスキル
 
@@ -34,6 +36,7 @@ color: green
 
 1. 作業開始時に `Skill` ツールで `pdf-extract` を呼び出し、PDF 取得・テキスト化・要点抽出の手法をロードする。
 2. 入力 `work/<run-id>/selected.json` を読み、解析対象論文の PDF 取得元を特定する。
-3. `pdf-extract` の手法に従い PDF を取得・テキスト化し、要点を抽出する。
-4. 抽出した要点を `work/<run-id>/analysis.md` に Write する。
-5. 生成した `analysis.md` の絶対パスを単一行で出力する。
+3. `pdf-extract` の手法に従い PDF を取得・テキスト化する。テキスト化の出力先（`--out`）は `work/<run-id>/paper_fulltext.txt` に固定し、削除・上書きせず残す。
+4. テキスト化物から要点を抽出する。
+5. 抽出した要点を `work/<run-id>/analysis.md` に Write する。
+6. 生成した `analysis.md` の絶対パスと、保全した `paper_fulltext.txt` の絶対パスを、それぞれ単一行で（計 2 行）出力する。
