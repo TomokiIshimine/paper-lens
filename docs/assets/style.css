@@ -585,13 +585,13 @@ a:hover { text-decoration: underline; }
 }
 .article-card__thumb {
   margin: 0;
-  overflow: hidden;
+  align-self: start;
 }
 .article-card__thumb img {
   width: 100%;
-  height: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
-  object-position: top center;
   display: block;
 }
 .article-card__body { padding: var(--space-sm) var(--space-md) var(--space-sm) 0; }
@@ -642,7 +642,7 @@ a:hover { text-decoration: underline; }
   .article-card {
     grid-template-columns: 1fr;   /* スマホでは縦積み */
   }
-  .article-card__thumb img { aspect-ratio: 4 / 3; height: auto; object-position: top center; }
+  .article-card__thumb img { aspect-ratio: 16 / 9; height: auto; }
   .article-card__body { padding: 0 var(--space-md) var(--space-md); }
 
   /* ビジュアルコンポーネントの狭幅対応：カード／数値は 1 列に段組み解除 */
