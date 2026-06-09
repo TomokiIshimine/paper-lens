@@ -2,6 +2,11 @@
 
 arXiv から論文を自動取得し、日本語の解説記事を自動生成するシステム。
 
+## 公開ページ
+生成された解説記事は GitHub Pages で公開している。
+
+📖 **https://tomokiishimine.github.io/paper-lens/**
+
 ## 仕組み
 収集・解析・執筆は Claude（エージェント）自身が実行主体となり、
 処理コードや手法は .claude/skills/ 配下のスキルに内包される。
