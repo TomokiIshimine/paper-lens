@@ -569,7 +569,8 @@ a:hover { text-decoration: underline; }
 }
 .article-card {
   display: grid;
-  grid-template-columns: 12rem 1fr;
+  grid-template-columns: 16rem 1fr;
+  align-items: center;
   gap: var(--space-md);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -585,7 +586,10 @@ a:hover { text-decoration: underline; }
 }
 .article-card__thumb {
   margin: 0;
-  align-self: start;
+  overflow: hidden;
+}
+.article-card__thumb a {
+  display: block;
 }
 .article-card__thumb img {
   width: 100%;
