@@ -553,7 +553,7 @@ a:hover { text-decoration: underline; }
 /* ============================================================================
  * 記事一覧トップ（docs/index.html）
  * ========================================================================== */
-.index { padding-block: var(--space-lg) var(--space-xl); max-width: 64rem; }
+.index { padding-block: var(--space-lg) var(--space-xl); max-width: 75rem; }
 
 .index__lead {
   color: var(--color-text-muted);
@@ -565,7 +565,8 @@ a:hover { text-decoration: underline; }
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(28rem, 1fr));
+  /* 最大 3 列。min() で狭幅時のトラックはみ出し（横崩れ）を防ぐ */
+  grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
   gap: var(--space-lg);
 }
 .article-card {
