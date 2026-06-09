@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ゲームで AI エージェントを試す新ベンチマーク OmniGameArena — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-08-2606.09826-omnigamearena-vlm-game-agents-cover.png"
+           alt="ゲームエンジン UE5 で新規制作した 12 本のリアルタイムゲーム（単独 7・対戦 3・協調 2）で VLM ゲームエージェントを評価し、初回スコアではなく繰り返し挑戦して上達する軌跡を測るベンチマーク OmniGameArena と、AI が攻略メモを自分で書き直して上達する仕組み IDC を示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">ゲームで AI エージェントを試す新ベンチマーク OmniGameArena —— 一発勝負ではなく『どう上達するか』を測る</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-08</span>
+      <span>arXiv：2606.09826</span>
+      <span>カテゴリ：cs.CV / cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ゲーム画面を見て操作する AI エージェント（画像と言葉を扱う Vision-Language Model、VLM）を評価するために、ゲームエンジン Unreal Engine 5（UE5）で新規に作った 12 本のリアルタイムゲームからなるベンチマーク「<strong>OmniGameArena</strong>」を提案した論文です。単独プレイだけでなく対戦と協調も含み、しかも「1 回プレイした初回スコア」ではなく「何度も挑戦してどう上達していくか」という軌跡を測る点が新しい特徴です。あわせて、AI 自身が過去のプレイを振り返って攻略メモ（スキル）を書き直し、自律的に上達していく仕組み「Improvement Dynamics Curve（IDC）」も導入しました。実験からは、どの最先端モデルも全ゲームで支配的ではないこと、そして「原タスクでの上達」と「学んだスキルが新しい状況へ通用するか（転移）」が必ずしも一致しないことが分かりました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">12 ゲーム</span>
+          <span class="stat__label">UE5 で新規制作したリアルタイムゲーム<br>（単独 7・対戦 3・協調 2）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">3 形態</span>
+          <span class="stat__label">単独（Solo）／対戦（PvP）／協調（Coop）<br>を統一環境で評価</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">7 次元</span>
+          <span class="stat__label">視覚認識・空間ナビ・反応速度・記憶<br>・計画・対戦・協調の能力で採点</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">IDC</span>
+          <span class="stat__label">初回スコアではなく<br>「上達の軌跡」を曲線として測る</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>基盤モデル（大規模な事前学習済みモデル）は、いまや「何を答えるか」だけでなく「どう行動するか」で評価される時代に入っています。ゲームはその行動能力を試すストレステストとして格好の題材です。リアルタイムで状況が変わり、画面を見て素早く判断し、操作で結果を出す必要があるからです。</p>
+      <p>しかし著者らは、既存のゲームベンチマークには 2 つの限界があると指摘します。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 1</span> 「初回スコア」しか見ない</p>
+          <p>多くが初回 1 回のスコア（first-attempt score）しか報告せず、繰り返し遊ぶうちにエージェントがどう改善するかの軌跡が見えません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 2</span> 単独プレイへの偏り</p>
+          <p>単独プレイ（Solo）に偏り、対戦（PvP）や協調（Coop）が過小評価されています。対戦・協調では、相手を読む・役割を分担する・仲間のミスから立て直すといった、単独プレイとは別種の能力が問われます。</p>
+        </div>
+      </div>
+
+      <p>加えて、商用 VLM・公開されている VLM・ゲーム専用に作られた制御モデルといった異なる種類のエージェントを、同じ条件で比べる統一的な仕組みも欠けていました。この研究はこれらの課題に正面から取り組んでいます。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>既存のゲームベンチマークの多くは、市販のゲームタイトルを再利用しています。これには見落としがちな落とし穴があります。事前学習データへの混入（pre-training contamination）です。</p>
+      <p>つまり、有名なゲームであればその攻略情報がインターネット上にあふれており、モデルが学習段階で「答え」を読んでしまっている可能性があるのです。これでは、モデルがその場で考えて行動したのか、覚えていた知識を思い出しただけなのかを区別できません。ベンチマークとしての信頼性が損なわれます。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>そこで本研究は、評価のために<strong>独自のゲームをゼロから作る</strong>という方針を取りました。攻略情報がネット上に存在しなければ、モデルは「その場で考えて行動する」しかなくなります。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>提案は大きく 2 つです。新しいベンチマーク「OmniGameArena」と、自己改善の仕組み「IDC」です。</p>
+
+      <h3>OmniGameArena：UE5 で新規制作した 12 ゲーム</h3>
+      <p>著者らは UE5 で 12 本のゲームを新たに作りました。たとえば Solo には障害物を走り抜ける ObstacleRun3D、波状の敵を生き延びる LastStand、的を撃つ MonsterShoot などがあります。各ゲームの進捗は 0 から 1 の連続値に正規化され、たとえば ObstacleRun ならスタートからゴールまでの到達割合、LastStand なら生存時間の割合でスコアが決まります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">Solo</span> 単独プレイ 7 本</p>
+          <p>障害物を走り抜ける ObstacleRun3D、波状の敵を生き延びる LastStand、的を撃つ MonsterShoot など。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">PvP</span> 対戦 3 本</p>
+          <p>SkyDuel・CrystalGuard・MidlineClash。相手を読む能力が問われる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Coop</span> 協調 2 本</p>
+          <p>SharedFloor・HandoffRun。役割分担や引き継ぎが必要になる。</p>
+        </div>
+      </div>
+
+      <p>このベンチマークの工夫は次の 3 点です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">統一されたアクションインターフェース</p>
+          <p>キーボード・マウス操作とゲームパッド操作を用意し、アダプタ（プロンプトをキー入力へ変換する仕組みなど）を介して、種類の異なるエージェントを同じリアルタイム環境につなげます。これにより、商用 VLM もゲーム専用モデルも同じ土俵で比較できます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">7 つの能力次元での採点</p>
+          <p>各ゲームを、視覚認識（VP）、空間ナビゲーション（SN）、反応速度（RT）、記憶（MEM）、計画（PLN）、対戦（ADV）、協調（COOP）の 7 つの観点で 0〜3 点に分類し、どのゲームがどの能力を問うかを明示します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">汚染回避（contamination avoidance）</p>
+          <p>公開前に「ウェブ露出監査（web-exposure audit）」を行い、ゲーム名・タスク文・ルール記述・スコア条件をネット上から除外。素材の一部に UE5 マーケットプレイス資産を使っても、組み合わせ・レベル形状・スクリプトの実行順・成功条件はすべて独自設計です。</p>
+        </div>
+      </div>
+
+      <h3>IDC：AI が自分で攻略メモを書き直して上達する仕組み</h3>
+      <p>IDC（Improvement Dynamics Curve、改善ダイナミクス曲線）は、エージェントが複数ラウンドにわたって自律的に上達していく様子を「曲線」として測る仕組みです。構造は 2 層になっています。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 280" role="img" aria-label="IDC の 2 層構造を示す図。内側ループは 1 エピソードごとに観測（RGB フレーム）を受け取り操作を返す。外側ループは経験の獲得・振り返り・永続的な蓄積の 3 要素で回り、自然言語のスキルプロンプトを書き直して次ラウンドへ渡す。モデルの重みは更新しない。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="380" y="28" text-anchor="middle">外側ループ（振り返り）：自然言語のスキルプロンプトを書き直す</text>
+
+          <rect class="node" x="30" y="60" width="200" height="64" rx="8"></rect>
+          <text class="node-label" x="130" y="88" text-anchor="middle">経験の獲得</text>
+          <text class="edge-label" x="130" y="108" text-anchor="middle">K 回プレイ→平均スコア</text>
+
+          <rect class="node" x="280" y="60" width="200" height="64" rx="8"></rect>
+          <text class="node-label" x="380" y="88" text-anchor="middle">振り返り（reflection）</text>
+          <text class="edge-label" x="380" y="108" text-anchor="middle">スキルを書き直す</text>
+
+          <rect class="node" x="530" y="60" width="200" height="64" rx="8"></rect>
+          <text class="node-label" x="630" y="88" text-anchor="middle">永続的な蓄積</text>
+          <text class="edge-label" x="630" y="108" text-anchor="middle">メモ・スキル・スコア列</text>
+
+          <path class="edge" d="M230,92 L278,92" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M480,92 L528,92" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M630,124 L630,180 L130,180 L130,126" fill="none" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="380" y="174" text-anchor="middle">次ラウンドへ（重みは更新しない）</text>
+
+          <rect class="node" x="180" y="208" width="400" height="56" rx="8"></rect>
+          <text class="node-label" x="380" y="232" text-anchor="middle">内側ループ（1 エピソード）</text>
+          <text class="edge-label" x="380" y="252" text-anchor="middle">観測（RGB フレーム）を受け取り操作を返す</text>
+
+          <path class="edge" d="M130,124 L130,236 L178,236" fill="none" marker-end="url(#arrow)"></path>
+        </svg>
+        <figcaption class="diagram__caption">IDC の 2 層構造。内側ループは 1 エピソードごとにゲーム画面を見て操作を返す。外側ループは経験の獲得・振り返り・永続的な蓄積の 3 要素で回り、自然言語で書かれたスキルプロンプトを書き直して次ラウンドへ渡す。モデルの重み（パラメータ）は一切更新しない。</figcaption>
+      </figure>
+
+      <p>1 層目は <strong>1 エピソードごとのループ</strong>です。エージェントはゲーム画面（RGB フレーム）を含む観測を受け取り、操作を返します。VLM には直近の観測と応答のペアを数件さかのぼって履歴として渡し、1 回の呼び出しで複数枚の画像をまとめて見せます。</p>
+      <p>2 層目は <strong>振り返りの外側ループ</strong>で、ここが本手法の核心です。次の 3 要素で動きます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">経験の獲得（experience acquisition）</p>
+          <p>いまのスキル（攻略メモ）で K 回プレイし、平均スコアをそのラウンドのスコアとします。最初のラウンド（Round 0）はスキルを空にして基準値を測ります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">振り返り（reflection）</p>
+          <p>「振り返り役（reflector）」と呼ばれる LLM が、新しいプレイ記録と過去の蓄積を読み、4 段階で作業します（下のタイムライン参照）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">永続的な蓄積（persistent state）</p>
+          <p>プレイヤーには見せない経験メモ（最大 2000 トークン）、現ラウンドのスキルプロンプト（最大 1200 トークン）、各ラウンドのスコアの列を保持します。</p>
+        </div>
+      </div>
+
+      <p>振り返り役（reflector）の 4 段階は次のように進みます。</p>
+
+      <ul class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">Explore（記録を調べる）</p>
+          <p>新しいプレイ記録と過去の蓄積（メモと旧スキル）を読み込み、何が起きたかを調査します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">Diagnose（原因を言語化する）</p>
+          <p>失敗の原因を自然言語で言語化します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">Validate（検証する）</p>
+          <p>独立した判定役の LLM が、マップの丸暗記や診断との矛盾を棄却します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">Distill（スキルを確定する）</p>
+          <p>採用するスキルプロンプトを確定し、次ラウンドへ渡します。</p>
+        </li>
+      </ul>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>ここで重要なのは、<strong>モデルの重み（パラメータ）は一切更新しない</strong>ことです。改善はあくまで自然言語で書かれたスキルプロンプトという「明示的な成果物」の上で起こります。著者らはこれを「ヒューリスティック学習（heuristic learning）」パラダイムの具体化と位置づけています。</p>
+        </div>
+      </div>
+
+      <p>さらに、スコアがそれまでの最高値を大きく下回ったとき（具体的には最高スコアの半分を割ったとき）に、最も良かったスキルへ巻き戻す「ベストスキル・ロールバック（best-skill rollback）」も備えています。下手に書き換えて性能が崩れるのを防ぐ安全装置です。</p>
+      <p>こうして R ラウンド繰り返して得られるスコアの列が、その（エージェント、ゲーム）の組に対する改善ダイナミクス曲線です。同じ最終スコアでも、早く上達するか後で伸びるか、なめらかに伸びるか振動するかで曲線の形は変わります。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価では 12 のエージェントを 3 種類に分けて比較しました。商用 VLM（Claude Opus 4.7 / 4.6、Claude Sonnet 4.6、GPT-5.5、GPT-5.4、Gemini 3.1 Pro、Gemini 3.1 Flash-Lite、Kimi K2.5）、公開されている VLM（Qwen3.5 の 2 種類）、そしてゲーム専用ポリシー（NitroGen、Open-P2P）です。各（エージェント、ゲーム）の組は 5 エピソードで評価しました。なお、以下の主な表は推論時間を無料扱いにして純粋な判断品質を測るモード（PDQ）での結果です。</p>
+
+      <h3>どの単一モデルも支配的ではない</h3>
+      <p>Solo の 7 ゲームでは、首位がゲームごとに入れ替わります。GPT-5.5 が 4 ゲームでトップに立つ一方、Claude Opus 4.6 は CueChase で大差勝ち、Gemini 3.1 Pro は MonsterShoot でトップでした。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ゲーム</th>
+            <th>トップ</th>
+            <th>スコア（対 次点）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Solo 7 ゲーム中 4 ゲーム</th>
+            <td>GPT-5.5</td>
+            <td>最多の首位</td>
+          </tr>
+          <tr>
+            <th>CueChase</th>
+            <td>Claude Opus 4.6</td>
+            <td class="is-best">0.840 対 0.580（大差勝ち）</td>
+          </tr>
+          <tr>
+            <th>MonsterShoot</th>
+            <td>Gemini 3.1 Pro</td>
+            <td>0.710 対 0.464</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>また「新しい＝強い」ではありませんでした。Claude Opus 4.6 が 7 ゲーム中 5 つで Opus 4.7 を上回り、GPT-5.4 が SceneEscape で GPT-5.5 を上回りました。能力の順位はタスク固有で、リリース順どおりに一直線には並びません。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>公開 VLM とゲーム専用ポリシーは通用しませんでした。<strong>Qwen3.5</strong> はどちらのチェックポイントも全ゲームで 0.15 未満にとどまり、複数ゲームでちょうど 0.00 でした。<strong>NitroGen</strong> と <strong>Open-P2P</strong> もほぼ全ゲームでほぼゼロに崩れました。</p>
+        </div>
+      </div>
+
+      <h3>対戦には「非推移性」がある</h3>
+      <p>SkyDuel と CrystalGuard では Solo の順位どおりの明確な強弱関係が見られました。ところが MidlineClash では順位が一巡せず、じゃんけんのように相性が循環する現象が起きました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">5 戦全勝</span>
+          <span class="stat__label">MidlineClash で Kimi K2.5 が<br>Claude Opus 4.6 に 1.00（全勝）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">非推移</span>
+          <span class="stat__label">Solo では Claude の方が強いのに<br>対戦では相性が循環する</span>
+        </div>
+      </div>
+
+      <h3>協調はまだ難しい</h3>
+      <p>Coop の 2 ゲームでは GPT-5.5 が両方でトップ、Gemini 3.1 Pro が僅差の 2 位でしたが、最強モデルでも到達度は低い水準にとどまりました。LLM 同士の協調は未解決の能力ギャップだと位置づけられています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">0.368</span>
+          <span class="stat__label">SharedFloor の最高スコア<br>（最強モデルでも）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.184</span>
+          <span class="stat__label">HandoffRun の最高スコア<br>（最強モデルでも）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.000</span>
+          <span class="stat__label">Qwen3.5 は両ゲームでちょうどゼロ<br>1 つも完了できず</span>
+        </div>
+      </div>
+
+      <h3>IDC による上達と、その「転移」のずれ</h3>
+      <p>IDC は LastStand（Solo）と SharedFloor（Coop）で実施しました。4 つのエージェント（Claude Opus 4.6 / 4.7、GPT-5.5、Gemini 3.1 Pro）が 10 ラウンド × 各 5 エピソードを実行しています。主な知見は 3 つです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">知見 1</span> どのモデルも基準を上回るスキルを発見</p>
+          <p>LastStand では最良ラウンドで生存率が +0.54〜+0.70（相対で +130%〜+437%）改善し、SharedFloor では 1 エピソードあたり 1〜4 件多くタスク（配達オーダー）を完了しました。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">知見 2</span> ピークは中盤に来る</p>
+          <p>最終ラウンドではなく中盤がピークというのが典型でした。LastStand では 2 つの Opus モデルが最良〜最終ラウンドの間で 0.40〜0.52 を失う一方、GPT-5.5 と Gemini はほぼ利得を保持。ベストスキル・ロールバックの存在意義を裏づけます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">知見 3</span> 上達と転移は一致しない</p>
+          <p>学んだベストスキルを未見の 3 変種（VAR1〜VAR3）に適用し、通用するか（転移するか）を調べました。原タスクでの上達の大きさと、新しい状況への転移は一致しませんでした。</p>
+        </div>
+      </div>
+
+      <p>転移の様子は環境によって大きく異なりました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>環境</th>
+            <th>転移の様子</th>
+            <th>背景</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>SharedFloor（Coop）</th>
+            <td class="is-best">普遍的に転移（16 ケース全部が正の利得 +6%〜+56%）</td>
+            <td>スキルが空間の丸暗記ではなく「仲間の位置と所持品を確認する」「重複はゴミ箱で捨てる」といった協調のコツを符号化していたため。</td>
+          </tr>
+          <tr>
+            <th>LastStand（Solo）</th>
+            <td>結果がばらつく</td>
+            <td>GPT-5.5 は 3 変種すべてで正に転移する唯一のモデルだが原タスクの利得は最小（+130%）。逆に Opus 4.7 は原タスクで +201% と大きく伸びたが全変種で負に転移。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>つまり「<strong>原タスクでの上達が大きいこと</strong>」と「<strong>その学びが新しい状況へ通用すること</strong>」は必ずしも一致しません。この乖離が、変種実験の中心的な知見です。</p>
+        </div>
+      </div>
+
+      <p>なお付録では、推論にかかる遅延をゲーム時間に課金するモード（LCRT）での評価も報告されています。MonsterShoot のように素早い反応を要するゲームほど遅延に弱く、逆に LastStand のように最適手がほぼ静止しているゲームでは、一部モデルがむしろ改善しました。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、ゲームエージェントの評価を「1 回の初回スコア」から「上達の軌跡」と「学んだスキルが未見の状況へ通用するか」へと拡張した点にあります。汚染回避も成果が出ています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>汚染チェック</th>
+            <th>OmniGameArena</th>
+            <th>既存ベンチマーク</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>スクリーンショットの認識率</th>
+            <td class="is-best">0.0%</td>
+            <td>66.7〜100%</td>
+          </tr>
+          <tr>
+            <th>メカニクス漏洩</th>
+            <td class="is-best">50.0%</td>
+            <td>66.7〜100%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>いずれも既存ベンチマークより大幅に低い値であり、「その場で考えて行動する能力」を測れていることの裏づけになります。一方で、著者らは限界も率直に述べています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">IDC の範囲</p>
+          <p>計算資源の制約から、IDC 実験は 2 環境（LastStand と SharedFloor）× 各 3 変種 × 4 エージェントにとどまります。ゲーム・変種・モデルの規模拡大は今後の課題です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">単一スキル形式</p>
+          <p>振り返り役は毎ラウンド丸ごと置き換える 1 つの有界なスキルプロンプトを保持するだけで、スキルを少しずつ積み上げていく成長型のライブラリではありません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">プレイヤーと振り返り役が同一モデル</p>
+          <p>各エージェントはプレイ役と振り返り役に同じモデルを使っています。弱いプレイヤーと強い振り返り役を組み合わせる非対称構成が異なる結果を生むかは、まだ検証されていません。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>OmniGameArena は、UE5 で新規制作した 12 ゲームと、AI が自分で攻略メモを書き直して上達する IDC を組み合わせた、ゲームエージェント向けの統一ベンチマークです。最先端モデルでも全ゲームを制覇できる単独の王者はおらず、何より「原タスクでうまくなること」と「学びが新しい状況に通用すること」は別物だという発見が、今後のエージェント研究にとって重要な示唆になります。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>VLM（Vision-Language Model）</dt>
+        <dd>画像と言語をともに扱う基盤モデル。本研究ではゲーム画面を見て操作を出力するエージェントとして評価される。</dd>
+
+        <dt>Solo / PvP / Coop</dt>
+        <dd>それぞれ単独プレイ、対戦（player-vs-player）、協調（cooperative）の 3 つの相互作用形態。</dd>
+
+        <dt>IDC（Improvement Dynamics Curve）</dt>
+        <dd>複数ラウンドの振り返りを通じたスコア推移を「曲線」として測る、自己改善の仕組みであり観測対象。</dd>
+
+        <dt>Reflector（振り返り役）</dt>
+        <dd>プレイ記録を読み、ツールを使って自律的にスキルプロンプトを書き直す LLM。Explore / Diagnose / Validate / Distill の 4 段階で動く。</dd>
+
+        <dt>スキル（skill prompt）</dt>
+        <dd>ゲーム固有の戦略を自然言語でまとめた有界なプロンプト（最大 1200 トークン）。重みを更新せずに行動を改善する手段。</dd>
+
+        <dt>Contamination（汚染）</dt>
+        <dd>事前学習データへゲーム情報が混入し、モデルが「答え」を覚えてしまう問題。公開前のウェブ露出監査で回避する。</dd>
+
+        <dt>PDQ / LCRT</dt>
+        <dd>2 つの時間計測モード。PDQ は推論時間を無料扱いし純粋な判断品質を測り、LCRT は推論の遅延をゲーム時間に課金する。</dd>
+
+        <dt>転移（transfer）／未見変種（held-out variant）</dt>
+        <dd>学んだスキルが、訓練時とは異なる新しいタスク変種でも通用するか。各ゲームに 3 つの変種が用意されている。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">OmniGameArena: A Unified UE5 Benchmark for VLM Game Agents with Improvement Dynamics</p>
+      <a href="https://arxiv.org/abs/2606.09826" target="_blank" rel="noopener noreferrer">arXiv:2606.09826 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
