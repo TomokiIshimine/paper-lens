@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>整合か予測か：マルチモーダル学習の手法選びを地図化する「相図」 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-09-2606.11190-phase-diagram-multimodal-learning-cover.png"
+           alt="マルチモーダル学習の二大手法であるクロスモーダル整合（CA）とクロスモーダル予測（CP）を線形モデルで統一解析し、信号強度 κ とノイズ相関 ν の平面を Both / CA only / CP only / Neither の 4 領域に分ける相図と、LAMOST×Kepler が Both、LAMOST×TESS が Neither と診断された天体観測の検証結果を示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">整合か予測か：マルチモーダル学習の手法選びを地図化する「相図」</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-09</span>
+      <span>arXiv：2606.11190</span>
+      <span>カテゴリ：cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>画像とキャプションのように、対になった異なる種類のデータ（モダリティ）から共通の構造を学ぶ「マルチモーダル表現学習」には、大きく分けて 2 つの流派があります。本研究は、この 2 つを線形モデルのもとで統一的に解析し、「どんな問題のときにどちらが成功し、どちらが失敗するか」、さらには「そもそもマルチモーダル学習が役立つのか」を一枚の地図（相図）として描き出しました。加えて、少量のラベル付きデータから、訓練を始める前に自分の問題がこの地図のどこに位置するかを診断する手法を提案し、合成データから実際の天体観測データまでで検証しています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">2 手法</span>
+          <span class="stat__label">整合（CA）と予測（CP）を<br>1 つの線形枠組みで統一解析</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">4 領域</span>
+          <span class="stat__label">Both / CA only / CP only / Neither<br>に問題を分ける相図</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">分離比 ∆</span>
+          <span class="stat__label">∆ &gt; 1 で信号部分空間を<br>完全に回復できる</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">&lt; 1,000</span>
+          <span class="stat__label">訓練前の診断に必要な<br>ラベル付きサンプル数</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>マルチモーダル学習の代表的な 2 つの手法は、これまで別々に研究されてきました。そのため実務者は、経験的にうまくいった手法や、扱いやすいアーキテクチャを選んでいるだけで、「なぜこちらの手法が良いのか」を原理的に説明できていませんでした。</p>
+      <p>この問題はとくに、生物医学や天体物理のように、異なる計測機器で同じ対象を観測する科学分野で深刻です。標準的な手法を使っても、性能が「最も良い単一モダリティ」を下回ってしまうことがあり、その理由を診断する手立てがありませんでした。本研究は、手法選びを勘や経験ではなく、データの性質に基づいて事前に判断できる枠組みを与えます。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>マルチモーダル表現学習とは、画像とキャプション、音声と動画、あるいは異なる望遠鏡による同じ天体の観測のように、対になった異モダリティの観測から、共有された潜在構造を抽出する技術です。その二大パラダイムが次の 2 つです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">CA</span> クロスモーダル整合</p>
+          <p>対になったサンプルを共有の埋め込み空間に射影し、対応するペア同士を近づける手法（Cross-modal Alignment）。CLIP、ImageBind、VICReg が代表例です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">CP</span> クロスモーダル予測</p>
+          <p>情報を絞り込むボトルネックを通じて、一方のモダリティからもう一方を再構成する手法（Cross-modal Prediction）。マスク自己符号化器や data2vec などが該当します。</p>
+        </div>
+      </div>
+
+      <p>この 2 つは通常それぞれ個別に研究されており、両者の相対的な強み・弱みや、どの問題にどちらが向くのかは、原理的には理解されていませんでした。既存の理論研究（Huang et al. (2021) や Lu (2023)）は「マルチモーダルが役立ちうる」ことを特定の仮定のもとで示しましたが、モダリティ固有のノイズや、タスクに無関係な構造（nuisance。以下では「無関係構造」と呼びます）、ランク不足といった現象は捉えていませんでした。本研究は「いつ機能し、いつ害になるか」、そして「CA か CP かという手法の選択そのものが重要であること」を特徴づけることを目指します。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>2 つの手法を 1 つの線形の枠組みでとらえる</h3>
+      <p>本研究はまず、線形エンコーダ（入力を一次変換で符号化する単純なモデル）のもとで、CA と CP の解を閉じた式で導きます。すると、CA は CCA と、CP は打ち切り型の低ランク回帰（RRR）と等価であることが出発点になります。CCA（正準相関分析）は、2 種類のデータの中から「最もよく対応し合う方向」を見つける古典的な手法です。RRR（低ランク回帰）は、一方のデータから他方を予測する際に、使う方向の数をあえて少数に絞り込む回帰の一種です。</p>
+      <p>両者の解は、2 つのモダリティの相関を表す行列を特異値分解（SVD）することで表現できます。SVD は、行列を「どの方向に」「どれだけ強く」効くかという成分に分解する操作です。CA は両モダリティを対称的にホワイトニングしてから共通方向へ射影するのに対し、CP は予測元（ソース）側だけにホワイトニングを施します。ここでホワイトニングとは、各成分の大きさを揃えてクセを取り除く前処理のことです。この処理が片側だけか両側かという非対称性が、後で出てくる「予測の方向」が重要になる理由につながります。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 250" role="img" aria-label="CA はモダリティ X とモダリティ Y の両側を対称にホワイトニングしてから共通方向へ射影するのに対し、CP は予測元の片側だけにホワイトニングを施して予測先を再構成する。この非対称性が予測の方向が重要になる理由につながる図。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="120" y="28" text-anchor="middle">CA（整合）：両側を対称に処理</text>
+          <rect class="node" x="20" y="42" width="90" height="44" rx="8"></rect>
+          <text class="node-label" x="65" y="69" text-anchor="middle">モダリティ X</text>
+          <rect class="node" x="20" y="98" width="90" height="44" rx="8"></rect>
+          <text class="node-label" x="65" y="125" text-anchor="middle">モダリティ Y</text>
+          <rect class="node" x="160" y="70" width="110" height="44" rx="8"></rect>
+          <text class="node-label" x="215" y="91" text-anchor="middle">共通方向へ</text>
+          <text class="node-label" x="215" y="107" text-anchor="middle">射影</text>
+          <path class="edge" d="M110,64 L156,84" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M110,120 L156,100" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="135" y="160" text-anchor="middle">両側ホワイトニング</text>
+
+          <line x1="380" y1="30" x2="380" y2="170" class="edge"></line>
+
+          <text class="node-label" x="600" y="28" text-anchor="middle">CP（予測）：片側だけ処理</text>
+          <rect class="node" x="450" y="70" width="110" height="44" rx="8"></rect>
+          <text class="node-label" x="505" y="91" text-anchor="middle">予測元</text>
+          <text class="edge-label" x="505" y="107" text-anchor="middle">（ホワイトニング）</text>
+          <rect class="node" x="640" y="70" width="100" height="44" rx="8"></rect>
+          <text class="node-label" x="690" y="91" text-anchor="middle">予測先を</text>
+          <text class="node-label" x="690" y="107" text-anchor="middle">再構成</text>
+          <path class="edge" d="M560,92 L636,92" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="600" y="160" text-anchor="middle">片側だけ処理＝非対称</text>
+        </svg>
+        <figcaption class="diagram__caption">CA は両モダリティを対称にホワイトニングして共通方向へ射影する。CP は予測元の片側だけにホワイトニングを施して予測先を再構成する。この片側／両側の非対称性が、CP で「どちらの方向に予測するか」が重要になる理由につながる。</figcaption>
+      </figure>
+
+      <h3>信号とノイズを分けて考える「スパイクモデル」</h3>
+      <p>解析の土台として、各モダリティが「k 個の共有信号の座標」と「d−k 個のモダリティ固有な無関係構造（nuisance）の座標」に分解される、信号＋ノイズ型のモデル（スパイクモデル, spiked model）を置きます。ここでの無関係構造とは、タスクには関係しないものの、各モダリティに固有に存在する構造のことです。</p>
+      <p>本研究の特徴は、この無関係構造がモダリティ間で相関する度合い（クロスモーダルな無関係構造の相関）を明示的にモデルに組み込んだ点にあります。従来のスパイクモデル解析が見逃していたこの構造が、CP における予測元・予測先の非対称性や、後述する「どちらの手法も失敗する領域」といった現象を生み出します。</p>
+
+      <h3>成功・失敗を分ける「分離比」</h3>
+      <p>信号がノイズに対してどれだけ際立っているかを測る量として、<strong>分離比（separation ratio）</strong>を定義します。これは「信号の強さの最小値を、無関係構造の強さの最大値で割った値」で、CA 用の ∆<sub>CA</sub> と CP 用の ∆<sub>CP</sub> の 2 種類があります。この値が 1 を超えると、信号の部分空間を完全に回復できることが示されます（論文では命題 3.1 として与えられます）。</p>
+      <p>CA と CP は、失敗の仕方が相補的です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">CA の失敗</span></p>
+          <p>CA の無関係構造の量は、0〜1 のクロスモーダル相関係数で決まり、無関係構造の分散には依存しません。ある無関係構造のモダリティ間相関が 1 に近づくと、信号の強さに関わらず信号方向が勝てなくなり、∆<sub>CA</sub> が 1 を下回ります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">CP の失敗</span></p>
+          <p>CP の無関係構造の量は、予測先（ターゲット）側の無関係構造の分散に依存します。ターゲット側のこの分散が大きいと、ほどほどの相関でも回復が壊れます。予測元と予測先を入れ替えると効いてくる分散も入れ替わるため、「どちらの方向に予測するか」が重要になります。</p>
+        </div>
+      </div>
+
+      <h3>4 つの領域に分ける「相図」</h3>
+      <p>これらをまとめると、クロスモーダル信号の強さ κ（カッパ）と、正規化したノイズ相関 ν（ニュー）を 2 軸とする平面が、∆<sub>CA</sub> = 1 と ∆<sub>CP</sub> = 1 の境界によって 4 つの領域に分割されます。これが本研究の中心となる<strong>相図（phase diagram）</strong>です。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 520 380" role="img" aria-label="横軸が信号強度 κ、縦軸がノイズ相関 ν の平面を 4 領域に分ける相図。左下の κ 小・ν 小は Both（CA・CP どちらも成功）、右下の κ 大・ν 小は Both 寄り、左上の κ 小・ν 大は Neither（どちらも失敗）、右側は CA only と CP only。冗長モダリティは κ 大・ν 小で Both に、相補モダリティは ν 大・κ 小で Neither に位置する。">
+          <!-- quadrant fills -->
+          <rect x="80" y="40" width="180" height="140" class="node" rx="4" style="fill:var(--surface-2,#eef1f6)"></rect>
+          <rect x="260" y="40" width="180" height="140" class="node" rx="4" style="fill:var(--surface-2,#eef1f6)"></rect>
+          <rect x="80" y="180" width="180" height="140" class="node" rx="4" style="fill:var(--surface-2,#eef1f6)"></rect>
+          <rect x="260" y="180" width="180" height="140" class="node" rx="4" style="fill:var(--surface-2,#eef1f6)"></rect>
+
+          <text class="node-label" x="170" y="105" text-anchor="middle">Neither</text>
+          <text class="edge-label" x="170" y="125" text-anchor="middle">どちらも失敗</text>
+          <text class="node-label" x="350" y="105" text-anchor="middle">CA only</text>
+          <text class="edge-label" x="350" y="125" text-anchor="middle">CA だけ成功</text>
+          <text class="node-label" x="170" y="245" text-anchor="middle">CP only</text>
+          <text class="edge-label" x="170" y="265" text-anchor="middle">CP だけ成功</text>
+          <text class="node-label" x="350" y="245" text-anchor="middle">Both</text>
+          <text class="edge-label" x="350" y="265" text-anchor="middle">どちらも成功</text>
+
+          <!-- axes -->
+          <line x1="80" y1="320" x2="455" y2="320" class="edge"></line>
+          <line x1="80" y1="320" x2="80" y2="30" class="edge"></line>
+          <text class="node-label" x="265" y="352" text-anchor="middle">信号強度 κ →</text>
+          <text class="node-label" x="40" y="180" text-anchor="middle" transform="rotate(-90 40 180)">ノイズ相関 ν →</text>
+
+          <!-- regime labels for modality types -->
+          <text class="edge-label" x="170" y="62" text-anchor="middle">← 相補モダリティ</text>
+          <text class="edge-label" x="350" y="302" text-anchor="middle">冗長モダリティ →</text>
+        </svg>
+        <figcaption class="diagram__caption">信号強度 κ とノイズ相関 ν の平面を、∆<sub>CA</sub> = 1・∆<sub>CP</sub> = 1 の境界が 4 領域に分ける。画像とキャプションのような冗長モダリティは κ が大きく ν が小さいため Both 側に、多センサ天体観測のような相補モダリティは ν が大きく有効な κ が小さいため Neither 側に位置する。</figcaption>
+      </figure>
+
+      <p>画像とキャプションのように視点間で支配的な構造を共有する「冗長（redundant）」なモダリティは、κ が大きく ν が小さいため、標準的な自己教師あり学習（SSL）の前提が成り立ちます。一方、多センサによる天体観測やマルチオミクスのように、各視点が構造的に異なる情報を与える「相補（complementary）」なモダリティは、ν が大きく有効な κ が小さくなり、両手法が同時に失敗する Neither 領域に押しやられます。</p>
+
+      <h3>訓練前に自分の問題を診断する</h3>
+      <p>最後に、少量のラベル付きサブサンプルから、訓練を始める前に自分のデータセットが相図のどこに位置するかを推定する軽量な診断手法を提案します（論文ではアルゴリズム 1 として与えられます）。</p>
+
+      <ul class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">1. 相関成分を取り出す</p>
+          <p>推定したクロスモーダル相関行列の特異成分を求める。潜在的なパラメータを逐一復元する必要はない。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">2. 信号か無関係構造かを分類する</p>
+          <p>各成分を 5 分割の Ridge 回帰で評価し、説明力（R²、決定係数。1 に近いほどよく当たる）の折れ線の「肘」を検出して、信号と無関係構造を切り分ける。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">3. 分離比を直接推定する</p>
+          <p>∆<sub>CA</sub> と ∆<sub>CP</sub> を直接推定し、相図のどの領域にいるかを判定する。実験では 1,000 サンプル未満で十分だった。</p>
+        </li>
+      </ul>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>この診断が信頼できるのは、各モダリティを先に単一モダリティのモデルで符号化し、その<strong>凍結した表現の上でクロスモーダルな目的を動かす「2 段階（two-stage）パイプライン」</strong>のときです。生データから一気に同時最適化する 1 段階（single-stage）の場合は信頼性が落ちます。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>理論を、合成データ、画像、そして実際の天体観測データで検証しています。非線形の実験では、CA の近似に VICReg、CP の近似に MSE による再構成を用いています（VICReg は非線形版 CCA である DeepCCA の一形式であることを根拠にしています）。</p>
+
+      <h3>合成データと画像</h3>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">合成スパイクデータ</p>
+          <p>CP はノイズ相関 ν ≈ 0.15 で信号回復に失敗する一方、CA は ν ≈ 0.75 まで、ほぼ完璧な回復を維持。理論上も、∆<sub>CP</sub> は ∆<sub>CA</sub> より約 5 倍低いノイズ相関で回復の閾値（∆ = 1）を割り込みます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">画像データ（Stereo-dSprites / 3DShapes）</p>
+          <p>CA は無関係構造が完全相関（ν = 1）のときに失敗し、CP は逆の挙動。CA と CP の優劣が入れ替わる地点は、両データセットで ν<sub>max</sub> ≈ 0.8 とよく一致しました。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">MS-COCO（実画像とキャプション）</p>
+          <p>CP の非対称性がはっきり現れました。画像→テキスト予測はノイズが小さいとき CA を約 10 ポイント上回るが、画像ノイズが増えると単調に劣化。テキスト→画像予測は画像側の摂動にほぼ平坦で、「∆<sub>CP</sub> は予測元側の量だけに依存する」線形理論と一致しました。</p>
+        </div>
+      </div>
+
+      <h3>実天体物理データ（最も鋭い検証）</h3>
+      <p>同一の分光エンコーダ（LAMOST）を、品質の異なる 2 つの測光機器（Kepler と TESS）と組み合わせて検証しました。診断手法が予測したレジームと、実際にクロスモーダル学習が役立ったかどうかがきれいに対応します。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>組み合わせ</th>
+            <th>診断されたレジーム</th>
+            <th>推定 ∆<sub>CA</sub> / ∆<sub>CP</sub></th>
+            <th>実際の結果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>LAMOST × Kepler</th>
+            <td class="is-best">Both</td>
+            <td>1.13 / 2.22</td>
+            <td>全タスクで CA か CP の少なくとも一方が、最良の単一モダリティに並ぶか上回った</td>
+          </tr>
+          <tr>
+            <th>LAMOST × TESS</th>
+            <td>Neither</td>
+            <td>ともに 1 未満</td>
+            <td>どのタスクでも、どのクロスモーダル手法も LAMOST 単独を上回れなかった</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><strong>LAMOST × Kepler（Both）</strong>では、たとえば年齢（age）の推定で、LAMOST が弱いため CA が測光信号を捉え、LAMOST 単独より R² で +0.19 改善しました。<strong>LAMOST × TESS（Neither）</strong>では、クロスモーダル手法の劣位が seed による分散を大きく超えて確認されました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p><strong>CP の方向の非対称性</strong>も確認されました。表面重力（logg）や連星性（binarity）では、信号をより直接的に符号化している分光（LAMOST）から測光へ予測する向きが成功し、逆向きは失敗。一方、年齢では測光の自転周期がより直接的な手がかりを与えるため向きが逆転し、逆向きの予測（R² = 0.497）が順向きを上回りました。</p>
+        </div>
+      </div>
+
+      <h3>「分散の罠」</h3>
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>CP は CA より低い再構成誤差（MSE）を達成しながら、「誤った部分空間」を回復してしまうことがあります。MSE という目的関数そのものは、信号と無関係構造を区別しないためです。本研究はこれを<strong>「分散の罠（variance trap）」</strong>と呼んでいます。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>本研究の意義は、実務者がモデルの訓練に着手する前に、自分のマルチモーダル問題を診断し、正しい目的関数と予測方向を選べる枠組みを提供した点にあります。分離比 ∆<sub>CA</sub>・∆<sub>CP</sub> が問題を 4 つのレジームに分け、「どちらの手法が成功するか」だけでなく「そもそもクロスモーダル訓練が役立つか否か」までを決めることを示しました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">最重要の未解決問題：Neither レジーム</p>
+          <p>各計測機器が構造的に異なる視点を与えるものの、CA・CP のどちらも共有信号を抽出できない領域。相補的な科学モダリティが自然に置かれる場所で、抜け出すにはペアごとのクロス共分散を超えた目的関数（高次の構造、補助的な教師信号、モダリティ固有の事前分布など）が必要だろうと著者らは推測しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">線形から非線形への転移</p>
+          <p>解析は線形のケースで厳密解を導き、それを非線形へ転移する形を取っています。回復レジームの推定は 2 段階パイプラインのときに最も直接的に成り立ち、1 段階の場合は信頼性が下がる点に注意が必要です。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>本研究は、マルチモーダル学習の二大手法である整合（CA）と予測（CP）を統一的な線形フレームワークで解析し、分離比を軸に問題を Both / CA only / CP only / Neither の 4 領域へ分ける相図を導きました。さらに、少量のラベルから訓練前に自分の問題を相図上に位置づける診断手法を提案し、合成データから実天体観測データまでで予測の妥当性を確認しています。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>クロスモーダル整合（Cross-modal Alignment, CA）</dt>
+        <dd>対サンプルを共有埋め込み空間に射影し、対応ペアを近づける手法。線形では CCA と等価。代表例は CLIP、ImageBind、VICReg。</dd>
+
+        <dt>クロスモーダル予測（Cross-modal Prediction, CP）</dt>
+        <dd>ボトルネックを通じて一方のモダリティから他方を再構成する手法。線形では打ち切り型低ランク回帰（RRR）と等価。</dd>
+
+        <dt>スパイクモデル（spiked model）</dt>
+        <dd>各モダリティを k 個の共有信号座標と d−k 個のモダリティ固有な無関係構造（nuisance）座標に分解する統計モデル。</dd>
+
+        <dt>無関係構造（nuisance）／クロスモーダルな無関係構造の相関</dt>
+        <dd>タスクに無関係でモダリティ固有な構造（nuisance）と、それがモダリティ間で相関する度合い。CA・CP の失敗を分ける鍵。</dd>
+
+        <dt>分離比（separation ratio）∆<sub>CA</sub>, ∆<sub>CP</sub></dt>
+        <dd>信号の強さの最小値を、無関係構造の強さの最大値で割った量。1 を超えると信号部分空間を完全回復できる。</dd>
+
+        <dt>相図（phase diagram）</dt>
+        <dd>信号強度 κ とノイズ相関 ν の平面を、Both / CA only / CP only / Neither の 4 領域に分ける図。境界は ∆<sub>CA</sub> = 1, ∆<sub>CP</sub> = 1。</dd>
+
+        <dt>冗長 / 相補モダリティ</dt>
+        <dd>冗長は視点間で支配的構造を共有（画像・キャプション等）、相補は各視点が構造的に異なる情報を与える（多センサ天体観測、マルチオミクス等）。後者が Neither 領域に対応。</dd>
+
+        <dt>VICReg</dt>
+        <dd>分散・不変・共分散の正則化を用いた自己教師あり学習手法。本論文では非線形 CA の近似として使用。</dd>
+
+        <dt>LAMOST / Kepler / TESS</dt>
+        <dd>天体物理実験のデータ源。LAMOST は地上分光、Kepler・TESS は宇宙からの測光。下流ターゲットは連星性・表面重力・年齢。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">When to Align, When to Predict: A Phase Diagram for Multimodal Learning</p>
+      <a href="https://arxiv.org/abs/2606.11190" target="_blank" rel="noopener noreferrer">arXiv:2606.11190 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
