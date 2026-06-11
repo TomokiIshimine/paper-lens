@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>削るな、迂回させろ：視覚トークンを「消さずに見送る」VLM 高速化手法 Reroute — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-10-2606.12412-reroute-recoverable-visual-token-routing-cover.png"
+           alt="VLM 高速化のための視覚トークン削減で、従来の枝刈り（rank-and-remove）が低スコアのトークンを不可逆に削除するのに対し、提案手法 Reroute は削除せず残差パスで次段へ見送り、後段で全トークン集合から再評価・再選択できるようにする仕組みと、88.9% 削減でも学習不要のままグラウンディング精度を改善することを示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">削るな、迂回させろ：視覚トークンを「消さずに見送る」VLM 高速化手法 Reroute</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-10</span>
+      <span>arXiv：2606.12412</span>
+      <span>カテゴリ：cs.CV / cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>画像を扱う AI（視覚言語モデル、VLM）を高速化するとき、これまでは画像由来の「視覚トークン」を重要度順に並べ、下位を<strong>永久に削除</strong>するのが定石でした。この論文は、削除する代わりに低スコアのトークンを「いったん見送る」だけにして、後の処理段階で再び選び直せるようにする手法 <strong>Reroute</strong> を提案します。計算量（TFLOPs）と KV キャッシュのメモリ予算は従来と同じに保ったまま、特に削減率が厳しい状況で、画像内の指示対象を特定する精度を改善しました。追加の学習を一切必要としない、既存手法に差し込めるプラグインである点が特徴です。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">削除→見送り</span>
+          <span class="stat__label">スコアリング後の<br>アクションだけを置き換える</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">学習不要</span>
+          <span class="stat__label">追加パラメータ・再学習なしで<br>既存の枝刈り手法に上乗せ</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">同一予算</span>
+          <span class="stat__label">TFLOPs と KV キャッシュは<br>元の枝刈りスケジュールと同クラス</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">88.9% 削減</span>
+          <span class="stat__label">最も厳しい削減率で<br>グラウンディング精度を改善</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>VLM は画像を 1 枚あたり数百〜数千個の「視覚トークン」に変換してから言語モデルに入力します。トークンが多いほど推論は重くなります。アテンション計算はトークン数の二乗で、KV キャッシュ（過去トークンの情報を保持するメモリ）はトークン数に比例して増えるためです。</p>
+      <p>そこで広く使われてきたのが「視覚トークンの削減」です。重要そうなトークンだけ残して、残りを捨ててしまえば軽くなる、という発想です。しかしこの「捨てる」操作は元に戻せません。本当に必要なトークンを序盤で捨ててしまうと、取り返しがつかなくなります。</p>
+      <p>この論文は、その「不可逆な削除」こそが性能低下の原因だと指摘し、削除をやめて「見送り」に置き換えるだけで問題が和らぐことを示します。仕組みがシンプルで、学習不要のまま既存手法に上乗せできるため、実用面での意義が大きい研究です。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>既存の視覚トークン削減手法は、表現は違っても共通して「rank-and-remove（順位付けして削除）」というレシピに従っています。各トークンにスコアを付けて並べ、上位の少数を残し、残りを不可逆に削除する、というものです。代表例には次のような手法があります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">FastV</span></p>
+          <p>デコーダの早い層で 1 回だけ、テキストから視覚トークンへのアテンションを使って枝刈りする。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">PDrop</span> PyramidDrop</p>
+          <p>1 回ではなく、多段階の漸進的なスケジュールで少しずつ削っていく。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">FEATHER / Nüwa</span></p>
+          <p>空間的な手がかりを保てるように、スコアの付け方を改良する。</p>
+        </div>
+      </div>
+
+      <p>これらはいずれも「あるトークンの重要度は、デコーダのどの深さで見てもだいたい同じ」という暗黙の前提に立っています。序盤で重要度が低ければ、後でも低いはずだ、という想定です。</p>
+      <p>ところが著者らの分析によれば、この前提は成り立ちません。視覚トークンの重要度は、層が深くなるにつれて変化するのです。論文の Figure 2 では、ある正解トークン（「緑のシャツの男性（man in green shirt）」の正解領域の中にあるトークン）のアテンションの順位（パーセンタイル）が、層を追うごとに次のように変化することが示されています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">0.11</span>
+          <span class="stat__label">L3（第 3 層）の順位<br>FastV はここで削除</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.25</span>
+          <span class="stat__label">L8（第 8 層）の順位<br>PDrop はここで削除</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.97</span>
+          <span class="stat__label">L25（第 25 層）の順位<br>深層で初めてくっきり浮上</span>
+        </div>
+      </div>
+
+      <p>浅い層では注意がぼんやり広く散らばり、対象に関連する領域は中〜深層になって初めてくっきり現れます。FastV も PDrop も、まだ順位が低い序盤でこのトークンを不可逆に削除してしまうため、後で重要になっても取り戻せません。</p>
+      <p>この「序盤で捨てたものは二度と戻らない」性質が、深刻な結果を招きます。論文の Figure 1 によれば、視覚トークンを 88.9% 削減した状況では、3 つのバックボーン（基盤モデル）にわたってグラウンディング（指示表現が指す対象の領域特定）が崩壊し、IoU（重なり度合いの指標）が 0.4 を下回りました。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>中核のアイデアは、スコアを付けた後の「アクション」を変えることだけです。削除する代わりに、<strong>回復可能な見送り（recoverable deferral）</strong>にします。スコアの付け方、どの層でルーティングを行うか、各段階でどれだけ残すかという予算スケジュールは、既存の枝刈り手法のものをそのまま再利用します。新しい学習も追加パラメータも要りません。</p>
+      <p>仕組みは次のとおりです（論文の Figure 3）。デコーダをいくつかのステージに分割し、各ルーティング層で「テキスト→視覚アテンション」を順位の信号として使い、上位の一定割合のトークンを選びます。選ばれたトークンだけがアテンションと FFN（順伝播ネットワーク）の処理を通ります。ここまでは枝刈りと同じです。</p>
+      <p>違うのは、選ばれなかった「見送りトークン」の扱いです。枝刈りなら削除されますが、Reroute では削除しません。残差パス（処理をスキップして次へ渡す経路）を通って当該ステージを素通りし、次のルーティング判断のときに<strong>全視覚トークンの集合に対して</strong>改めて評価されます。つまり、L3 で見送られたトークンも、後でスコアが上がれば L15 で再び選ばれ得るのです。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 320" role="img" aria-label="枝刈りと Reroute の違いを示す図。どちらも各ルーティング層で上位トークンを選んでアテンションと FFN に通す点は同じだが、枝刈りは選ばれなかった低スコアトークンを不可逆に削除し、次段の候補をその選択分だけに縮める。一方 Reroute は見送りトークンを残差パスで次段へ持ち越し、毎ステージ候補を全トークン集合へ復元するため、序盤で見送られたトークンも後段で再び選ばれ得る。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <!-- 枝刈り（上段） -->
+          <text class="node-label" x="60" y="30" text-anchor="start">枝刈り（rank-and-remove）：選外は不可逆に削除</text>
+          <rect class="node" x="40" y="44" width="92" height="40" rx="8"></rect>
+          <text class="node-label" x="86" y="68" text-anchor="middle">全トークン</text>
+          <rect class="node" x="200" y="44" width="92" height="40" rx="8"></rect>
+          <text class="node-label" x="246" y="62" text-anchor="middle">上位を選択</text>
+          <text class="edge-label" x="246" y="78" text-anchor="middle">→ 処理</text>
+          <rect class="node" x="360" y="44" width="92" height="40" rx="8"></rect>
+          <text class="node-label" x="406" y="68" text-anchor="middle">選択分のみ</text>
+          <rect class="node" x="520" y="44" width="100" height="40" rx="8"></rect>
+          <text class="node-label" x="570" y="68" text-anchor="middle">次段も縮小</text>
+          <path class="edge" d="M132,64 L196,64" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M292,64 L356,64" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M452,64 L516,64" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="406" y="104" text-anchor="middle">選外は削除（×）二度と戻らない</text>
+
+          <line x1="40" y1="150" x2="640" y2="150" class="edge"></line>
+
+          <!-- Reroute（下段） -->
+          <text class="node-label" x="60" y="182" text-anchor="start">Reroute：選外は残差パスで見送り、毎段で全集合へ復元</text>
+          <rect class="node" x="40" y="196" width="92" height="40" rx="8"></rect>
+          <text class="node-label" x="86" y="220" text-anchor="middle">全トークン</text>
+          <rect class="node" x="200" y="196" width="92" height="40" rx="8"></rect>
+          <text class="node-label" x="246" y="214" text-anchor="middle">上位を選択</text>
+          <text class="edge-label" x="246" y="230" text-anchor="middle">→ 処理</text>
+          <rect class="node" x="360" y="196" width="92" height="40" rx="8"></rect>
+          <text class="node-label" x="406" y="214" text-anchor="middle">全集合へ</text>
+          <text class="edge-label" x="406" y="230" text-anchor="middle">候補を復元</text>
+          <rect class="node" x="520" y="196" width="100" height="40" rx="8"></rect>
+          <text class="node-label" x="570" y="214" text-anchor="middle">次段で再選択</text>
+          <text class="edge-label" x="570" y="230" text-anchor="middle">見送り分も再入場</text>
+          <path class="edge" d="M132,216 L196,216" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M292,216 L356,216" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M452,216 L516,216" marker-end="url(#arrow)"></path>
+          <!-- 見送り→次段への残差バイパス -->
+          <path class="edge" d="M246,236 C246,275 406,275 406,238" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="326" y="296" text-anchor="middle">見送りトークンは残差パスでステージを素通り</text>
+        </svg>
+        <figcaption class="diagram__caption">枝刈りは選ばれなかったトークンを不可逆に削除し、次段の候補を選択分だけに縮める。Reroute は見送りトークンを残差パスで持ち越し、毎ステージ候補を全トークン集合へ復元するため、序盤で見送られたトークンも後段でスコアが上がれば再び選ばれ得る。</figcaption>
+      </figure>
+
+      <p>枝刈りとの違いは、候補集合の遷移という観点で見るとたった 1 点に集約されます（論文の式 (2)）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>観点</th>
+            <th>枝刈り（rank-and-remove）</th>
+            <th>Reroute</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>選外トークンの扱い</th>
+            <td>不可逆に削除する</td>
+            <td class="is-best">残差パスで次段へ見送る</td>
+          </tr>
+          <tr>
+            <th>次ステージの候補集合</th>
+            <td>今回選んだトークンだけに縮める</td>
+            <td class="is-best">毎ステージ全トークン集合へ復元する</td>
+          </tr>
+          <tr>
+            <th>見送りトークンの再入場確率</th>
+            <td>0 に固定（退化ケース）</td>
+            <td class="is-best">0 でなくす（後段で再選択可能）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>この見方をすると、従来の枝刈りは「見送ったトークンの再入場確率を 0 に固定した退化ケース」と位置づけられます。Reroute はその確率を 0 でなくす、と言い換えられます。</p>
+      <p>効率の面では、各ステージでアテンションと FFN に入るのは選択されたトークンだけ（個数 K は保持率 r とトークン総数の積）です。そのため理論上の計算量と KV キャッシュの規模は、元にした枝刈りスケジュールと同じクラスに保たれます。なお実際のレイテンシ（実行速度）は、gather/scatter（選んだトークンを集めて並べ替え、また元の位置へ戻す処理）といった処理カーネル（GPU 上で動く演算ルーチン）や KV キャッシュの実装に依存します。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">▶</span>
+        <div class="callout__body">
+          <p>著者らは、この手法を <strong>Mixture-of-Depth（MoD）</strong>スタイルの条件付き計算を VLM の視覚トークン削減に<strong>学習不要</strong>で持ち込んだもの、と整理しています。MoD は通常は学習したルータを使いますが、Reroute は枝刈りがすでに計算しているテキスト→視覚アテンションのスコアをそのままルーティング信号に流用するため、追加学習が要らないのです。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価では、グラウンディングを RefCOCO / RefCOCO+ / RefCOCOg で Acc@0.5（IoU 0.5 でのバウンディングボックス精度）により測り、一般的な VQA（視覚質問応答）を GQA、TextVQA、MME、POPE、ScienceQA、MMBench、MMMU、SEED などで測りました。モデルは LLaVA-1.5-7B、Qwen2.5-VL-7B、Qwen3.5-9B-Hybrid を使い、各手法を「予算を一致させた」Reroute 変種と比較しています。</p>
+
+      <h3>グラウンディングの改善（LLaVA-1.5、HuggingFace 形式、Table 1(b)、平均 Ratio）</h3>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>トークン予算（削減率）</th>
+            <th>手法</th>
+            <th>元手法</th>
+            <th>+Reroute</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th rowspan="2">192 トークン（66.7% 削減）</th>
+            <td>FastV</td>
+            <td>45.5%</td>
+            <td class="is-best">59.2%</td>
+          </tr>
+          <tr>
+            <td>PDrop</td>
+            <td>71.3%</td>
+            <td class="is-best">82.3%</td>
+          </tr>
+          <tr>
+            <th rowspan="2">128 トークン（77.8% 削減）</th>
+            <td>FastV</td>
+            <td>19.8%</td>
+            <td class="is-best">31.8%（+12.0pt）</td>
+          </tr>
+          <tr>
+            <td>PDrop</td>
+            <td>53.4%</td>
+            <td class="is-best">61.2%（+7.8pt）</td>
+          </tr>
+          <tr>
+            <th rowspan="2">64 トークン（88.9% 削減）</th>
+            <td>FastV</td>
+            <td>0.6%</td>
+            <td>0.6%</td>
+          </tr>
+          <tr>
+            <td>PDrop</td>
+            <td>22.2%</td>
+            <td class="is-best">34.0%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>64 トークン（88.9% 削減）では、1 回しか枝刈りしない FastV は回復の余地がほぼなく、0.6% → 0.6% とほとんど改善しませんでした。一方、多段階で削る PDrop は 22.2% → 34.0% に改善しました。著者らはこの差を「多段の再入場機会こそが有効なルーティングのカギ」と解釈しています。</p>
+
+      <h3>より強いパイプラインへの上乗せ（LLaVA-1.5、オリジナル形式、Table 1(a)）</h3>
+      <p>近年の強力なベースライン Nüwa の上に Reroute を加えても、64 トークンで Nüwa 54.6% → Nüwa+Reroute 55.8% と改善が見られました。192 トークンではほぼ同等（Nüwa* 103.7% 対 Nüwa+Reroute* 103.0%）でした。</p>
+
+      <h3>一般 VQA の維持（LLaVA-1.5、Table 3）</h3>
+      <p>グラウンディングの改善が、他のタスクの犠牲の上に成り立っていないかも重要です。全予算（192/128/64）で Reroute は元手法と同等以上の平均 Ratio を保ちました。例えば 64 トークンで FastV 66.8% → FastV+Reroute 69.1%、PDrop 89.7% → PDrop+Reroute 91.7% です。</p>
+
+      <h3>他バックボーンへの転移</h3>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">Qwen2.5-VL-7B（Table 2(a)）</p>
+          <p>66.7% 削減で FastV 53.7% → 60.3%、PDrop 62.9% → 65.1%。77.8% 削減で PDrop 29.3% → 37.4%。88.9% 削減で PDrop 11.1% → 18.6%。削減率が厳しいほど改善幅が大きい傾向が見られました。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">Qwen3.5-9B-Hybrid（Table 2(b)）</p>
+          <p>改善幅が最も大きく、66.7% 削減で FastV 31.1% → 77.5%、PDrop 40.0% → 77.7%。77.8% 削減で PDrop 25.8% → 59.7%、88.9% 削減で PDrop 19.3% → 37.4%。ハイブリッド構成では系列レイアウト（トークンの並び）の保持が効いている可能性を著者らは指摘しています。</p>
+        </div>
+      </div>
+
+      <h3>効率（LLaVA-1.5、Table 4）</h3>
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">80% / 86%</span>
+          <span class="stat__label">FastV+Reroute（64 トークン）の<br>TFLOPs / KV キャッシュ削減（vanilla 比）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">77% / 83%</span>
+          <span class="stat__label">PDrop+Reroute（64 トークン）の<br>TFLOPs / KV キャッシュ削減（vanilla 比）</span>
+        </div>
+      </div>
+      <p>Reroute による計算量のわずかな上乗せは、FastV に対する追加のルーティング段や、PDrop に対する予算一致スケジュールに由来します。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>ablation（要素ごとの寄与分析、Figure 5）では、ルーティング段を増やすほど概ね改善すること、2 番目のルーティング層は早〜中層に置くのが最良で、後段に挿入すると効果が薄れて単発 FastV に近づくことが示されています。また実装上の知見として、物理的に枝刈りする際は位置インデックスを詰め直さず元の視覚位置を保つ「keep-index」規約が有利であること（再採番すると精度が大きく劣化する）も報告されています。Reroute は見送りトークンを物理削除しないため、構成上もとの並びを自然に保ちます。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、視覚トークン削減を「スコアリング後のアクションの選び方」という新しい軸で捉え直した点にあります。従来の枝刈りは「見送ったトークンが二度と戻らない特殊ケース」にすぎず、削除を見送りに変えるだけで、後段の層が必要とする視覚的証拠を捨てずに済みます。改善が最も大きく出るのは「削減率が厳しく」「グラウンディングを重視する」評価です。論文の要旨は「視覚トークン削減は、見送った証拠を後で回復できる選択肢を残すべきだ」というものです。</p>
+      <p>一方で、論文は次の限界も認めています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">ルータの限界を継承</p>
+          <p>Reroute はアテンションスコアやルータの限界をそのまま引き継ぎます。順位付けが悪かったり予算が過度に厳しかったりすると、有用な証拠が複数ステージにわたって不活性のまま残ることがあります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">効率向上は主に理論上</p>
+          <p>効率の向上は主に理論上のものです。実際の速度は、最適化された gather/scatter カーネルや KV キャッシュ管理の実装に左右されます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">デコーダ側に限定</p>
+          <p>対象はデコーダ側の削減です。エンコーダ側の圧縮、トークンのマージ、KV キャッシュの追い出しなどとは相補的ですが、それらとの組み合わせは網羅的には評価されていません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">ハイブリッド構成の課題</p>
+          <p>Qwen3.5 のようなハイブリッド構成では、ルーティングを softmax アテンションのブロックにのみ適用しています。線形アテンションの状態ダイナミクスとの相互作用は今後の課題です。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>この論文は、VLM の視覚トークン削減における「削除」を「回復可能な見送り」へ置き換える学習不要の手法 Reroute を提案しました。計算量と KV キャッシュの予算を据え置いたまま、特に厳しい削減率でのグラウンディングを改善し、一般 VQA を保ちつつ複数のバックボーンへ転移できることを示しています。「重要度は層によって変わるのだから、序盤で捨てきってはいけない」という観察が、この手法の出発点です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>視覚トークン（visual token）</dt>
+        <dd>画像をエンコーダで変換して得られる、言語デコーダに入力されるトークン列。LLaVA-1.5 では標準で 1 枚あたり 576 個。</dd>
+
+        <dt>枝刈り（rank-and-remove / pruning）</dt>
+        <dd>視覚トークンをスコア順に並べ、上位だけ残して残りを不可逆に削除する従来パラダイム。</dd>
+
+        <dt>Reroute（回復可能なルーティング）</dt>
+        <dd>見送りトークンを削除せず残差パスで次段へ持ち越し、後段で再評価・再選択できるようにする本手法の中核。</dd>
+
+        <dt>グラウンディング（grounding）</dt>
+        <dd>自然言語表現が指す対象を、画像内のバウンディングボックスとして特定するタスク。RefCOCO 系で Acc@0.5（IoU 0.5）で評価する。</dd>
+
+        <dt>KV キャッシュ（KV-cache）</dt>
+        <dd>デコーダ推論で過去トークンの Key / Value を保持するメモリ。視覚トークン数に比例して増える。</dd>
+
+        <dt>TFLOPs</dt>
+        <dd>計算量の指標。アテンションはトークン数の二乗で増える。</dd>
+
+        <dt>FastV / PDrop（PyramidDrop） / Nüwa</dt>
+        <dd>既存のデコーダ側視覚トークン枝刈り手法。FastV は早期層で 1 回、PDrop は多段階の漸進、Nüwa は空間的整合性を保つようスコア則を改良する。</dd>
+
+        <dt>Mixture-of-Depth（MoD）</dt>
+        <dd>各層で上位 k 個のトークンのみブロックを通し、残りは残差バイパスさせる条件付き計算手法。標準 MoD は学習ルータを使うが、Reroute は既存アテンションを流用して学習不要にする。</dd>
+
+        <dt>テキスト→視覚アテンション（text-to-vision attention）</dt>
+        <dd>テキストトークンから視覚トークンへの注意。Reroute がルーティングの順位信号として流用する、既存の枝刈りスコア。</dd>
+
+        <dt>keep-index / re-index</dt>
+        <dd>物理枝刈り後に残ったトークンの位置インデックスを元のまま保つ（keep-index）か、詰め直す（re-index）か。keep-index がグラウンディングに有利。</dd>
+
+        <dt>gather/scatter カーネル（gather/scatter kernel）</dt>
+        <dd>選んだトークンをメモリ上で集めて並べ替え（gather）、処理後に元の位置へ書き戻す（scatter）GPU 上の演算ルーチン（カーネル）。実際の実行速度はこの実装の最適化度合いに左右される。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Reroute, Don't Remove: Recoverable Visual Token Routing for Vision-Language Models</p>
+      <a href="https://arxiv.org/abs/2606.12412" target="_blank" rel="noopener noreferrer">arXiv:2606.12412 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
