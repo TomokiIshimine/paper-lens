@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>変化し続ける環境でも崩れない AI エージェントの記憶を測る・育てる「EvoArena」と「EvoMem」 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-11-2606.13681-evoarena-memory-evolution-llm-agents-cover.png"
+           alt="ターミナル・コードベース・ユーザーの好みが時間とともに変化し続ける環境で LLM エージェントの頑健性を測るベンチマーク群 EvoArena と、記憶の更新履歴を Git のパッチのように追記専用で残す仕組み EvoMem を提案し、現行エージェントが進化する環境では平均 39.6% の精度にとどまる一方 EvoMem を組み込むと精度が一貫して改善することを示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">変化し続ける環境でも崩れない AI エージェントの記憶を測る・育てる「EvoArena」と「EvoMem」</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-11</span>
+      <span>arXiv：2606.13681</span>
+      <span>カテゴリ：cs.CL</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ターミナルやソフトウェア、ユーザーの好みといった「使っているうちに変わっていく環境」でも、大規模言語モデル（LLM）を使った AI エージェントが頑健に振る舞えるかを測るベンチマーク群「<strong>EvoArena</strong>」を提案した論文です。あわせて、エージェントの記憶（メモリ）の更新履歴を、ソフトウェア開発で使う Git のパッチのように追記して残しておく仕組み「<strong>EvoMem</strong>」も提案しています。現行のエージェントは進化する環境では平均 39.6% の精度にとどまりますが、EvoMem を組み込むと精度が一貫して改善することを示しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">39.6%</span>
+          <span class="stat__label">現行エージェントの<br>3 ドメイン平均ステップ精度</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">EvoArena</span>
+          <span class="stat__label">変化し続ける環境での<br>頑健性を測るベンチマーク群</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">EvoMem</span>
+          <span class="stat__label">記憶の更新履歴を Git の<br>パッチのように残す軽量な仕組み</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">一貫して改善</span>
+          <span class="stat__label">EvoMem を組み込むと<br>精度が安定して向上</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>AI エージェントは、コードを書く・ターミナルを操作する・ユーザーと長く対話するといった実用的な場面でどんどん使われ始めています。ところが、それらの能力を測る既存のベンチマークの多くは「ある時点で固定された環境」を前提にしています。</p>
+      <p>しかし現実の環境は止まっていません。API の仕様が変わり、ワークフローのルールが更新され、コードベースが成長し、ユーザーの好みも時間とともに移り変わります。「テストでは高得点なのに、実運用で環境が変わると急に弱くなる」というギャップが起きやすいのです。この論文は、その「変化への強さ」を正面から測り、改善しようとしている点で重要です。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>既存のベンチマークは、いったん作られるとインターフェース・ルール・タスクの内容・成功条件が固定されがちです。近年はタスクを入れ替えたり、想定外のイベントを差し込んだりする「動的な評価」も登場していますが、この論文が注目するのは少し違う設定です。すなわち「同じ環境が、バージョンを跨いで持続的に変化し続ける（persistent environment evolution）」という状況であり、これはほとんど検証されてきませんでした。</p>
+      <p>ここで問題になるのが、エージェントの「記憶」の持ち方です。多くの記憶ベースのエージェントは、記憶を「単一の最新状態」として保持します。たとえば検索できる記憶バンクや、過去の出来事を貯めるストアです。この方式は、新しい情報が古い情報を安全に上書きしてよい場面ではうまく働きます。</p>
+      <p>問題は、環境のバージョンによって正しい振る舞いが違う場面です。論文はこれを「<strong>状態の崩壊（state collapse）</strong>」と呼んでいます。たとえばワークフローの権限ルールが新しく更新されたとき、その更新が、旧バージョンでは依然として有効な以前のルールごと上書きしてしまう、というケースです。すると、エージェントは「以前の振る舞い」と「それがどんな条件で有効だったか」という文脈の両方を一度に失ってしまいます。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 300" role="img" aria-label="状態の崩壊とバージョン認識型状態追跡の違いを示す図。記憶を単一の最新状態として持つエージェントは、新しいルールの更新が旧バージョンで有効なルールごと上書きしてしまい、過去の振る舞いとその有効な文脈を失う（状態の崩壊）。一方バージョン認識型状態追跡は、最新の記憶を保ちつつ過去の状態と各更新の理由も呼び戻せる。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <!-- 状態の崩壊（上段） -->
+          <text class="node-label" x="40" y="28" text-anchor="start">単一の最新状態だけを持つ：状態の崩壊</text>
+          <rect class="node" x="40" y="42" width="120" height="40" rx="8"></rect>
+          <text class="node-label" x="100" y="66" text-anchor="middle">旧ルール（有効）</text>
+          <rect class="node" x="240" y="42" width="120" height="40" rx="8"></rect>
+          <text class="node-label" x="300" y="66" text-anchor="middle">新ルールで更新</text>
+          <rect class="node" x="440" y="42" width="150" height="40" rx="8"></rect>
+          <text class="node-label" x="515" y="60" text-anchor="middle">最新状態だけ残る</text>
+          <text class="edge-label" x="515" y="76" text-anchor="middle">旧ルールは消失（×）</text>
+          <path class="edge" d="M160,62 L236,62" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M360,62 L436,62" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="300" y="104" text-anchor="middle">旧バージョンで今も有効な振る舞いと文脈を一度に失う</text>
+
+          <line x1="40" y1="150" x2="720" y2="150" class="edge"></line>
+
+          <!-- バージョン認識型状態追跡（下段） -->
+          <text class="node-label" x="40" y="182" text-anchor="start">バージョン認識型状態追跡：履歴を残す</text>
+          <rect class="node" x="40" y="196" width="120" height="40" rx="8"></rect>
+          <text class="node-label" x="100" y="220" text-anchor="middle">最新の記憶</text>
+          <rect class="node" x="240" y="196" width="120" height="40" rx="8"></rect>
+          <text class="node-label" x="300" y="214" text-anchor="middle">関連する過去状態</text>
+          <text class="edge-label" x="300" y="230" text-anchor="middle">呼び戻せる</text>
+          <rect class="node" x="440" y="196" width="150" height="40" rx="8"></rect>
+          <text class="node-label" x="515" y="214" text-anchor="middle">各更新の理由</text>
+          <text class="edge-label" x="515" y="230" text-anchor="middle">なぜ変えたか推論</text>
+          <path class="edge" d="M160,216 L236,216" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M360,216 L436,216" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="300" y="262" text-anchor="middle">最新を保ちつつ、過去の状態と更新理由を接続したまま判断できる</text>
+        </svg>
+        <figcaption class="diagram__caption">記憶を単一の最新状態として持つと、新しい更新が旧バージョンで今も有効なルールごと上書きしてしまう（状態の崩壊）。バージョン認識型状態追跡は、最新の記憶を保ちながら、関連する過去の状態と各更新の理由も呼び戻せる。</figcaption>
+      </figure>
+
+      <p>そこで論文は「<strong>バージョン認識型の状態追跡（version-aware state tracking）</strong>」が必要だと主張します。これは、最新の記憶を保ちつつ、関連する過去の状態も呼び戻せて、しかも「各更新がなぜ起きたのか」まで推論できる能力を指します。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>提案は大きく 2 つです。「測るための道具（EvoArena）」と「記憶を改善する仕組み（EvoMem）」です。</p>
+
+      <h3>測る道具：EvoArena</h3>
+      <p>EvoArena は、環境の変化を「漸進的に進化するリリース（progressively evolving releases）の連鎖（チェーン）」としてモデル化します。根底にある目標や設定は同じまま、インターフェース・ルール・ワークフロー・コードの状態・ユーザーの好みが時間とともに変わっていく、という捉え方です。代表的な 3 つの進化パターンを含みます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">Terminal-Bench-Evo</span></p>
+          <p>実行可能なワークフローの進化。ターミナル操作のベンチマーク Terminal-Bench をもとに、同じ目標を保ちながら、パッケージ・インストールの方針・入出力・権限・実装方法などをバージョンごとに変えます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">SWE-Chain-Evo</span></p>
+          <p>ソフトウェア／コードベースの進化。リポジトリの節目となるリリース（マイルストーン）を時系列の連鎖にしたもの。各ステップで、積み上がったリポジトリの状態とマイルストーンの指示を見てパッチを生成し、そのマイルストーンのテストで評価されます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">PersonaMem-Evo</span></p>
+          <p>社会的知能／好みの進化。長い対話の中で、同じユーザーの好みが時間とともに変化していく軌跡を扱います。各設問は、1 つの多肢選択問題と、さまざまな話題が混ざった長い会話履歴の組です。</p>
+        </div>
+      </div>
+
+      <p>EvoArena は「新しい変化への適応（forward adaptation）」と「いまも有効な過去の知識との両立（version compatibility）」の両方を評価する点が特徴です。論文の比較表（Table 1）では、EvoArena は「持続的な環境進化」「暗黙的な変化」「連鎖での評価」という 3 つの軸をすべて満たす唯一のベンチマークと位置づけられています。</p>
+
+      <p>評価指標は 2 種類です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>評価指標</th>
+            <th>何を測るか</th>
+            <th>意味</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>ステップ精度<br>（Step Accuracy）</th>
+            <td>バージョンごとの個々のタスク・マイルストーン・設問を 1 つずつ解けるか</td>
+            <td>局所的な適応力</td>
+          </tr>
+          <tr>
+            <th>チェーン精度<br>（Chain Accuracy）</th>
+            <td>連鎖全体を最後まで誤りなく完遂できるか（例：派生した全バージョンを解いて初めて正解）</td>
+            <td>持続的な信頼性</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>記憶を育てる仕組み：EvoMem</h3>
+      <p>EvoMem は、既存の記憶システムに「記憶がどう変化してきたかの明示的な記録」を追加する、軽量で Git に似た仕組みです。2 つの部品からなります。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">パッチ記録（Patch recording）</p>
+          <p>記憶の更新のうち「非加算的（non-additive）な更新」、つまり既存の記憶を改訂・上書き・解釈し直すような更新だけを、追記専用（append-only）の履歴にパッチとして残します。単に情報が増えるだけの観測はベースの記憶にそのまま置けばよく、パッチは不要です。各パッチには、いつの更新か・更新前の内容・更新後の内容・更新理由・変更の要約・引き金になった証拠、が記録されます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">パッチ拡張検索（Patch-augmented retrieval）</p>
+          <p>問い合わせに対して、まず最新の記憶から手がかりを検索し、さらにパッチの履歴からも関連するパッチを取り出します。最終的に、両者を組み合わせた文脈をもとに意思決定します。これにより「最新の一貫した記憶」と「それがどう変化してきたかの軌跡」の両方を見て判断できます。</p>
+        </li>
+      </ol>
+
+      <p>重要なのは、EvoMem が土台となる記憶の更新そのものは置き換えない点です。テキストの記憶バンク・ユーザープロファイル・記憶グラフ・スキルファイルなど、もとの更新の仕組みはそのまま使い、その前後の差分（Diff）を監視して記録します。そのため EvoMem は汎用的な仕組みであり、論文では 4 種類のエージェントに組み込まれています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">Terminus2</p>
+          <p>ターミナル操作のエージェント。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">OpenHands</p>
+          <p>ソフトウェア開発のエージェント。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">A-Mem</p>
+          <p>ノート型の記憶を持つエージェント。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">Memento-Skill</p>
+          <p>再利用可能なスキルを記憶するエージェント。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>主な評価は EvoArena の 3 つのサブセットで行われ、加えて標準的なベンチマークである GAIA と LoCoMo でも評価しています。バックボーンには GPT-5.5、Gemini-3.1-Pro、Kimi-K2.6、Deepseek-V4-Pro など複数のモデルが使われました。</p>
+
+      <h3>現行エージェントは進化する環境で苦戦する</h3>
+      <p>ステップ精度の平均は、Terminal-Bench-Evo で 43.6%、SWE-Chain-Evo で 29.2%、PersonaMem-Evo で 46.5% でした（Abstract では 3 ドメイン平均で 39.6% と記載）。さらにチェーン精度になると下がります。論文は「個々のステップが解けても、持続的な進化を跨いだ信頼性にはつながらない」と述べています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ドメイン</th>
+            <th>ステップ精度（平均）</th>
+            <th>チェーン精度</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Terminal-Bench-Evo</th>
+            <td>43.6%</td>
+            <td>21.5%</td>
+          </tr>
+          <tr>
+            <th>SWE-Chain-Evo</th>
+            <td>29.2%</td>
+            <td>10.6%</td>
+          </tr>
+          <tr>
+            <th>PersonaMem-Evo</th>
+            <td>46.5%</td>
+            <td>39.1%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>EvoMem を組み込むと精度が改善する</h3>
+      <p>ステップ精度の平均改善は、Terminal-Bench-Evo で +2.4%、SWE-Chain-Evo で +0.5%、PersonaMem-Evo で +1.8% でした。標準ベンチでも GAIA で +6.1%、LoCoMo で +4.8% の改善が見られます。全設定の平均ではステップ単位で +2.6%、チェーン単位で +3.7% の改善です。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">+2.6%</span>
+          <span class="stat__label">全設定平均の<br>ステップ精度改善</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+3.7%</span>
+          <span class="stat__label">全設定平均の<br>チェーン精度改善</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+6.1%</span>
+          <span class="stat__label">GAIA（標準ベンチ）<br>での改善</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+4.8%</span>
+          <span class="stat__label">LoCoMo（標準ベンチ）<br>での改善</span>
+        </div>
+      </div>
+
+      <p>注目すべきは、<strong>チェーン単位での改善がステップ単位より大きい</strong>点です。たとえば Terminal-Bench-Evo ではステップ +2.4% に対してチェーンは +6.1%、SWE-Chain-Evo ではステップ +0.5% に対してチェーン +2.9% でした。持続的な信頼性の側でより効いている、という読み取りです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ドメイン</th>
+            <th>ステップ精度の改善</th>
+            <th>チェーン精度の改善</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Terminal-Bench-Evo</th>
+            <td>+2.4%</td>
+            <td class="is-best">+6.1%</td>
+          </tr>
+          <tr>
+            <th>SWE-Chain-Evo</th>
+            <td>+0.5%</td>
+            <td class="is-best">+2.9%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>仕組みの分析：EvoMem が効く条件</h3>
+      <p>仕組みの分析からは、EvoMem が効く条件も見えてきました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">Terminal-Bench-Evo</p>
+          <p>検索したパッチが実際に行動へ反映されたときに効果が大きく、パッチが取り込まれた場合の利得は +8.3% でした（取り込まれない場合は +2.6%）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">SWE-Chain-Evo</p>
+          <p>前後とも通過すべき回帰テスト（PASS_TO_PASS）の失敗率が平均 9.09% から 6.32% へ低下。「過去に確立した振る舞いを保ちつつ新しいマイルストーンに適応できる」ことを示しました。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">PersonaMem-Evo</p>
+          <p>下流の推論に必要な好みの状態を保持する力（row-level capture）が 72.5% から 74.9% に上昇しました。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>ただし改善は一様ではありません。一部のモデルや設定では性能が下がるケースもありました（たとえば SWE-Chain-Evo の Gemini-3.1-Pro や、PersonaMem-Evo の GLM-5.1）。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、「変化する環境でのエージェントの記憶は、更新の履歴を検索可能な証拠として保持すべき」という設計の指針を、ベンチマークと具体的な仕組みの両面から示した点にあります。最新の状態を、それを生んだ過去の状態・理由・証拠と接続したまま保つことが、信頼性につながるという主張です。</p>
+      <p>一方で、論文は次のような限界も率直に認めています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">効果が一様でない</p>
+          <p>EvoMem の効果は一様ではなく、一部のモデル・設定では性能が低下します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">推論のボトルネックは残る</p>
+          <p>PersonaMem-Evo では、競合する好みの解決（conflict resolution）や単一パターンの転移（single-pattern transfer）でわずかに精度が低下。「パッチ履歴は証拠を使いやすくするが、最終的な推論が難しいケースではボトルネックが残る」と述べています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">条件付きの効果</p>
+          <p>EvoMem は、検索した変化の記録を実際に行動へ反映できたときにのみ効く、という条件付きの効果であることも分析で示されています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>この論文は、タスク・コードベース・ワークフロー・ユーザーの好みが時間変化する環境でエージェントを評価する EvoArena を導入し、現行エージェントがそうした非定常な状況で限定的であることを明らかにしました。あわせて、記憶の更新履歴を Git のパッチのように残す EvoMem を提案し、進化する環境と標準ベンチの双方で精度と証拠の保持を改善できることを示しています。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>LLM エージェント</dt>
+        <dd>大規模言語モデル（LLM）を頭脳として、ツール操作や対話などのタスクを自律的に進めるシステム。</dd>
+
+        <dt>持続的環境進化（persistent environment evolution, PE）</dt>
+        <dd>同じ環境やユーザーの状態が、バージョンを跨いで進化し続けること。EvoArena が中心に据える設定。</dd>
+
+        <dt>状態の崩壊（state collapse）</dt>
+        <dd>記憶を「単一の最新状態」として持つエージェントの失敗様式。旧バージョンで依然有効なルールまで上書きしてしまい、過去の振る舞いとその有効な文脈を失う。</dd>
+
+        <dt>バージョン認識型状態追跡（version-aware state tracking）</dt>
+        <dd>最新の記憶を保ちつつ、関連する過去の状態を呼び戻し、各更新の理由まで推論できる能力。</dd>
+
+        <dt>パッチ（patch）／追記専用履歴（append-only patch history）</dt>
+        <dd>記憶を改訂・上書きするような更新を、Git のパッチのように追記だけで記録した履歴。EvoMem の中核。</dd>
+
+        <dt>非加算的更新（non-additive update）</dt>
+        <dd>既存の記憶を改訂・上書き・解釈し直す更新。EvoMem はこれだけをパッチ化し、単に増えるだけの観測はパッチにしない。</dd>
+
+        <dt>ステップ精度／チェーン精度（Step Accuracy / Chain Accuracy）</dt>
+        <dd>個々のタスクを解けるかを測るステップ精度と、連鎖全体を最後まで誤りなく完遂できるかを測るチェーン精度。後者は持続的な信頼性を表す。</dd>
+
+        <dt>F2P / P2P テスト</dt>
+        <dd>SWE-Chain-Evo の評価で使うテスト。F2P（Fail-to-Pass）は修正前は失敗・修正後に通過するテスト、P2P（Pass-to-Pass）は前後とも通過すべき回帰テスト。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">EvoArena: Tracking Memory Evolution for Robust LLM Agents in Dynamic Environments</p>
+      <a href="https://arxiv.org/abs/2606.13681" target="_blank" rel="noopener noreferrer">arXiv:2606.13681 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
