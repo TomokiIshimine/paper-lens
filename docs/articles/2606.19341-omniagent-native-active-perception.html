@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>長い動画を「全部見る」のをやめる — 必要な手掛かりだけ自分で取りに行く AI エージェント「OmniAgent」 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-17-2606.19341-omniagent-native-active-perception-cover.png"
+           alt="長い動画を全フレーム一律に処理する受け身のやり方をやめ、質問に必要な映像・音声の手掛かりだけを観測・思考・行動の反復サイクルで能動的に取りに行く単一モデルのエージェント OmniAgent を表したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">長い動画を「全部見る」のをやめる — 必要な手掛かりだけ自分で取りに行く AI エージェント「OmniAgent」</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-17</span>
+      <span>arXiv：2606.19341</span>
+      <span>カテゴリ：cs.CV / cs.CL / cs.SD</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>長い動画について質問に答える AI は、これまで動画の全フレームを一律に処理する「とにかく全部見る（watch-it-all）」やり方が主流でした。この論文は、その受け身の処理をやめ、質問に答えるために必要な映像・音声の手掛かりだけを自分で能動的に取りに行く、反復的な推論プロセスとして動画理解を定式化します。提案する単一モデルのエージェント <strong>OmniAgent</strong> は 7B（70 億パラメータ）規模ながら、10 倍大きいモデルを長尺動画ベンチマーク LVBench で上回りました（50.5% 対 47.3%）。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">7B</span>
+          <span class="stat__label">単一モデルのパラメータ規模<br>（70 億パラメータ）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">50.5%</span>
+          <span class="stat__label">LVBench での精度<br>（10 倍規模の 72B＝47.3% を上回る）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 73% 少</span>
+          <span class="stat__label">72B モデルより少ないフレームで<br>より高い精度（203 対 768 フレーム）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">10 / 10</span>
+          <span class="stat__label">直接のベースラインを改善した<br>ベンチマーク数</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>動画は時間方向にも空間方向にもデータ量が大きく、特に長い動画では「全部を均等に処理する」やり方が現実的でなくなります。論文によると、計算コストは動画の長さに対して超線形（super-linear、長さ以上の勢いで増える）にスケールするため、受け身の end-to-end（入力から出力まで一気通貫）処理は長尺動画では計算的に扱いきれなくなります。</p>
+      <p>一方、人間が長い動画から何かを探すときは、全編を等しく注視したりはしません。質問に関係しそうな箇所にあたりをつけ、そこだけを詳しく見ます。この「必要なところだけ能動的に見る」発想を AI に持ち込めれば、動画が長くなっても計算量が際限なく増えるのを避けられます。本研究はそれを単一モデルで実現しようとする試みです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>既存の動画理解モデルは「watch-it-all」パラダイムを採り、質問の難しさに関わらずフレームを一律に処理します。そのため計算コストが動画の長さとともに膨らみ続けます。</p>
+      <p>これに対し、能動的に処理しようとする「エージェント的」手法も提案されてきましたが、論文は大きく 2 系統に分けて、それぞれの限界を指摘します。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">系統 (1)</span>LLM をコントローラにして専用ツールを呼ぶ</p>
+          <p>大規模言語モデル（LLM）が司令塔となり、画像用・音声用などモダリティ（情報の種類）ごとの専用モジュールを呼び出します。しかし中間モジュールへの依存が情報のボトルネックを生み、推論と知覚の間で勾配の流れ（gradient flow、学習信号の伝わり方）が断ち切られてしまいます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">系統 (2)</span>「thinking with images」</p>
+          <p>思考の連鎖（chain-of-thought）の中に、時間方向の切り出しや空間方向のズームを組み込みます。ただし依然として「半受動的（semi-passive）」であり、「どこを見るか」を決めるために動画全体の事前スキャン（global pre-scan）や密な視覚バッファを必要とします。結局、推論の複雑さを動画の長さから切り離せていません。</p>
+        </div>
+      </div>
+
+      <p>論文は、これらが動画を「静的な情報の入れ物」や「大きな 1 枚の画像」のように扱い、動画が本来持つ逐次的（sequential、時間に沿って進む）性質を無視していると述べます。だから時間単位の長さを持つ動画にはスケールしない、というわけです。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>提案手法 <strong>OmniAgent</strong> は、著者らの主張では、知覚・推論・行動を単一モデル内に統合した、オムニモーダル（音声・映像など複数の情報種別を扱う）動画タスク向けの初の end-to-end なネイティブ・エージェント的フレームワークです。「ネイティブ」とは、外部ツールやモジュールではなく、行動する当のモデル自身が知覚も推論も行うという意味です。</p>
+
+      <h3>動画探索を「逐次的な意思決定」として定式化する</h3>
+      <p>OmniAgent は音声・映像の探索を <strong>POMDP（Partially Observable Markov Decision Process、部分観測マルコフ決定過程）</strong> として定式化します。これは、環境の状態を一部しか観測できない状況での逐次的な意思決定を扱う枠組みです。動画全体は一度に見えず、行動を起こして少しずつ手掛かりを集める、という構図にぴたりと当てはまります。</p>
+      <p>中核となるのが <strong>Observation-Thought-Action（OTA、観測・思考・行動）サイクル</strong> です。モデルは次の 3 つを繰り返します。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">Observation（観測, O）</span></p>
+          <p>取得した高次元の生メディア（フレームや音声）を、構造化されたテキスト要約に蒸留します。生のピクセルを捨てる前に、後の推論に必要な視覚・聴覚の詳細を明示的に書き留める、情報密度の高い記録です。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">Thought（思考, T）</span></p>
+          <p>知覚と行動を橋渡しする内部推論です。これまで集めた記憶と、質問が求めている情報との「ギャップ」を見極め、次に何をすべきかの根拠を導きます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">Action（行動, A）</span></p>
+          <p>記号的なオペレータの集合から次の手を選びます。具体的には、区間からフレームを一様に取得する <code>a_frames</code>、音声セグメントを抜き出す <code>a_audio</code>、音声同期付きの連続動画セグメントを取る <code>a_clip</code>、そして最終回答を出力してサイクルを終える <code>a_answer</code> です。</p>
+        </li>
+      </ol>
+
+      <h3>メディアは捨て、要約だけ残す</h3>
+      <p>このサイクルの肝が <strong>Context Purging（コンテキストの破棄）</strong> です。行動によって新しい生メディアが返ってくると、直前の生メディアは作業中のコンテキストから捨てられ、蒸留されたテキスト要約だけが記憶に残ります。生メディア（捨てられる一時的な percept）と、保持されるテキスト記憶を厳密に分けるわけです。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 380" role="img" aria-label="OmniAgent の観測・思考・行動サイクルを示す図。環境から取得した生メディアを観測でテキスト要約に蒸留し、Context Purging で直前の生メディアを捨ててテキスト記憶だけ残す。思考で記憶と質問のギャップを見極め、行動でフレーム取得・音声抽出・クリップ取得のいずれかを選んで環境に働きかけるループを繰り返し、十分に集まったら最終回答を出力する。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="40" y="150" width="170" height="64" rx="8"></rect>
+          <text class="node-label" x="125" y="178" text-anchor="middle">環境（長い動画）</text>
+          <text class="edge-label" x="125" y="198" text-anchor="middle">生メディアの抽出だけ担う</text>
+
+          <path class="edge" d="M210,170 L290,130" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="245" y="138" text-anchor="middle">生メディア</text>
+
+          <rect class="node" x="290" y="84" width="180" height="76" rx="8"></rect>
+          <text class="node-label" x="380" y="112" text-anchor="middle">Observation（観測）</text>
+          <text class="edge-label" x="380" y="134" text-anchor="middle">生メディアを</text>
+          <text class="edge-label" x="380" y="150" text-anchor="middle">テキスト要約に蒸留</text>
+
+          <path class="edge" d="M380,160 L380,210" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="470" y="188" text-anchor="middle">Context Purging：生メディアは破棄</text>
+
+          <rect class="node" x="290" y="212" width="180" height="64" rx="8"></rect>
+          <text class="node-label" x="380" y="240" text-anchor="middle">Thought（思考）</text>
+          <text class="edge-label" x="380" y="260" text-anchor="middle">記憶と質問のギャップを見極め</text>
+
+          <path class="edge" d="M470,244 L560,244" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="560" y="212" width="160" height="64" rx="8"></rect>
+          <text class="node-label" x="640" y="240" text-anchor="middle">Action（行動）</text>
+          <text class="edge-label" x="640" y="260" text-anchor="middle">次の手を選ぶ</text>
+
+          <path class="edge" d="M640,212 Q640,150 215,170" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="470" y="60" text-anchor="middle">a_frames / a_audio / a_clip で環境に働きかけ → サイクルを繰り返す</text>
+
+          <path class="edge" d="M640,276 L640,320" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="700" y="300" text-anchor="middle">a_answer</text>
+
+          <rect class="node" x="540" y="322" width="200" height="48" rx="8"></rect>
+          <text class="node-label" x="640" y="350" text-anchor="middle">最終回答を出力</text>
+
+          <rect class="node" x="40" y="250" width="170" height="64" rx="8"></rect>
+          <text class="node-label" x="125" y="278" text-anchor="middle">テキスト記憶</text>
+          <text class="edge-label" x="125" y="298" text-anchor="middle">負荷は長さに依らず一定</text>
+          <path class="edge" d="M290,250 L210,282" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="245" y="258" text-anchor="middle">要約だけ蓄積</text>
+        </svg>
+        <figcaption class="diagram__caption">観測でメディアをテキスト要約に蒸留し、Context Purging で生メディアを捨てて要約だけ残す。思考でギャップを見極め、行動で次の取得手段を選ぶサイクルを繰り返し、十分集まったら a_answer で回答を出す。環境は生メディアの抽出だけを担い、意味理解と推論はモデル自身がネイティブに行う。</figcaption>
+      </figure>
+
+      <p>この工夫により、モデルが抱えるメディアの負荷が、動画の長さや繰り返しの回数によらず一定に保たれます。環境側は生メディアの抽出（フレーム取得・音声抽出・クリップ取得）だけを担い、意味の理解や推論はすべてモデル自身がネイティブに行います。外部モジュールに頼らないのがポイントです。</p>
+
+      <h3>2 段階で学習する</h3>
+      <p>OmniAgent は 2 段階で訓練されます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">Stage 1</span>Agentic SFT（教師ありファインチューニング）</p>
+          <p>長い手順を踏むエージェント推論の事前経験がないモデルを、いきなり強化学習にかけると方策が崩壊（policy collapse）するおそれがあります。そこでまず教師あり学習で能動的知覚の土台を作ります。論文では 3 種類のタスク（選択式 QA・数値推論・時間的グラウンディング）にわたる <strong>58K（5 万 8 千）件</strong>の軌跡を、5 つのデータセットの訓練分割から構築しました。教師モデルに多数の候補軌跡を生成させ、品質管理を経て使います。範囲外の時刻を指定するなど誤った行動からの自己修正（self-correction）の軌跡も含め、教師の言う通りに真似るだけの偏りを防いでいます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">Stage 2</span>Agentic RL（強化学習）</p>
+          <p>検証可能な報酬（verifiable reward）を使い、教師あり学習で得た範囲を超えて性能を伸ばします。報酬は、選択式・数値なら正解かどうか、時間的グラウンディングなら IoU、サイズ推定なら MRA（Mean Relative Accuracy、予測がどれだけ正解に近いかを段階的な許容閾値にわたって測る指標）を使います。</p>
+        </div>
+      </div>
+
+      <p>Agentic SFT の品質管理は 2 段構えです。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">Step 1</span>Outcome Verification（結果の検証）</p>
+          <p>選択式・数値は完全一致、時間的グラウンディングは IoU（Intersection over Union、予測した時間区間と正解区間がどれだけ重なっているかの割合）が 0.5 以上、といった閾値で正解性を選別します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">Step 2</span>Rationality Audit（合理性の監査）</p>
+          <p>GPT-4o に推論の筋が通っているかを 5 段階で採点させ、最低スコア 3/5 を課します。これにより、記録した記憶に裏付けられないまま「まぐれ当たり」した軌跡を除外します。</p>
+        </li>
+      </ol>
+
+      <h3>マルチターン特有の落とし穴をどう解くか — TAURA</h3>
+      <p>強化学習で標準的に使われる <strong>GRPO（Group Relative Policy Optimization）</strong> をそのままマルチターン（何ターンも続く）のエージェント推論に当てはめると、問題が起きます。GRPO は軌跡全体に対する単一のスコア（アドバンテージ）を、すべてのターンに一律に配ってしまうのです。論文はこれを <strong>Advantage Homogenization（アドバンテージの均質化）</strong> と呼びます。結果、その後の展開を左右する決定的な「分岐（fork）」ターンと、どうでもいい些末なターンが同じ扱いになってしまいます。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>著者らの分析では、決定的な分岐ターンの <strong>79.2%</strong> は、軌跡全体の平均より明らかに高い平均トークンエントロピー（出力の不確実さの度合い）を示したとされています。つまり「迷いの大きいターンほど重要な分岐になりやすい」という関係です。</p>
+        </div>
+      </div>
+
+      <p>そこで提案するのが <strong>TAURA（Turn-aware Adaptive Uncertainty Rescaled Advantage）</strong> です。各ターンの平均トークンエントロピーを連続的な重みとして使い、軌跡全体のアドバンテージをターンごとに再スケール（重み付け）します。重みは平均すると 1 になるよう正規化されるため、全体の勾配の大きさは保ったまま、不確実さの高い「発見的な瞬間」に学習の更新を集中させられます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">正解だった軌跡では</p>
+          <p>不確実さの高いターンほどプラスの評価を増幅します。「有効な探りの一手」を強化する向きに効きます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">間違った軌跡では</p>
+          <p>不確実さの高いターンほど大きなマイナスのペナルティを与えます。「混乱した推測」を罰する向きに効きます。</p>
+        </div>
+      </div>
+
+      <p>この再スケールは符号付きで効くため、「混乱した推測」は罰し、「有効な探りの一手」は強化する、というわけです。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>ベースとなるモデルは Qwen2.5-Omni-7B です。評価は 3 カテゴリ・計 10 個のベンチマークで行われました（動画理解、音声・映像、時間的グラウンディング）。数値はいずれも論文の報告に基づきます。</p>
+      <p>主な結果として、<strong>オープンソースモデルの中で、10 ベンチマークすべてにおいて直接のベースライン（Qwen2.5-Omni）を改善し、最高性能（SoTA）を達成した</strong>と主張されています。</p>
+
+      <h3>動画理解・音声映像ベンチマークの主要数値</h3>
+      <p>かっこ内の数値は、直接のベースライン（Qwen2.5-Omni）との差を表します。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>カテゴリ</th>
+            <th>ベンチマーク</th>
+            <th>OmniAgent-7B</th>
+            <th>ベースライン比</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th rowspan="5">動画理解</th>
+            <td>LVBench（長尺）</td>
+            <td class="is-best">50.5%</td>
+            <td>+7.5（43.0 → 50.5）</td>
+          </tr>
+          <tr>
+            <td>MLVU</td>
+            <td>71.1%</td>
+            <td>+5.9</td>
+          </tr>
+          <tr>
+            <td>VideoMME（字幕なし・Overall）</td>
+            <td>67.8%</td>
+            <td>+3.0（Long は 59.6%, +4.8）</td>
+          </tr>
+          <tr>
+            <td>VSI-Bench</td>
+            <td>48.4%</td>
+            <td>+12.9</td>
+          </tr>
+          <tr>
+            <td>Minerva</td>
+            <td>41.4%</td>
+            <td>+8.0</td>
+          </tr>
+          <tr>
+            <th rowspan="3">音声・映像</th>
+            <td>DailyOmni</td>
+            <td>64.8%</td>
+            <td>+4.7</td>
+          </tr>
+          <tr>
+            <td>WorldSense</td>
+            <td>47.2%</td>
+            <td>+1.8</td>
+          </tr>
+          <tr>
+            <td>OmniVideoBench</td>
+            <td>37.1%</td>
+            <td>+7.8</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>LVBench では、ベースラインの 43.0% を 7.5 ポイント上回っただけでなく、10 倍規模の Qwen2.5-VL-72B（47.3%）やエージェント的ベースライン Zoom-Zero-7B（45.7%）も上回りました。</p>
+
+      <h3>時間的グラウンディングでの大きな伸び</h3>
+      <p>時間的グラウンディング（Temporal IoU）では特に大きく伸び、VUE-TR では GPT-4o や Gemini-2.5-Pro といった商用モデルも上回ったとされています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">+33.4</span>
+          <span class="stat__label">LongVALE で 39.1%<br>（ベースライン比）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+33.0</span>
+          <span class="stat__label">VUE-TR（Vision+Audio）で 36.5%<br>（ベースライン比）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+38.1</span>
+          <span class="stat__label">VUE-TR（Vision）で 46.1%<br>（ベースライン比）</span>
+        </div>
+      </div>
+
+      <h3>効率と推論時スケーリング</h3>
+      <p>効率の面でも示唆的な結果が出ています。OmniAgent-7B は平均 203 フレームで LVBench 50.5% を達成したのに対し、Qwen2.5-VL-72B は 768 フレームで 47.3% でした。約 73% 少ないフレームで、より高い精度を出した計算になります。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>推論時に使う計算（ここではターン数）を増やすほど性能が上がる <strong>Test-time scaling（推論時スケーリング）</strong> も確認されました。VideoMME-Long で最大ターン数の上限を 6 から 52 に広げると、精度が 53.4% から 59.6% へ単調に改善します。興味深いのは、上限を 52 にしても実際の平均ターン数は約 11.7 で頭打ちになる点です。モデルはやみくもにターンを増やさず、必要な情報量に応じて推論の深さを自分で調整しています。</p>
+        </div>
+      </div>
+
+      <h3>アブレーションと動画長による分析</h3>
+      <p>アブレーション（要素を 1 つずつ外して効果を測る検証）では、各工程の役割がはっきり出ています。通常の静的な QA への教師あり学習だけでは、超長尺の LVBench でかえって性能が下がりました（43.0 → 41.6）。選ぶ仕組みを持たず、情報過多に陥るためと説明されています。一方、Agentic SFT を経て、さらに通常の GRPO ではなく TAURA で強化学習すると、知覚・推論の双方で一貫した改善が得られました。</p>
+      <p>動画長による分析も示唆的です。動画の長さが約 4 倍（およそ 30 分から 130 分）に伸びても、推論ターン数は 8.5 から 12.5 へとわずかに増えるだけでした。1 時間あたりのサンプリング密度はむしろ 16.9 から 5.7 へ急減します。それでも精度は安定しており（120〜140 分で 50.8%）、計算コストが動画の長さではなくタスクの複雑さで決まることを裏付けています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">8.5 → 12.5</span>
+          <span class="stat__label">動画長が約 4 倍に伸びても<br>推論ターン数はわずかな増加</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">16.9 → 5.7</span>
+          <span class="stat__label">1 時間あたりのサンプリング密度<br>はむしろ急減</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">50.8%</span>
+          <span class="stat__label">120〜140 分の動画でも<br>精度は安定</span>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>この研究の中心的な洞察は、知覚を「網羅的な前処理」ではなく「反復的・質問駆動の情報蒸留」として扱うことです。これにより、推論の複雑さを動画の長さではなくタスクの難しさで決められるようになります。論文は、教師あり学習で能動的知覚の土台を作り、TAURA を用いた強化学習で磨くことで、外部の知覚モジュールに頼らずとも、単一のマルチモーダルモデルの中にネイティブなエージェント能力を出現させられると結論づけています。</p>
+      <p>意義としては、7B のエージェントが 10 倍大きい受け身のモデルを、はるかに少ないフレーム消費で上回ったこと、そして推論ステップを増やすほど性能が伸びる前向きな推論時スケーリングを示したことが挙げられます。明示的な OTA サイクルは解釈可能な推論の軌跡を残すため、ブラックボックス的な動画推論に対する透明な代替にもなります。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>限界。</strong>論文が認めているのは、逐次的な対話ループが遅延（latency）のオーバーヘッドを生む点です。今後の課題として、この制約に対処するための並列化探索（parallelized exploration）の検討が挙げられています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>OmniAgent は、長い動画を「全部見る」のをやめ、質問に必要な手掛かりだけを自分で取りに行く能動的知覚を、単一モデルの中に統合したフレームワークです。生メディアを捨ててテキスト要約だけ残す設計と、マルチターン強化学習向けの TAURA により、7B 規模で 10 倍大きいモデルを少ないフレームで上回りました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>オムニモーダル（omni-modal）</dt>
+        <dd>音声・映像など複数の情報種別をまとめて扱うこと。</dd>
+
+        <dt>watch-it-all パラダイム</dt>
+        <dd>質問の難しさによらず動画の全フレームを一律に処理する受け身のやり方。</dd>
+
+        <dt>POMDP（部分観測マルコフ決定過程）</dt>
+        <dd>環境の状態を一部しか観測できない状況での逐次的意思決定の枠組み。</dd>
+
+        <dt>Observation-Thought-Action（OTA）サイクル</dt>
+        <dd>観測・思考・行動の 3 つ組を繰り返す、本手法の中核となる推論ループ。</dd>
+
+        <dt>Context Purging（コンテキストの破棄）</dt>
+        <dd>行動のたびに直前の生メディアを捨て、テキスト要約だけ残してメディア負荷を一定に保つ機構。</dd>
+
+        <dt>ネイティブ能動的知覚（Native Active Perception）</dt>
+        <dd>外部ツールではなく、行動する当のモデル自身が知覚を担う能動的な情報取得の考え方。</dd>
+
+        <dt>Agentic SFT / RL</dt>
+        <dd>能動的知覚を教師あり学習で立ち上げ（SFT）、検証可能な報酬を使う強化学習（RL）で磨く 2 段階の最適化。</dd>
+
+        <dt>GRPO（Group Relative Policy Optimization）</dt>
+        <dd>同じ質問から複数の軌跡をサンプリングし、報酬をグループ内で正規化してアドバンテージを得る強化学習手法。</dd>
+
+        <dt>Advantage Homogenization（アドバンテージの均質化）</dt>
+        <dd>単一のスコアを全ターンに一律配分し、重要ターンと些末ターンが混同される問題。</dd>
+
+        <dt>TAURA（Turn-aware Adaptive Uncertainty Rescaled Advantage）</dt>
+        <dd>各ターンの平均トークンエントロピーを重みに、アドバンテージをターン単位で再スケールする手法。</dd>
+
+        <dt>Test-time scaling（推論時スケーリング）</dt>
+        <dd>推論時の計算（ここではターン数）を増やすほど性能が向上する性質。</dd>
+
+        <dt>時間的グラウンディング（Temporal Grounding）</dt>
+        <dd>動画中で問われたイベントが起きる時間区間を特定するタスク。評価には Temporal IoU を用いる。</dd>
+
+        <dt>IoU（Intersection over Union）</dt>
+        <dd>予測した時間区間と正解区間の時間的な重なりの割合。重なりが大きいほど 1 に近づく。</dd>
+
+        <dt>MRA（Mean Relative Accuracy、平均相対精度）</dt>
+        <dd>サイズ推定などで、予測がどれだけ正解に近いかを段階的な許容閾値（0.5〜0.95）にわたって測る定量的な忠実度の指標。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Native Active Perception as Reasoning for Omni-Modal Understanding</p>
+      <a href="https://arxiv.org/abs/2606.19341" target="_blank" rel="noopener noreferrer">arXiv:2606.19341 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
