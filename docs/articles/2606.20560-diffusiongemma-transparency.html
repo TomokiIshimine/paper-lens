@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>テキスト拡散モデルは「考えていること」が見えるのか — DiffusionGemma の透明性を測る — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-18-2606.20560-diffusiongemma-transparency-cover.png"
+           alt="人間に読めない密な内部状態を使うテキスト拡散モデル DiffusionGemma を、Logit Lens のような簡単な解釈性テクニックで読み解くと、その中間状態の大部分が「最終トークンの推測」として解釈でき、監視可能性も自己回帰版 Gemma 4 とほぼ同等になることを示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">テキスト拡散モデルは「考えていること」が見えるのか — DiffusionGemma の透明性を測る</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-18</span>
+      <span>arXiv：2606.20560</span>
+      <span>カテゴリ：cs.LG / cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>テキスト拡散モデル（text diffusion model）と呼ばれる新しいタイプの言語モデル「DiffusionGemma」は、人間に読めない連続的な内部状態を使って計算するため、従来の言語モデルより「何を考えているか」が見えにくいのではないか、という懸念があります。この論文はその懸念を実際に検証し、簡単な解釈性テクニックを使えば DiffusionGemma の透明性や監視のしやすさは、従来型の Gemma 4 とほぼ同じ水準にできることを示しました。Google DeepMind による研究です。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">28.6 倍</span>
+          <span class="stat__label">中間状態を「解釈不能」と仮定したときの<br>不透明シリアル深度の上限（Gemma 4 比）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 1.1 倍</span>
+          <span class="stat__label">中間状態を「解釈可能」と仮定すると<br>Gemma 4 とほぼ同等に下がる</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">85% 超</span>
+          <span class="stat__label">最初のノイズ除去ステップでも<br>分類可能だった重要トークンの割合</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.85 / 0.82</span>
+          <span class="stat__label">監視可能性（G-mean²）の平均値<br>DiffusionGemma / Gemma 4</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>最近の高性能な AI の多くは、自然言語による「思考の連鎖（chain of thought、CoT）」を書きながら答えを導きます。たとえば計算問題を解くとき、途中の考えを文章として書き出していくイメージです。</p>
+      <p>この「途中の考えが自然言語で読める」という性質は、AI 安全性の観点でとても重要です。なぜなら、モデルが報酬を不正に稼ごうとしていないか、悪意あるプロンプトに乗せられていないか、といった問題を人間が監視（monitoring）できるからです。</p>
+      <p>ところが、新しく登場したテキスト拡散モデルは、この途中の考えを必ずしも自然言語で持ちません。一部は人間に解釈できない密なベクトルとして内部に保持します。つまり「英語で考えていない」かもしれず、従来のように途中を覗いて監視できなくなる恐れがあります。この論文は、その心配が本当に成り立つのかを丁寧に確かめています。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>まず、比較対象となる従来型のモデルを整理します。Gemma 4 のような<strong>自己回帰（autoregressive）</strong>モデルは、トークン（単語の断片）を左から右へ 1 つずつ順番に生成します。過去に生成したトークンを手がかりに次の 1 つを決める方式です。途中の出力はすべて自然言語のトークンなので、人間が読めます。</p>
+      <p>一方、DiffusionGemma は<strong>テキスト拡散モデル</strong>です。これは多数のトークンからなる大きな「キャンバス（canvas）」を用意し、そこに<strong>ノイズ除去（denoising）</strong>という操作を全体に何度も繰り返しかけて、徐々に出力を仕上げていきます。絵を全体的に少しずつ描き込んでいくようなイメージです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">従来型</span>自己回帰モデル（Gemma 4）</p>
+          <p>トークンを左から右へ 1 つずつ生成します。途中の出力はすべて自然言語のトークンなので、人間が読め、途中を覗いて監視できます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">新型</span>テキスト拡散モデル（DiffusionGemma）</p>
+          <p>キャンバス全体にノイズ除去を繰り返して出力を仕上げます。ステップ間で受け渡される中間状態に、人間が解釈できない密な自己条件付けベクトルを部分的に含みます。</p>
+        </div>
+      </div>
+
+      <p>ここで問題になるのが、ノイズ除去ステップとステップの間で受け渡される中間状態です。この中間状態は純粋な自然言語ではなく、人間が解釈できない密な「<strong>自己条件付けベクトル（self-conditioning vector）</strong>」を部分的に含みます。このため、自己回帰モデルには現れない次のような処理が起こりえます。</p>
+
+      <ul>
+        <li>1 つの位置（トークンの置き場所）に対して、複数の候補を同時に保持できる。</li>
+        <li>順番に生成しないため、ノイズ除去の途中で「考えを変える」ことができ、後ろのトークンが前のトークンに影響を与えられる。</li>
+      </ul>
+
+      <p>こうした性質から、DiffusionGemma は自己回帰モデルより透明性（transparency）が低いと予想されていました。この論文は、その予想を検証します。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>著者らはまず「透明性」という言葉を 2 つの軸に分解します。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">変数透明性（variable transparency）</p>
+          <p>モデルの計算途中のスナップショット（中間状態）を、人間が理解できるか。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">アルゴリズム透明性（algorithmic transparency）</p>
+          <p>それらのスナップショットを使って、モデルがどう答えにたどり着いたかを再構築できるか。</p>
+        </div>
+      </div>
+
+      <p>その上で、評価を 4 つの柱で進めます。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">柱 1</span>不透明シリアル深度の測定</p>
+          <p>「解釈できる中間状態を一度も通らずに、どれだけ長く計算が続くか」を表す指標です。これが長いほど、人間に見えないまま処理が進むことになります。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">柱 2</span>中間状態は解釈できるかの検証</p>
+          <p>ステップ間で受け渡される中間状態を、人間が読めるトークンに翻訳できるかを調べます。ここでは中間状態を語彙トークンに射影する <strong>Logit Lens</strong> という解釈性手法を使います。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">柱 3</span>監視可能性（monitorability）の評価</p>
+          <p>モデルの出力が、不正や誤動作の検出といった下流タスクにとって有用かを測ります。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">柱 4</span>アルゴリズム透明性のケーススタディ</p>
+          <p>拡散モデル特有の推論の振る舞いを、具体例で解明します。</p>
+        </li>
+      </ol>
+
+      <h3>DiffusionGemma の仕組み</h3>
+      <p>DiffusionGemma は、自己回帰型の Gemma 4 26B A4B モデルのアーキテクチャを適応して作られています。推論は、準備のための「セットアップステージ」と、それに続く T 回の「ノイズ除去ループ」から成ります。</p>
+      <p>各ステップでは、現在のキャンバスと「自己条件付け行列」を次のステップへ渡します。この 2 つが、ステップ間の情報の通り道（情報ボトルネック）になります。長さ C のキャンバスに対して、C 個の自然言語トークンと C 個の自己条件付けベクトルが受け渡されるイメージです。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 320" role="img" aria-label="DiffusionGemma のノイズ除去ループを示す図。各ノイズ除去ステップは、現在のキャンバス（人間が読める自然言語トークン C 個）と自己条件付け行列（人間に解釈しづらいベクトル C 個）を次のステップへ受け渡す。この 2 つがステップ間の情報ボトルネックとなり、自己条件付けベクトルの部分が解釈しづらいことが懸念の中心である。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="40" y="120" width="150" height="64" rx="8"></rect>
+          <text class="node-label" x="115" y="148" text-anchor="middle">ノイズ除去</text>
+          <text class="node-label" x="115" y="168" text-anchor="middle">ステップ t</text>
+
+          <path class="edge" d="M190,135 L320,80" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M190,170 L320,225" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="320" y="44" width="240" height="68" rx="8"></rect>
+          <text class="node-label" x="440" y="72" text-anchor="middle">キャンバス（C 個のトークン）</text>
+          <text class="edge-label" x="440" y="94" text-anchor="middle">自然言語：人間が読める</text>
+
+          <rect class="node" x="320" y="196" width="240" height="68" rx="8"></rect>
+          <text class="node-label" x="440" y="224" text-anchor="middle">自己条件付け行列（C 個）</text>
+          <text class="edge-label" x="440" y="246" text-anchor="middle">密なベクトル：解釈しづらい ← 懸念の中心</text>
+
+          <path class="edge" d="M560,78 L640,135" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M560,230 L640,173" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="640" y="120" width="120" height="64" rx="8"></rect>
+          <text class="node-label" x="700" y="148" text-anchor="middle">ノイズ除去</text>
+          <text class="node-label" x="700" y="168" text-anchor="middle">ステップ t+1</text>
+
+          <text class="edge-label" x="440" y="160" text-anchor="middle">情報ボトルネック（ステップ間の唯一の通り道）</text>
+        </svg>
+        <figcaption class="diagram__caption">各ノイズ除去ステップは、キャンバス（自然言語トークン C 個）と自己条件付け行列（密なベクトル C 個）を次のステップへ受け渡す。この 2 つが情報ボトルネックであり、自己条件付けベクトルの部分が人間に解釈しづらいことが懸念の中心だった。</figcaption>
+      </figure>
+
+      <p>この情報ボトルネックのうち、自己条件付けベクトルの部分が人間には解釈しづらい、というのが懸念の中心でした。</p>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>不透明シリアル深度は、見方次第で大きく変わる</h3>
+      <p>256k のコンテキスト長で評価したところ、不透明シリアル深度の経験的な上限は、前提の置き方で大きく変わりました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>中間ボトルネックの前提</th>
+            <th>DiffusionGemma の上限</th>
+            <th>Gemma 4 26B A4B 比</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>「解釈不能」と仮定</td>
+            <td class="is-best">608,016</td>
+            <td>約 28.6 倍（21,235 に対し）</td>
+          </tr>
+          <tr>
+            <td>「解釈可能」と仮定</td>
+            <td>23,571</td>
+            <td>約 1.1 倍（ほぼ同等）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p>なお 28.6 倍という値は最悪ケースに基づきます。実際には<strong>適応的停止</strong>（adaptive stopping、予測が変化しなくなったら止める仕組み）が働くため、通常は表の値の約 3 分の 1 程度に収まると述べられています。</p>
+        </div>
+      </div>
+
+      <p>つまり、「中間ボトルネックが解釈できるかどうか」が、透明性を左右する鍵になります。そこで著者らは、それが本当に解釈できるのかを次に検証します。</p>
+
+      <h3>中間状態は、ごく少数のトークンで足りる</h3>
+      <p>ステップ間で渡される情報を、わずか数トークンに制限しても性能が落ちないかを調べました。コードや数学（AMC・AIME・IMO の変種）、GPQA などのベンチマークで評価しています。</p>
+      <p>その結果、情報を上位 8 トークン（k=8）、あるいは確率 0.03 以上のトークン（p=0.03）に絞っても、ベースラインと同等の性能を達成できました。情報の大部分を捨てても結果が変わらないということは、計算に本当に効いている中間状態はごく少数のトークンで表せる、ということです。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">k=8</span>
+          <span class="stat__label">上位 8 トークンに絞っても<br>ベースラインと同等の性能</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">p=0.03</span>
+          <span class="stat__label">確率 0.03 以上のトークンに絞っても<br>ベースラインと同等の性能</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">26 分の 1</span>
+          <span class="stat__label">射影されたトークンが解釈可能なら<br>シリアル深度を削減できた</span>
+        </div>
+      </div>
+
+      <p>このとき、もし射影されたトークンが解釈可能であれば、シリアル深度は 26 分の 1 に削減できたことになると述べられています。</p>
+
+      <h3>残ったトークンの正体は「最終トークンの推測」</h3>
+      <p>では、その少数の重要なトークンは何を意味しているのでしょうか。著者らは WildChat データセットの 800 プロンプトで生成を行い、各ステップ・各位置のトークンを次のように分類しました。</p>
+
+      <ul>
+        <li>最終的に出力されるトークンとの完全一致（Final Token）</li>
+        <li>近傍（±10 位置以内）の最終トークンとの一致（Adjacent Token）</li>
+        <li>最終トークンと意味的に近いもの（Similar to Final）</li>
+        <li>近傍トークンと意味的に近いもの（Similar to Adjacent）</li>
+        <li>どれにも当てはまらない解釈不能なもの（Other）</li>
+      </ul>
+
+      <p>確率 0.03 超という閾値でフィルタすると、最初のノイズ除去ステップでさえ 85% を超えるトークンが分類可能でした。結論として、DiffusionGemma の計算上重要な（load-bearing な）中間状態は、主に「現在および近傍トークンの推測」であり、その大部分が解釈可能だと示されました。</p>
+
+      <h3>監視のしやすさは Gemma 4 と同等</h3>
+      <p>監視可能性については、Guan ら（2025）の評価スイートを DiffusionGemma に適用し、Gemma 4 と比較しました。評価は、入力に介入して挙動の変化を監視が推測できるか（Intervention）、特定の解法経路を通る問題で監視が証拠を見つけられるか（Process）といったカテゴリで行われます。</p>
+      <p>主な結果として、DiffusionGemma の監視可能性は Gemma 4 と同等でした。指標（G-mean² と呼ばれる集計値）の平均値は、Gemma 4 26B A4B が 0.82、DiffusionGemma 26B 4B が 0.85 で、ほぼ並んでいます。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル</th>
+            <th>監視可能性（G-mean² 平均）</th>
+            <th>平均の思考文字数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Gemma 4 26B A4B</td>
+            <td>0.82</td>
+            <td>24,392</td>
+          </tr>
+          <tr>
+            <td>DiffusionGemma 26B 4B</td>
+            <td class="is-best">0.85</td>
+            <td>13,192</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>ただし注意点もあります。DiffusionGemma は対応する Gemma より思考が短い傾向があり、たとえば平均の思考文字数は Gemma が 24,392、DiffusionGemma が 13,192 でした。一般に思考が長いほど監視しやすいとされるため、この差はむしろ DiffusionGemma に不利に働くと予想されます。それでも同等の結果が出たことになります。</p>
+
+      <h3>拡散モデルならではの推論も見えてきた</h3>
+      <p>アルゴリズム透明性のケーススタディでは、拡散モデル特有の興味深い振る舞いがいくつか観察されました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">早期の応答長予測</p>
+          <p>「光合成を 2 文で説明」というプロンプトでは、1 回目のノイズ除去ステップの後にはもう、文末以降を空白用トークンでほぼ埋め、最終的な長さ（約 50 トークン）を当てていました。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">遡及的な自己修正</p>
+          <p>「400 から 800 の間の平方数はいくつ？」という問題で、途中では誤った答え（9）を出しながら、数ステップ後に正しい答え（8）へ高い確信で修正する様子が見られました。ただし自己修正は保証されず、早い段階の答えに固定されてしまう場合もあります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">骨格優先のコード生成</p>
+          <p>コードを書くとき、まず関数名やブロックの区切りといった構造的な足場を作り、後から変数名やコメントを埋めていく傾向が見られました。</p>
+        </div>
+      </div>
+
+      <p>このほか、出す文字は決まっているのに置き場所が定まらず確率を複数位置に分散させる「トークンの滲み（token smearing）」や、意味の異なる候補系列を同時に保持する「系列の滲み（sequence smearing）」といった、自己回帰モデルには見られない現象も報告されています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究を額面通りに受け取れば、結果は安心材料です。DiffusionGemma は自己回帰版の Gemma 4 と同程度に監視可能であり、簡単な解釈性テクニックで不透明シリアル深度を Gemma 並みに下げられ、努力すれば非自己回帰的なアルゴリズムの多くを理解できる、ということが示されました。</p>
+      <p>著者らは本研究を、今後登場する「潜在推論モデル」を評価するためのテンプレート（前例）にしたいと述べています。新しいこの種のモデルが公開されたときには、同様の透明性監査を実施してほしい、という呼びかけです。</p>
+      <p>一方で、論文は次のような限界も率直に認めています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>限界。</strong>論文が率直に認めている主な制約は次のとおりです。</p>
+          <ul>
+            <li>今回の監視可能性の評価は、複数のキャンバスにまたがる生成で行われており、キャンバス間の推論は自己回帰的でした。そのため、単一キャンバス内で起こりうる監視可能性の低下を見逃している可能性があります。</li>
+            <li>観測された透明性が、テキスト拡散モデルというアーキテクチャに固有の性質なのか、現状の比較的初期の学習手順がたまたま生んだ産物なのかは、まだ分かりません。将来のモデルがより大きなキャンバスへスケールすれば、中間状態が解釈しづらくなる可能性があります。</li>
+            <li>中核的な主張（中間ボトルネックが解釈可能ならシリアル深度が Gemma 4 と同等になる）は、厳密に保証されたものではありません。射影された潜在ベクトルに「解釈可能」というラベルを貼ることには、不透明な推論を良性と誤認するリスクが伴います。</li>
+            <li>本番環境での監視は実際には配備しておらず、実用上の考慮を見落としている可能性があります。提案手法はすべてのノイズ除去ステップで中間状態を抽出・分析する必要があり、現実にはコストの高い監視になります。</li>
+          </ul>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>DiffusionGemma は人間に読めない中間状態を使うため透明性が低いと予想されましたが、Logit Lens のような簡単な解釈性テクニックを使えば、その中間状態の大部分は「最終トークンの推測」として読み解け、監視可能性も自己回帰版 Gemma 4 とほぼ同等になることが分かりました。ただしこれが拡散モデルの恒久的な性質かは不明であり、著者らは将来の潜在推論モデルにも同様の透明性監査を続けることを促しています。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>テキスト拡散モデル（text diffusion model）</dt>
+        <dd>多数のトークンからなるキャンバスに、ノイズ除去操作を全体へ繰り返し適用して出力を仕上げる言語モデル。</dd>
+
+        <dt>DiffusionGemma</dt>
+        <dd>Google DeepMind が公開したテキスト拡散モデル。Gemma 4 26B A4B のアーキテクチャを適応して作られている。</dd>
+
+        <dt>自己回帰（autoregressive）</dt>
+        <dd>トークンを左から右へ 1 つずつ、過去のトークンに条件付けて生成する従来の方式。比較対象の Gemma 4 がこれにあたる。</dd>
+
+        <dt>キャンバス（canvas）</dt>
+        <dd>テキスト拡散モデルが一度に生成・精製する固定長のトークン列。</dd>
+
+        <dt>ノイズ除去ステップ（denoising step）</dt>
+        <dd>キャンバス全体に適用される 1 回の精製操作。</dd>
+
+        <dt>自己条件付けベクトル（self-conditioning vector）</dt>
+        <dd>ノイズ除去ステップ間で受け渡される密な連続ベクトル。既定では人間に解釈しづらい。</dd>
+
+        <dt>思考の連鎖（chain of thought、CoT）</dt>
+        <dd>自然言語で書かれる推論の過程。自己回帰モデルの透明性の根拠になる。</dd>
+
+        <dt>透明性（transparency）</dt>
+        <dd>本論文では、中間状態を理解できるか（変数透明性）と、出力に至る過程を再構築できるか（アルゴリズム透明性）に分けて扱う。</dd>
+
+        <dt>不透明シリアル深度（opaque serial depth）</dt>
+        <dd>解釈可能な中間状態を通らずに行われる最長の連続計算の長さ。</dd>
+
+        <dt>監視可能性（monitorability）</dt>
+        <dd>モデルの出力が、不正や誤動作の検出といった下流タスクにとって有用かを測る指標。</dd>
+
+        <dt>Logit Lens</dt>
+        <dd>中間状態を語彙トークンに射影して、人間が読める形に翻訳する解釈性手法。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">How Transparent is DiffusionGemma?</p>
+      <a href="https://arxiv.org/abs/2606.20560" target="_blank" rel="noopener noreferrer">arXiv:2606.20560 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
