@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>「代理モデル」を仲介役に、9 つの異種教師から一人称映像エンコーダを育てる — UNIEGO — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-18-2606.20559-uniego-egocentric-video-representation-cover.png"
+           alt="RGB・深度・骨格の 3 モダリティ、一人称と三人称の 2 視点、4 つの基盤モデルにまたがる合計 9 つの異種教師から、教師ごとの Proxy（代理モデル）を仲介役として知識を翻訳・選別し、本番では一人称映像 1 本だけで動く統一エンコーダ UNIEGO を育てる枠組みを表したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">「代理モデル」を仲介役に、9 つの異種教師から一人称映像エンコーダを育てる — UNIEGO</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-18</span>
+      <span>arXiv：2606.20559</span>
+      <span>カテゴリ：cs.CV / cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ウェアラブルカメラで撮った一人称視点（egocentric）の映像だけで動く、統一的な映像エンコーダ <strong>UNIEGO</strong> を提案した研究です。RGB・深度・骨格という 3 種類のモダリティ、一人称と三人称という 2 つの視点、4 つの大規模基盤モデルにまたがる、合計 9 つの「教師」モデルから知識を学びます。その際、教師から直接学ぶのではなく「Proxy（代理モデル）」という仲介役を挟む点が肝で、3 つのベンチマーク・3 つのタスクで最高性能を達成しました。推論時にはウェアラブルカメラの映像 1 本だけあれば動きます。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">9</span>
+          <span class="stat__label">学習に使う「教師」モデルの数<br>（異種の教師から知識を統合）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">3 / 2</span>
+          <span class="stat__label">モダリティ（RGB・深度・骨格）<br>／ 視点（一人称・三人称）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">3 / 3</span>
+          <span class="stat__label">ベンチマーク ／ タスクで<br>一人称推論下の最高性能（SOTA）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">映像 1 本</span>
+          <span class="stat__label">推論時に必要な入力<br>（教師・三人称・Proxy は不要）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>GoPro のようなウェアラブルカメラで撮った一人称映像は、装着者が「いま何をしているか」を捉える上で有望なデータですが、扱いが難しいことで知られています。カメラの視野が狭く、自分の身体や手元がしばしば隠れてしまう（自己遮蔽、self-occlusion）ためです。</p>
+      <p>一方で世の中には、深度（奥行き）や骨格（人体の関節構造）といった、人の動きの幾何を捉える別種の情報源や、DINOv2 や SigLIP のような大規模な基盤モデル（foundation model）が存在します。これらは一人称映像理解には通常活かされていません。著者らは「これら多様な情報をすべて取り込みつつ、本番では一人称映像だけで動く統一表現」を作れれば、より強い一人称映像理解が実現できると考えました。本研究はその統合のやり方を示すものです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>多様な情報源から 1 つのモデルを育てる自然な枠組みが、<strong>知識蒸留（knowledge distillation）</strong>です。優れた「教師」モデルの知識を、展開しやすい「生徒」モデルに移す手法で、複数の教師を使う場合は<strong>マルチ教師蒸留（multi-teacher distillation）</strong>と呼ばれます。</p>
+      <p>ところが、一人称設定でこれを素直にやると 2 つの壁にぶつかると著者らは指摘します。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">壁 1</span>表現ギャップ（representational gap）</p>
+          <p>教師どうしが本質的に異質です。たとえば骨格ベースのモデルはグラフ構造を扱い、通常の映像エンコーダとは仕組みが噛み合いません。三人称（exocentric）の RGB 教師は、まったく別の視点からシーンの幾何を捉えています。これらの特徴空間を、一人称の生徒が直接すり合わせるのは困難です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">壁 2</span>勾配の衝突（conflicting gradients）</p>
+          <p>互換性のない特徴空間を 1 つの生徒に同時に調停させると、学習の更新方向（勾配）どうしがぶつかり、最適化がうまく進みません。著者らは「1 段階の蒸留でモダリティ・視点のギャップを埋めつつ多様な事前知識を吸収させる」ことを、解の定まりにくい不良設定（ill-posed）な目的だと述べています。</p>
+        </div>
+      </div>
+
+      <p>既存のマルチ教師蒸留の多くは、似た性質の教師を 1 つの生徒に蒸留しており、この一人称特有の構造的な難しさを回避してきました。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>UNIEGO の中核は、<strong>階層的マルチ教師蒸留フレームワーク（hierarchical multi-teacher distillation framework）</strong>です。異質な教師から生徒へ直接知識を流すのではなく、教師ごとに用意した <strong>Proxy（代理モデル）</strong>を仲介役として挟みます。学習は 2 つのレベルに分かれます。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 340" role="img" aria-label="UNIEGO の階層的蒸留の全体像を示す図。9 つの異種教師（RGB・深度・骨格、一人称・三人称、基盤モデル）から、Level-I で教師ごとの Proxy（代理モデル）が独立に知識を翻訳して受け取り、Level-II で正しく確信を持って予測した Proxy だけを選んで統一モデル UNIEGO へ蒸留する。本番では UNIEGO に一人称映像だけを入力すればよく、教師も三人称映像も Proxy も不要になる。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="40" width="170" height="56" rx="8"></rect>
+          <text class="node-label" x="105" y="64" text-anchor="middle">9 つの異種教師</text>
+          <text class="edge-label" x="105" y="84" text-anchor="middle">RGB・深度・骨格／一人称・三人称</text>
+
+          <rect class="node" x="20" y="140" width="170" height="56" rx="8"></rect>
+          <text class="node-label" x="105" y="172" text-anchor="middle">…（互いに非互換）</text>
+
+          <rect class="node" x="20" y="240" width="170" height="56" rx="8"></rect>
+          <text class="node-label" x="105" y="264" text-anchor="middle">4 つの基盤モデル</text>
+          <text class="edge-label" x="105" y="284" text-anchor="middle">DINOv2・SigLIP ほか</text>
+
+          <path class="edge" d="M190,68 L300,150" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M190,168 L300,168" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M190,268 L300,186" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="300" y="120" width="180" height="96" rx="8"></rect>
+          <text class="node-label" x="390" y="150" text-anchor="middle">Level-I</text>
+          <text class="node-label" x="390" y="172" text-anchor="middle">教師ごとの Proxy 群</text>
+          <text class="edge-label" x="390" y="194" text-anchor="middle">生徒互換の均質空間へ翻訳</text>
+
+          <path class="edge" d="M480,168 L590,168" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="535" y="156" text-anchor="middle">Level-II</text>
+          <text class="edge-label" x="535" y="186" text-anchor="middle">信頼できる Proxy だけ選択</text>
+
+          <rect class="node" x="590" y="130" width="150" height="76" rx="8"></rect>
+          <text class="node-label" x="665" y="160" text-anchor="middle">UNIEGO</text>
+          <text class="edge-label" x="665" y="182" text-anchor="middle">統一一人称エンコーダ</text>
+
+          <text class="edge-label" x="665" y="232" text-anchor="middle">推論時：一人称映像 1 本だけ</text>
+        </svg>
+        <figcaption class="diagram__caption">9 つの異種教師の知識を、Level-I で教師ごとの Proxy が「共通言語」に翻訳し、Level-II で信頼できる Proxy だけを選んで統一モデル UNIEGO へ蒸留する。本番では教師も三人称映像も Proxy も不要で、一人称映像 1 本だけで動く。</figcaption>
+      </figure>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">Level-I</span>Proxy 学習（教師の言葉を共通言語に翻訳する）</p>
+          <p>まず教師ごとに 1 つずつ Proxy モデルを用意し、各教師から独立に蒸留して学習します。すべての Proxy は、生徒（UNIEGO）と同じ一人称向けのアーキテクチャを共有します（パラメータは別々）。これにより、バラバラだった教師の知識が、生徒と互換性のある「均質な一人称の表現空間」へ翻訳されます。たとえるなら、言語の異なる 9 人の先生の話を、生徒が分かる共通言語に通訳する段階です。</p>
+          <p>一部の教師（基盤モデル）は行動ラベルの予測（logits）を出さず特徴埋め込みしか出さないため、この段は一貫して特徴レベルの蒸留を採用します。学習した Proxy は視点ごとに、一人称由来の集合と三人称由来の集合に分けて整理されます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge badge--accent-2">Level-II</span>Selective Proxy Distillation（信頼できる仲介役だけから学ぶ）</p>
+          <p>次に、これらの Proxy 群から統一モデル UNIEGO を組み上げます。ここに 2 つの工夫があります（下のカードを参照）。統一モデルは、選ばれた Proxy から特徴レベルと logit（出力前のスコア）レベルの両方で蒸留し、同時に行動分類の損失も学びます。特徴レベルでは特徴ベクトルの向きの近さを測る<strong>コサイン距離（cosine distance）</strong>で、logit レベルでは予測確率分布どうしの近さを測る<strong>KL ダイバージェンス（KL divergence）</strong>で、Proxy に近づくよう学習します。</p>
+        </li>
+      </ol>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">Proxy Merging（プロキシ統合による初期化）</p>
+          <p>統一モデルを Proxy 群のパラメータの「最適な加重和」で初期化します。重み係数は、訓練データ上の行動分類の損失（予測の誤りの大きさ）が最小になるよう解いて決めます。著者らは、ある仮定（損失が局所的になめらかであること）の下で、この統合初期化が平均的にどの個別 Proxy よりも良い初期値になることを理論的に示しています（Proposition 1）。学習が安定して未知データにも対応しやすい、条件の良い出発点にモデルを置けると主張しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">Proxy Selection（プロキシ選択）</p>
+          <p>すべての Proxy から一律に蒸留するのではなく、サンプルごとに信頼できる Proxy だけを選びます。基準は「正解フィルタ付きの small-loss 基準」です。その Proxy が行動クラスを正しく予測した場合のみ候補とし、候補の中から損失の小さい（＝高確信度の）上位 k 個を選びます。正しく予測した Proxy が 1 つもなければ、そのサンプルの蒸留は丸ごとスキップします。誤った監督を取り込まないための仕組みです。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>推論時には、UNIEGO に一人称映像を入力するだけです。</strong>教師ネットワークも、三人称の映像も、Proxy も、本番ではいっさい不要になります。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>著者らは、公開されている 3 つの ego-exo データセット（EgoExo-Fitness、Assembly101、EgoExo4D）で評価しました。以下の結果はいずれも、一人称映像のみを入力した推論時のものです。</p>
+
+      <h3>行動認識：素のバックボーンと最強ベースラインを上回る</h3>
+      <p><strong>行動認識（Top-1 精度）</strong>では、UNIEGO がそれぞれ 84.7%、50.7%、41.1% を記録しました。素のバックボーンである TimeSformer を、各データセットで上回ります。最も強い蒸留ベースラインだった π-ViT に対しても、EgoExo-Fitness で +4.6%、Assembly101 で +2.9% の改善を示し、3 ベンチマークすべてで一人称推論下の最高性能（SOTA）を達成したと報告しています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>データセット</th>
+            <th>TimeSformer（素のバックボーン）</th>
+            <th>UNIEGO</th>
+            <th>改善幅</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>EgoExo-Fitness</td>
+            <td>80.3%</td>
+            <td class="is-best">84.7%</td>
+            <td>+4.4%</td>
+          </tr>
+          <tr>
+            <td>Assembly101</td>
+            <td>47.6%</td>
+            <td class="is-best">50.7%</td>
+            <td>+3.1%</td>
+          </tr>
+          <tr>
+            <td>EgoExo4D</td>
+            <td>39.9%</td>
+            <td class="is-best">41.1%</td>
+            <td>+1.2%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>動画検索：仲介役を挟むと改善幅が桁違いに</h3>
+      <p><strong>動画検索</strong>では、たとえば EgoExo-Fitness で、素朴なマルチ教師蒸留が mAP を +0.012 しか上げられなかったのに対し、提案手法（Selective Proxy Distillation）は +0.057 と大きく改善しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">+0.012</span>
+          <span class="stat__label">素朴なマルチ教師蒸留の mAP 改善<br>（EgoExo-Fitness、動画検索）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+0.057</span>
+          <span class="stat__label">提案手法（SPD）の mAP 改善<br>（EgoExo-Fitness、動画検索）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">22M</span>
+          <span class="stat__label">小型バックボーン（UniFormer-S）でも<br>効果が出る＝エンコーダに非依存</span>
+        </div>
+      </div>
+
+      <h3>時間的行動セグメンテーション：素朴な蒸留はむしろ劣化</h3>
+      <p><strong>時間的行動セグメンテーション</strong>（Assembly101）でも UNIEGO は全指標で最良でした。注目すべきは、素朴なマルチ教師蒸留がスクラッチ学習（一人称のみ）より全指標で<strong>劣化</strong>した点で、異質な教師を直接蒸留すると細かい時間表現が乱れてしまうことが示されています。これは仲介役を挟むアプローチの必要性を裏づける結果です。</p>
+      <p>そのほか、22M パラメータの小型モデル（UniFormer-S）など複数のバックボーンで効果が出ること（特定のエンコーダに依存しないこと）、各構成要素を順に足すと精度が積み上がること（アブレーション）も確認されています。著者らはさらに、CKA という表現類似度の指標で Proxy 群の表現が教師どうしより揃っていること（表現ギャップの緩和）と、勾配が衝突する割合が選択的蒸留によって下がること（勾配衝突の緩和）を、定量的に検証しています。</p>
+
+      <h2>意義と限界</h2>
+      <p>UNIEGO が示したのは、視点・モダリティ・基盤モデルにまたがる多様な知識を、Proxy という仲介役を介して 1 つの一人称モデルへ統合できるということです。教師から直接蒸留するより豊かで識別力の高い表現が得られ、本番では一人称カメラ 1 つで動きます。22M の小型モデルでも有効である点は、リソースの限られた環境への展開という観点でも意味があります。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>限界。</strong>著者らは限界も明示しています。現在の Proxy 選択は small-loss 基準というヒューリスティック（経験則）に基づいており、効果的ではあるものの Proxy 群の潜在能力を使い切れていません。入力と訓練の状態に応じて Proxy の信頼度を動的に重み付けする「学習された選択機構」があれば、より適応的な監督が得られるはずだと述べています。ただしその適応的な選択戦略の設計は容易ではなく、今後の有望な課題として残されています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>UNIEGO は、9 つの異質な教師の知識を Proxy で「共通言語」に翻訳し、信頼できる Proxy だけを選んで一人称映像エンコーダへ統合する手法です。素朴なマルチ教師蒸留が抱える表現ギャップと勾配衝突を緩和し、3 タスク・3 ベンチマークで一人称推論の最高性能を達成しました。本番に必要なのはウェアラブルカメラの映像 1 本だけです。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>egocentric / exocentric（一人称 / 三人称）視点</dt>
+        <dd>egocentric はウェアラブルカメラによる装着者視点の映像、exocentric は外部の固定カメラからの三人称視点。両方を含むデータセットを「ego-exo」と呼ぶ。</dd>
+
+        <dt>知識蒸留 / マルチ教師蒸留（knowledge distillation / multi-teacher distillation）</dt>
+        <dd>大きな「教師」モデルの知識を展開しやすい「生徒」モデルに移す枠組み。複数教師に拡張したものがマルチ教師蒸留。</dd>
+
+        <dt>表現ギャップ（representational gap）</dt>
+        <dd>異質な教師（アーキテクチャ・視点・モダリティが異なる）の特徴空間が互いに非互換で、生徒が直接すり合わせられないこと。</dd>
+
+        <dt>勾配の衝突（conflicting gradients）</dt>
+        <dd>複数の監督信号からの更新方向（勾配）が主タスクの勾配と逆向きになり、最適化を妨げる現象。</dd>
+
+        <dt>Proxy（代理モデル）</dt>
+        <dd>生徒と同じアーキテクチャを持ち一人称映像で動く中間モデル。各教師の知識を生徒互換の均質な空間へ翻訳する仲介役。</dd>
+
+        <dt>Selective Proxy Distillation（SPD）</dt>
+        <dd>サンプルごとに「正しく・確信を持って」予測した Proxy だけから蒸留し、誤った監督を抑える選択的蒸留の仕組み。</dd>
+
+        <dt>Proxy Merging（プロキシ統合初期化）</dt>
+        <dd>統一モデルを Proxy パラメータの最適な加重和で初期化し、平坦で条件の良い損失地形に置く手法。</dd>
+
+        <dt>基盤モデル（foundation model）</dt>
+        <dd>大規模に事前学習されたモデル。本研究の教師には DINOv2、SigLIP、DepthAnything などが含まれる。</dd>
+
+        <dt>CKA（Centered Kernel Alignment）</dt>
+        <dd>2 つのニューラル表現どうしの類似度を測る指標。本研究では表現ギャップの定量化に使用。</dd>
+
+        <dt>コサイン距離（cosine distance）</dt>
+        <dd>2 つの特徴ベクトルの「向き」がどれだけ近いかを測る尺度。本研究では特徴レベルの蒸留に使用。</dd>
+
+        <dt>KL ダイバージェンス（KL divergence）</dt>
+        <dd>2 つの確率分布がどれだけ離れているかを測る尺度。本研究では予測確率の近さをそろえる logit レベルの蒸留に使用。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">UNIEGO: Proxies as Mediators for Unified Egocentric Video Representation Learning</p>
+      <a href="https://arxiv.org/abs/2606.20559" target="_blank" rel="noopener noreferrer">arXiv:2606.20559 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
