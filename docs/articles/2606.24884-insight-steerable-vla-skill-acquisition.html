@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>デモなしで新しい動作を覚えるロボット：VLA を『基本動作』単位で操れるようにする INSIGHT — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-23-2606.24884-insight-steerable-vla-skill-acquisition-cover.png"
+           alt="ロボット制御モデル VLA を「基本動作（プリミティブ）」単位で言語指示によって操れるようにし、足りない動作を視覚言語モデルが見つけてロボット自身に試させ、成功例を再学習で取り込むデータフライホイールを回す INSIGHT を、人間の追加デモゼロ・注ぎ 96%・14 動作の長期タスク 80% という成果とともに示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">デモなしで新しい動作を覚えるロボット：VLA を『基本動作』単位で操れるようにする INSIGHT</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-23</span>
+      <span>arXiv：2606.24884</span>
+      <span>カテゴリ：cs.RO / cs.AI / cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ロボットの制御モデルである VLA（Vision-Language-Action model：視覚と言語からロボットの行動を出すモデル）を、「基本動作（プリミティブ）」という小さな単位で言語指示によって操作できるようにした研究です。新しいタスクに足りない基本動作を、別の AI（視覚言語モデル）が自分で見つけ出し、ロボットに試させて成功例を集め、それを使ってモデルを再学習します。この仕組みにより、目標とするスキルについての人間の追加デモを一切使わずに新しいスキルを獲得でき、注ぐ動作では最大 96% の成功率、14 個の基本動作をつなぐ長い手順のタスクでも 80% の成功率を達成しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">デモ 0</span>
+          <span class="stat__label">目標スキルについての<br>人間の追加デモ数</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">96%</span>
+          <span class="stat__label">ビーンズの注ぎ成功率<br>（CaP-X は 16%／π₀.₅ は 0%）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">80%</span>
+          <span class="stat__label">14 基本動作をつなぐ<br>長期合成タスクの成功率</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">5/5</span>
+          <span class="stat__label">掬うデモだけから獲得した<br>掃き動作の評価試行成功</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>ロボットに新しい作業を覚えさせるのは、いまでも非常に手間がかかります。代表的な VLA モデル（OpenVLA や π₀.₅ など）は、学習データに含まれていた動作しかできず、新しいタスクごとに人間がお手本（デモ）を集めてモデルを微調整する必要があります。</p>
+      <p>では人間のデモなしで、ロボットが試行錯誤しながら学べばよいのでしょうか。それも簡単ではありません。シミュレーション上の強化学習では数千回の試行が必要になり、現実世界での強化学習は試行回数の多さや安全面の制約から、ほぼ現実的ではないとされています。</p>
+      <p>この論文は、追加のお手本なしで新しいスキルを覚えられる道筋を示しました。ロボットを実用的に運用するうえで、新タスクごとの人手コストは大きな壁です。その壁を下げる一つの方向性を具体的に示した点に意義があります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>著者らが出発点に置くのは、「操作スキルは本質的に構成的（compositional）である」という見方です。つまり、新しいスキルは完全にゼロから作るものではなく、すでに知っている基本動作を新しい組み合わせで使い回すことが多い、という考え方です。</p>
+      <p>論文はいくつか例を挙げています。たとえば「掃く（sweeping）」と「掬う（scooping）」は、対象に近づく動作と下ろす動作を共有しており、最後に横方向へ押すかどうかだけが違います。「ブロックをひっくり返す」は、掴んで持ち上げる動作（pick-and-place で使うもの）を再利用し、そこに回転の動作を加えるだけです。</p>
+      <p>ここで著者らが注目するのは、既存の VLA はこうした再利用可能な基本動作を、すでにモデル内部に持っている可能性が高いという点です。ところがその動作は、タスク指示全体と「絡み合って（entangled）」いるため、基本動作だけを取り出して指示することが難しい状態にあります。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>動機となった火星ロボットのシナリオ。</strong>火星探査機 InSight にちなんだもので、岩を掬う（scoop）ように訓練された火星ロボットが、太陽光パネルに積もった塵を掃く（sweep）必要に迫られても、掃く動作のお手本がなければ実行できない、という状況です。すでに「掬う」を知っているのに、わずかに違う「掃く」が指示できない――この絡み合いを解くことが本研究の出発点です。</p>
+        </div>
+      </div>
+
+      <p>なお、視覚言語モデルや大規模言語モデルを使う既存研究（SayCan、VoxPoser、Code-as-Policies、Hi Robot など）もあります。これらはテスト時に計画役やコード生成役として、あらかじめ用意された基本動作を「組み合わせる」ことはしますが、学習済みのポリシー（制御モデル）そのものは更新しません。INSIGHT は、視覚言語モデルを「足りない基本動作を見つけ、成功する試行を生成し、再学習でモデルに追加する能動的なエージェント」として使う点が異なります。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>INSIGHT は大きく 2 段階で動きます。まず、本手法を読み解くための用語を整理しておきます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">skill</span>スキル</p>
+          <p>言語指示で表される目標能力。たとえば「ボトルのキャップを開けて中身をボウルに注ぐ」。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">plan</span>プラン</p>
+          <p>スキルを達成するために計画役の視覚言語モデルが生成する、基本動作の並び。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">primitive</span>プリミティブ（基本動作）</p>
+          <p>言語ラベルを与えたときに VLA が生成する、再利用可能な行動の断片。「黄色いボトルへグリッパを動かす」「上に持ち上げる」「ひねる」「注ぐ」のようなラベルが付き、単一の主要な動き（ある軸方向の並進や回転、グリッパの開閉）だけを担います。各動作には呼び出される世界状態を表す precondition（前提条件）と結果状態を表す effect（効果）が対応づきます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">V / gap</span>語彙 V とプリミティブギャップ</p>
+          <p>プリミティブ語彙 V は VLA がすでに訓練済みの基本動作ラベルの集合。プリミティブギャップ（primitive gap）は、プランが要求するのに語彙 V に存在しない基本動作。INSIGHT はこれを自律的に獲得し、再学習で V を広げます。</p>
+        </div>
+      </div>
+
+      <h3>Stage 1：基本動作単位で操れる VLA を作る</h3>
+      <p>最初の段階では、人間が手作業でラベルを付けることなく、遠隔操作（teleoperation）で集めたデモを自動的に「ラベル付きの基本動作」へ分割します。</p>
+      <p>タスクの説明を与えると、視覚言語モデルが期待される基本動作の並びを生成します。グリッパを使うタスクでは、グリッパの開閉が切り替わる箇所を区切り目として動作を分割します。さらにエンドエフェクタ（ロボットの手先）の姿勢や移動量、主要な動作軸のタグを視覚言語モデルに渡し、各フレームを基本動作の名前に対応づけていきます。</p>
+      <p>こうして区切った基本動作で、事前学習済みの VLA を LoRA（Low-Rank Adaptation：大規模モデルを低コストで微調整する手法）によって微調整します。各基本動作の断片が独立した訓練エピソードになり、その動作のラベルを言語プロンプトとして条件に与えます。また、基本動作ごとの終了を判定するために、行動の出力に「進捗チャネル（progress channel）」という学習型の値（各動作内で 0 から 1 へ進む）を追加します。</p>
+
+      <h3>Stage 2：視覚言語モデルに導かれてスキルを獲得する</h3>
+      <p>新しいタスクが来たときは、次の手順で進みます。著者らはこの一連の流れ（足りない動作を見つける → 自律的に試す → 成功例をラベル付けして保存し訓練データに統合する）を「データフライホイール（data flywheel）」と呼んでいます。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">段階 1</span>ギャップの特定</p>
+          <p>視覚言語モデルがタスクを基本動作の並びに分解し、既知の語彙と照らし合わせます。語彙にない動作はプリミティブギャップとして印を付けます。計画役は各ギャップにつき「単一軸の動き 1 つ」を返すよう制約されているため、複数の異なる動きが要るタスク（たとえば前へ傾けてから戻す）は複数のギャップに分かれます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">段階 2</span>パラメータの提案</p>
+          <p>各ギャップを、軸（並進なら {dx, dy, dz}、回転なら {drx, dry, drz}）と符号付きの大きさでパラメータ化します。実行前に視覚言語モデルが現在の場面を分析し、このパラメータを提案します。1 回の試行で複数のギャップが連なる場合は、前のギャップのパラメータを次の判断に渡し、対になる動き（注ぐために前傾する動作と垂直に戻す動作など）の軸や大きさの一貫性を保ちます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">段階 3</span>実行とオラクル判定</p>
+          <p>プランを実行し、既知・新規の基本動作の並びをロボットが実際に動いて試します。実行後、視覚言語モデルが「オラクル（oracle）」として、スキル実行の前後の場面画像を見比べ、タスク全体が成功したかを判定します。成功した新しい基本動作は VLA の訓練データに追加します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">段階 4</span>再学習で語彙を拡張</p>
+          <p>n 回の試行のあと、もとの語彙 V と新しい基本動作を合わせて VLA を再学習します。再学習後のモデルは合成したタスクを自分で実行でき、視覚言語モデルは高レベルの計画役として基本動作を並べるだけの役割になります。</p>
+        </li>
+      </ol>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 250" role="img" aria-label="INSIGHT のデータフライホイールを示すサイクル図。視覚言語モデルが新タスクを基本動作に分解して語彙にない動作をプリミティブギャップとして特定し、軸と符号付きの大きさでパラメータ化して実行、オラクルが前後の画像を見比べて成功を判定し、成功した新しい基本動作を VLA の訓練データに追加して再学習で語彙 V を拡張する流れ。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="30" y="95" width="150" height="64" rx="8"></rect>
+          <text class="node-label" x="105" y="120" text-anchor="middle">ギャップ特定</text>
+          <text class="edge-label" x="105" y="142" text-anchor="middle">VLM が分解</text>
+
+          <path class="edge" d="M180,127 L220,127" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="220" y="95" width="160" height="64" rx="8"></rect>
+          <text class="node-label" x="300" y="120" text-anchor="middle">試行</text>
+          <text class="edge-label" x="300" y="142" text-anchor="middle">単一軸でパラメータ化</text>
+
+          <path class="edge" d="M380,127 L420,127" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="420" y="95" width="160" height="64" rx="8"></rect>
+          <text class="node-label" x="500" y="120" text-anchor="middle">オラクル判定</text>
+          <text class="edge-label" x="500" y="142" text-anchor="middle">前後画像で成否</text>
+
+          <path class="edge" d="M580,127 L620,127" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="620" y="95" width="120" height="64" rx="8"></rect>
+          <text class="node-label" x="680" y="120" text-anchor="middle">データ追加</text>
+          <text class="edge-label" x="680" y="142" text-anchor="middle">成功例を保存</text>
+
+          <rect class="node" x="280" y="190" width="200" height="44" rx="8"></rect>
+          <text class="node-label" x="380" y="217" text-anchor="middle">再学習で語彙 V を拡張</text>
+
+          <path class="edge" d="M680,159 L680,212 L480,212" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M280,212 L105,212 L105,159" marker-end="url(#arrow)"></path>
+        </svg>
+        <figcaption class="diagram__caption">足りない動作を特定 → 自律的に試行 → オラクルが成功を判定 → 成功例を訓練データに追加 → 再学習で語彙を広げる。この循環を「データフライホイール」と呼ぶ。</figcaption>
+      </figure>
+
+      <h3>実装の構成</h3>
+      <p>ベースとなる VLA には π₀.₅ を使っています（ただし INSIGHT はベースとなる VLA の種類に依存しない設計です）。視覚言語モデルには Gemini 3 Flash を使い、次の 4 つの役割を担わせています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">役割 1</span>デモの分割</p>
+          <p>遠隔操作で集めたデモを、ラベル付きの基本動作へ自動的に区切る。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">役割 2</span>プランニング</p>
+          <p>新タスクを基本動作の並びに分解し、語彙にない動作をギャップとして特定する。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">役割 3</span>パラメータ提案</p>
+          <p>各ギャップの軸と符号付きの大きさを、現在の場面を見て提案する。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">役割 4</span>オラクル判定</p>
+          <p>実行の前後画像を見比べ、スキルの成功・基本動作の完了を判定する。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価は、シミュレーション 2 タスク（ブロックひっくり返し、引き出し閉め）と、実機 3 系統（ボトルのキャップひねり、注ぎ、両者をつなぐ長期合成タスク、加えて掃き動作）で行われました。いずれも目標スキルについての人間のデモはゼロです。シミュレーションはロボット操作のベンチマーク環境 LIBERO の 7 自由度 Franka Panda、実機は 6 自由度の UFactory xArm を使っています。比較対象は強化学習（SAC：Soft Actor-Critic）、Code-as-Policies スタイルの zero-shot（事前のお手本なしで初見のタスクに対応すること）ベースライン（CaP-X）、そして人間のデモのみで微調整した π₀.₅ ベースラインです。</p>
+
+      <h3>シミュレーション：ブロックひっくり返しと引き出し閉め</h3>
+      <p>ブロックひっくり返しでは、横倒しのブロックを掴んで置く（pick-and-place）デモを 150 個集め、自動分割で 7 種類・700 個超の基本動作エピソードに分けました。ひっくり返すには pick-and-place に存在しない「ブロックを回す」動作が必要で、視覚言語モデルがこれをギャップと特定しました。獲得した動作を追加していくと、成功率は段階的に上昇しました。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">59 動作</span>成功率 19%</p>
+          <p>獲得した成功動作がまだ少ない初期段階。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">153 動作</span>成功率 52%</p>
+          <p>動作が増えるにつれて性能が伸びる。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">246 動作</span>成功率 75%</p>
+          <p>479 回の試行で集めた 246 個の獲得動作（成功した試行）の後に到達。上限値は 80%。同じ計算予算で強化学習（SAC）はひっくり返しを一度も完了できなかった（0%）。</p>
+        </li>
+      </ol>
+
+      <p>引き出し閉めでは、ベースのモデルは「引き出しを開ける」デモだけで訓練されています。開いた引き出し（訓練の分布外、OOD な初期状態）から「押して閉める」動作を獲得する必要があります。82 エピソード中、INSIGHT は <strong>70 個の成功した閉める動作</strong>を生成し、もとの開けるデモと合わせて再学習したモデルは、25 回の評価試行で <strong>100% の成功率</strong>で引き出しを閉め、開ける能力も維持しました。</p>
+
+      <h3>実機：ひねり・注ぎ・合成タスク（各手法 25 試行）</h3>
+      <p>実機 3 系統では、INSIGHT が全タスクで比較手法を大きく上回りました。π₀.₅ ベースラインはひねり・注ぎのデモがないため、これらの動作で完全に失敗しています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>タスク</th>
+            <th class="is-best">INSIGHT</th>
+            <th>CaP-X</th>
+            <th>π₀.₅ ベースライン</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>キャップひねり</td>
+            <td class="is-best">92%</td>
+            <td>32%</td>
+            <td>0%</td>
+          </tr>
+          <tr>
+            <td>ビーンズの注ぎ</td>
+            <td class="is-best">96%</td>
+            <td>16%</td>
+            <td>0%</td>
+          </tr>
+          <tr>
+            <td>長期合成タスク（ひねり＋注ぎ）</td>
+            <td class="is-best">80%</td>
+            <td>4%</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>長期合成タスクは、別々に獲得したひねりスキルと注ぎスキルから 14 個の基本動作を連鎖させ（合成タスク自体のお手本は一切なし）、(1) ボトルを上から掴む、(2) ひねってキャップを開ける、(3) ボトルを横から掴み直す、(4) ビーンズをボウルに注ぐ、という手順を <strong>80% の end-to-end 成功率</strong>でこなしました。</p>
+
+      <h3>獲得コスト・実行時間・もとのスキルの維持</h3>
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">23 / 31 試行</span>
+          <span class="stat__label">20 個の成功動作到達まで<br>（ひねり 39.7 分／注ぎ 85.3 分）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">55.1 秒</span>
+          <span class="stat__label">ひねりの実行時間<br>（CaP-X は 109.1 秒）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">86% → 100%</span>
+          <span class="stat__label">上から掴むタスクの成功率<br>（追加後はむしろ向上）</span>
+        </div>
+      </div>
+      <p>20 個の成功動作に到達するまでのコストは、ひねりが 23 試行（実機 23.8 分・視覚言語モデル 8.4 分・全体 39.7 分）、注ぎが 31 試行（実機 49.6 分・視覚言語モデル 26.9 分・全体 85.3 分）でした。実行時間は CaP-X より大幅に短く、ひねりでは合計 55.1 秒（CaP-X は 109.1 秒）です。さらにひねり・注ぎの動作を追加した後も、統合したモデルはもとの pick-and-place を維持しました。上から掴むタスクはベースの 86% から 100% へ、横から掴むタスクは 100% を維持しています。</p>
+
+      <h3>掃き動作：動機シナリオへの回帰（実機）</h3>
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>掬うデモだけから掃く動作を獲得。</strong>動機となった火星ロボットのシナリオに立ち返り、掬うデモだけから掃く動作を獲得できるかを検証しました。掬うと掃くは近づく・下ろす動作を共有し、最後の接触動作だけが違います。視覚言語モデルがこの横押しを欠落動作と判定し、INSIGHT は掃く動作を自律獲得して、<strong>5 回の評価試行すべて（5/5）で成功</strong>しました。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>INSIGHT は、視覚言語モデルに導かれて「足りない基本動作」を見つけ、それをロボット自身に試させて訓練データを作ることで、人間の追加デモなしに新しいスキルを獲得する手法です。著者らは、この「基本動作単位での操作可能性（steerability）」が、VLA の継続的な（continual）スキル獲得の実用的な基盤になりうることを示したと位置づけています。もとの基本動作と新しい基本動作を同時に再学習するデータ中心の設計により、語彙が増えても既存の動作が学習され続ける点も特徴です。</p>
+
+      <p>一方で、論文は次の限界も認めています。</p>
+      <ol>
+        <li>ギャップの実行が単一軸の動きに制限されており、獲得できる基本動作の複雑さに限りがあります。今後は視覚言語モデルが生成するウェイポイントや軌道最適化、オンライン強化学習で、より豊かな動作の獲得を目指すとしています。</li>
+        <li>成功した試行だけを取り込む設計のため、失敗の分析と視覚言語モデルからのフィードバックを取り入れれば、必要な試行数をさらに減らせる可能性があります。</li>
+        <li>各試行ごとに環境の手動リセットが必要で、人手が依然として要ります。現実で動かす前に試せる手段（現実とシミュレーションを往復する仕組みや学習型の world model（環境の動きを予測する内部モデル））で緩和できるとしています。これは安全が重要な場面でとくに大切です。</li>
+        <li>モバイルマニピュレータやヒューマノイドなど、より自由度の高い身体への拡張も今後の課題です。</li>
+      </ol>
+
+      <h2>まとめ</h2>
+      <p>INSIGHT は、ロボット制御モデル VLA を「基本動作」という小さな単位で言語指示によって操れるようにし、足りない動作を視覚言語モデルが見つけて自律的に集め、再学習で取り込むフレームワークです。これにより、目標スキルの人間デモなしで新しいスキルを獲得し、注ぎで 96%、14 動作をつなぐ長期タスクで 80% といった成功率を、もとのスキル性能を保ったまま達成しました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>VLA（Vision-Language-Action model）</dt>
+        <dd>視覚観測と言語指示をロボットの行動に対応づけるモデル。本論文ではベースに π₀.₅ を使用。</dd>
+
+        <dt>VLM（Vision-Language Model、視覚言語モデル）</dt>
+        <dd>画像と言語を扱うモデル。本論文では Gemini 3 Flash を 4 つの役割で使用。</dd>
+
+        <dt>プリミティブ（primitive、基本動作）</dt>
+        <dd>単一の主要な動きを担う、再利用可能な行動の断片。前提条件（precondition）と効果（effect）で特徴づけられる。</dd>
+
+        <dt>プリミティブ語彙 V ／ プリミティブギャップ</dt>
+        <dd>V は VLA が訓練済みの基本動作の集合。プリミティブギャップはプランが要求するのに V にない基本動作。</dd>
+
+        <dt>steerability（操作可能性）</dt>
+        <dd>言語指示によって基本動作の単位で VLA の挙動を制御できる性質。</dd>
+
+        <dt>データフライホイール（data flywheel）</dt>
+        <dd>欠落動作を特定し、自律的に試行し、成功例をラベル付け・保存して訓練データに統合する循環。</dd>
+
+        <dt>LoRA（Low-Rank Adaptation）</dt>
+        <dd>大規模モデルを低コストで微調整する手法。</dd>
+
+        <dt>進捗チャネル（progress channel）</dt>
+        <dd>行動出力に加えた学習型の値。各基本動作内で 0 から 1 へ進み、動作の終了判定に使う。</dd>
+
+        <dt>オラクル（oracle）／ 完了チェック</dt>
+        <dd>視覚言語モデルが画像を見比べて、タスクの成功や基本動作の完了を判定する役割。</dd>
+
+        <dt>OOD（out-of-distribution、分布外）</dt>
+        <dd>訓練データの分布から外れた状態。引き出し閉めでは、開いた引き出しが分布外の初期状態にあたる。</dd>
+
+        <dt>CaP-X</dt>
+        <dd>Code-as-Policies スタイルの比較ベースライン。視覚言語モデルがテスト時に動作を合成して新タスクを zero-shot で実行するが、学習ポリシーは拡張しない手法を代表する。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">InSight: Self-Guided Skill Acquisition via Steerable VLAs</p>
+      <a href="https://arxiv.org/abs/2606.24884" target="_blank" rel="noopener noreferrer">arXiv:2606.24884 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
