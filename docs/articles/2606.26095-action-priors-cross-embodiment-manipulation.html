@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ロボットに「まず動き方」を先に教える — 見る前に行動の事前知識を仕込む二段階VLA学習 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-24-2606.26095-action-priors-cross-embodiment-manipulation-cover.png"
+           alt="ロボット操作の VLA モデルで、視覚も言語も使わず行動軌跡だけからステージ1で「動き方の事前知識（action prior）」を学び、それをデコーダ再利用・潜在蒸留・履歴圧縮の3経路でステージ2の VLA 学習へ転移する二段階の枠組みを、13タスク平均成功率55.3%から68.0%への向上とともに示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">ロボットに「まず動き方」を先に教える — 見る前に行動の事前知識を仕込む二段階VLA学習</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-24</span>
+      <span>arXiv：2606.26095</span>
+      <span>カテゴリ：cs.RO / cs.AI / cs.CV</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ロボット操作の AI である VLA（Vision-Language-Action）モデルは、カメラ映像と言語指示から「次にどう動くか」を予測します。本研究は、その「動きを生み出す部分」を、視覚も言語も使わず<strong>行動の軌跡だけ</strong>で先に事前学習し、「動き方の事前知識（action prior）」を仕込んでから本体の学習に転移する二段階の枠組みを提案しました。これにより学習の収束が速くなり成功率も上がり、特にデータが乏しい実世界タスクで大きな改善が得られました（Abstract）。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">55.3% → 68.0%</span>
+          <span class="stat__label">13 タスク平均成功率<br>（フルモデルで +12.7 ポイント）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">35.0% → 66.3%</span>
+          <span class="stat__label">実世界 Franka アーム平均<br>（履歴を有効化した場合）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 1/8</span>
+          <span class="stat__label">ステージ2 初期 3,000 ステップの<br>予測損失（約 7.1 → 0.9）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 +10%</span>
+          <span class="stat__label">ステージ1 の追加学習コスト<br>（VLA 学習 約20時間に対する実時間増）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>近年のロボット操作 AI は、画像と文章を理解できる強力な基盤モデル（VLM）に「行動を出力する部分」を後付けする作りが主流です。VLM 側は大量のデータで鍛えられているため、視覚や言語の知識は豊富に持っています。しかし行動を出力する部分は、物理的な「動き方」をほぼゼロから学び始めなければなりません。</p>
+      <p>人間に例えると、本や写真で世界をよく知っているのに、手足の動かし方をまったく知らない状態に近いと言えます。本研究は、この「動き方の知識が最初から欠けている」ことが学習を遅らせる構造的なボトルネックだと指摘し、動き方だけを先に教えるという素直な解決策で、学習効率と成功率の両方を底上げできることを示した点に意義があります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>多くの VLA モデルは、基盤となる VLM に行動モジュールを後付けし、全体をまとめて一括で最適化します。この作りでは VLM 由来の視覚・言語の知識は引き継げますが、行動モジュールには明示的な「動きの事前知識（motion prior）」がありません（Abstract / I章）。</p>
+      <p>そのため学習の初期段階で、ロボットは二つの難しい課題を同時に解かされます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">課題 1</span>行動のダイナミクス発見</p>
+          <p>「時間とともに行動がどう変化するか」という行動のダイナミクスを、未学習の状態から発見しなければなりません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">課題 2</span>クロスモーダルな整合</p>
+          <p>「見たもの・指示・制御」を対応づける、視覚・言語・行動をまたいだ整合を同時に解く必要があります（Abstract）。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>未学習の行動モジュールが土台まで揺さぶる。</strong>行動を出力する部分が未学習のままだと、そこから基盤モデルへ逆向きに伝わる学習信号（勾配）が不安定で構造の悪いものになり、土台のモデルにまで干渉して収束を遅らせます（I章 / III章）。この問題は、形態の異なる複数のロボットを一つのモデルで扱う <strong>cross-embodiment（クロス・エンボディメント）</strong> の設定では、ロボットごとに動きの分布がばらばらになるため、いっそう深刻になります（Abstract）。</p>
+        </div>
+      </div>
+
+      <p>関連する既存手法もいくつかありますが、本研究とは狙いが異なります（II章）。たとえば映像のフレーム間変化から行動らしき表現を学ぶ手法（LAPA・IGOR・Moto など）は、「画像がどう変化したか」を捉えがちで、ロボットの運動分布そのものを直接モデル化しません。本研究は視覚も言語も使わず、行動軌跡そのものから物理的な運動の統計を切り出す点が新しいとされています（II-C章）。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>中核にあるのは「方策（policy）はまず動き方を学び、その後で見て行動することを学ぶべき」という発想です（Fig. 1）。これを二段階の学習として実装します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 250" role="img" aria-label="二段階VLA学習の全体像。ステージ1では視覚・言語を使わず行動軌跡だけからエンコーダ・デコーダ構成で「行動の事前知識（action prior）」を学び、ステージ2ではデコーダの再利用・潜在蒸留・履歴圧縮という3つの経路でその知識を本体の VLA 学習へ転移する。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="30" y="40" width="230" height="170" rx="8"></rect>
+          <text class="node-label" x="145" y="66" text-anchor="middle">ステージ1</text>
+          <text class="edge-label" x="145" y="88" text-anchor="middle">行動軌跡だけで学習</text>
+          <text class="edge-label" x="145" y="120" text-anchor="middle">（視覚・言語なし）</text>
+          <text class="edge-label" x="145" y="150" text-anchor="middle">action prior を獲得</text>
+          <text class="edge-label" x="145" y="178" text-anchor="middle">分布のモデル化＋構造の抽象化</text>
+
+          <path class="edge" d="M260,125 L320,125" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="290" y="115" text-anchor="middle">転移</text>
+
+          <rect class="node" x="320" y="40" width="410" height="170" rx="8"></rect>
+          <text class="node-label" x="525" y="66" text-anchor="middle">ステージ2：VLA 学習</text>
+
+          <rect class="node" x="345" y="86" width="360" height="32" rx="6"></rect>
+          <text class="edge-label" x="525" y="106" text-anchor="middle">① デコーダの再利用（行動出力部の初期値）</text>
+
+          <rect class="node" x="345" y="126" width="360" height="32" rx="6"></rect>
+          <text class="edge-label" x="525" y="146" text-anchor="middle">② 初期段階の潜在蒸留（徐々に緩める）</text>
+
+          <rect class="node" x="345" y="166" width="360" height="32" rx="6"></rect>
+          <text class="edge-label" x="525" y="186" text-anchor="middle">③ 履歴の圧縮（過去を1トークンに）</text>
+        </svg>
+        <figcaption class="diagram__caption">行動軌跡だけで「動き方の事前知識」を学ぶステージ1から、デコーダ再利用・潜在蒸留・履歴圧縮の3経路でステージ2の VLA 学習へ転移する。</figcaption>
+      </figure>
+
+      <h3>ステージ1：行動の事前知識を学ぶ（行動だけ、視覚・言語なし）</h3>
+      <p>まず、軽量な行動モジュール（エンコーダ・デコーダ構成）を、視覚や言語のトークンをいっさい処理せず、<strong>条件のない行動軌跡だけ</strong>から学習します（III-B / III-C章）。ここで言う「行動の事前知識（action prior）」は、二つの能力として定義されています（III-B章）。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">能力 1</span>分布のモデル化<br>（Distribution Modeling）</p>
+          <p>連続的な行動の分布をうまく当てはめる能力。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">能力 2</span>構造の抽象化<br>（Structural Abstraction）</p>
+          <p>時間的にひとまとまりの行動列（action chunk）を、意味のあるコンパクトな潜在表現に圧縮する能力。</p>
+        </div>
+      </div>
+
+      <p>仕組みとしては、ロボット自身の身体状態（固有受容状態）と行動を交互に並べた系列を入力にし、エンコーダがそれを一つの潜在ベクトルに要約します。デコーダ側は <strong>flow matching（フロー・マッチング）</strong> という生成手法を使い、その潜在ベクトルを手がかりに元の行動列を復元するように学習します。フロー・マッチングは、ガウス雑音と正解行動の間を線形に補間した経路を作り、その経路上の「速度場」を予測することで、連続的で多峰な（答えが一つに定まらない）行動分布を扱える手法です（III-C章）。</p>
+
+      <h3>ステージ2：行動の事前知識を活かして VLA を学習する</h3>
+      <p>ステージ1で得た事前知識を、三つの方法で本体の VLA 学習に転移します（I章 / III-D / III-E章）。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">経路 1</span>デコーダの再利用</p>
+          <p>ステージ1で学んだデコーダを、VLA の行動出力部の初期値としてそのまま使います（III-D章）。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">経路 2</span>初期段階の潜在蒸留（latent distillation）</p>
+          <p>正解の行動軌跡からステージ1のエンコーダが取り出す潜在表現を「教師」とし、VLM が予測する潜在表現をそれに近づけます。これにより VLM を、ステージ1で得た「動きを意識した潜在空間」へ誘導します。ただしこの制約は学習が進むにつれて徐々に緩め（重みを単調に減衰させ）、ある時点から先は通常の end-to-end 最適化に切り替えます。初期だけ誘導し、後半は自由にさせるという戦略です（III-D章）。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">経路 3</span>履歴の圧縮（history compression）</p>
+          <p>学習済みのエンコーダを「履歴の圧縮器」として再利用します。過去の状態・行動の系列を<strong>たった1つの潜在トークン</strong>に圧縮して VLM へ入力します。生の数値の軌跡をそのまま渡すのではなく、行動の事前知識で構造化した運動情報を1トークンで注入するため、計算の追加コストはわずかです（III-E章）。</p>
+        </li>
+      </ol>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価は cross-embodiment 設定で、3 つのベンチマークにまたがる計 13 タスクで行われました。具体的にはシミュレーションの LIBERO、ヒューマノイド GR1 を使う RoboCasa、そして実機の Franka アームです。すべてのモデルを混合データで同時に学習し、環境ごとの追加調整なしで評価しています（IV-A章）。</p>
+
+      <h3>13 タスク平均の成功率（Table III）</h3>
+      <p>行動・状態の事前知識を加えると成功率が段階的に向上し、フルモデルでは比較対象の手法を上回りました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>設定</th>
+            <th>13 タスク平均成功率</th>
+            <th>事前知識なし比</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>行動事前知識なし</td>
+            <td>55.3%</td>
+            <td>基準</td>
+          </tr>
+          <tr>
+            <td>＋行動・状態の事前知識</td>
+            <td>64.9%</td>
+            <td>+9.6 ポイント</td>
+          </tr>
+          <tr>
+            <td class="is-best">＋履歴トークン（フルモデル）</td>
+            <td class="is-best">68.0%</td>
+            <td class="is-best">+12.7 ポイント</td>
+          </tr>
+          <tr>
+            <td>GR00T（比較対象）</td>
+            <td>48.6%</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>π0.5（比較対象）</td>
+            <td>53.8%</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>実世界 Franka アーム：データが乏しいほど効果が大きい</h3>
+      <p>実世界の Franka アームでは、事前知識なし相当が 35.0% のところ、行動事前知識で 61.3%、履歴を有効化すると 66.3% に達しました（IV-B章）。特にデータの少ないタスクほど、行動事前知識の付加で大きく改善しています（Table III / IV-B章）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>実世界タスク</th>
+            <th>事前知識なし</th>
+            <th>＋行動事前知識</th>
+            <th class="is-best">＋履歴</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>コーラを掴む</td>
+            <td>5%</td>
+            <td>35%</td>
+            <td class="is-best">50%</td>
+          </tr>
+          <tr>
+            <td>カップを積む</td>
+            <td>25%</td>
+            <td>75%</td>
+            <td class="is-best">80%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>学習の立ち上がりの速さ（Fig. 5）</h3>
+      <p>ステージ2の最初の 3,000 ステップで、行動事前知識を使うと立ち上がりが大きく速くなりました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">約 1/8</span>
+          <span class="stat__label">初期の予測損失<br>（約 7.1 → 0.9）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 1/16</span>
+          <span class="stat__label">勾配の大きさ<br>（約 1,400 → 90）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 700 ステップ</span>
+          <span class="stat__label">検証 MAE が 0.1 到達まで<br>（事前知識なしは約 2,100 ステップ）</span>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>比較対象 π0.5 の興味深い挙動。</strong>π0.5 はシミュレーションでは競争力を保つものの、実機では崩れてしまいました。「カップを積む」タスクは全試行で失敗（最初のカップを十分に持ち上げられず2個目に衝突）、「コーラを掴む」では目標姿勢には到達するものの掴む動作を出さない、という失敗が観察されています（IV-B / IV-C章）。</p>
+        </div>
+      </div>
+
+      <p>学習コストの面でも、ステージ1の追加学習は 8 枚の H200 GPU で約 2 時間と軽量で、後続の VLA 学習（約 20 時間）に対しておよそ 10% の実時間増にとどまります（IV-D章）。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、VLA 学習の遅さの一因を「行動の事前知識が最初から欠けていること」という構造的なボトルネックとして特定し、それを軽量な前処理で補えると示した点にあります（I章）。実際、ステージ1のデータを増やすほどより強い事前知識が得られ、それが下流の VLA 性能に直接転移することも確認されています。論文の検証では、ステージ1のデータを約 4 倍に増やすと、ステージ1の 2 時間のコストを実時間に含めても、最終的に事前知識なしの手法を追い越せたと報告されています（IV-F章）。</p>
+
+      <p>限界として、著者自身が「ステージ1で使ったデータの規模はまだ控えめである」と述べています。そのうえで、より広く多様な行動データ（行動だけからなるロボットデータセット）で事前学習すれば、さらに強い事前知識を後続の VLA 学習へ転移できる、という方向性を示唆しています。これは断定ではなく今後の展望として提示されています（IV-F章）。</p>
+
+      <h2>まとめ</h2>
+      <p>本研究は、ロボット操作 AI に「見て行動する」よりも先に「動き方」を教えるという二段階の発想を、行動軌跡だけで学ぶ事前学習として具体化しました。学習済みの行動知識をデコーダの再利用・潜在蒸留・履歴圧縮という3つの経路で本体に転移することで、収束が速まり成功率が上がり、とりわけデータの乏しい実世界タスクで大きな効果が得られています。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>VLA（Vision-Language-Action model）</dt>
+        <dd>視覚観測と言語指示を条件に、未来の行動列を予測するロボット操作向けの行動生成モデル。</dd>
+
+        <dt>VLM（Vision-Language Model）</dt>
+        <dd>VLA の土台となる基盤視覚言語モデル。豊富な意味的知識を持つ。</dd>
+
+        <dt>action prior（行動事前知識）</dt>
+        <dd>視覚・言語に依存せず行動軌跡だけから学ぶ「動き方の事前知識」。分布のモデル化と構造の抽象化という2つの能力で定義される。</dd>
+
+        <dt>cross-embodiment（クロス・エンボディメント）</dt>
+        <dd>行動空間・状態空間・運動分布が異なる複数のロボット形態を、一つの方策で扱う設定。</dd>
+
+        <dt>action chunk</dt>
+        <dd>連続する複数ステップの行動列。</dd>
+
+        <dt>flow matching（フロー・マッチング）</dt>
+        <dd>連続的で多峰な行動分布を扱う生成手法。雑音と正解行動の間を補間する経路上の速度場を予測する。</dd>
+
+        <dt>latent distillation（潜在蒸留）</dt>
+        <dd>ステージ1エンコーダの潜在表現を教師とし、VLM の予測表現をそれに近づける蒸留。学習初期だけ強く効かせ、徐々に緩める。</dd>
+
+        <dt>history compression（履歴圧縮）</dt>
+        <dd>学習済みエンコーダで過去の状態・行動履歴を1トークンに圧縮し、VLM に低コストで時間的文脈を与える機構。</dd>
+
+        <dt>固有受容状態（proprioceptive state）</dt>
+        <dd>ロボット自身の身体構成（手先の姿勢や関節角度など）を表す状態。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Learning Action Priors for Cross-embodiment Robot Manipulation</p>
+      <a href="https://arxiv.org/abs/2606.26095" target="_blank" rel="noopener noreferrer">arXiv:2606.26095 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
