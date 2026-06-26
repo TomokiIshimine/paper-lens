@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2606.27377-danceopd-on-policy-generative-field-distillation.html">
+            <img src="assets/2026-06-25-2606.27377-danceopd-on-policy-generative-field-distillation-cover.png"
+                 alt="1 つの画像生成モデルに、テキストからの画像生成・局所編集・大域編集という互いに干渉しがちな複数の能力を、各能力を「速度場」とみなして on-policy 蒸留で統合する DanceOPD を、GEditBench 平均を最良 OPD ベースラインより 8.1% 改善・realism の報酬ギャップを 85.3% 埋めるといった成果とともに示したインフォグラフィック">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-06-25</p>
+          <h2 class="article-card__title">
+            <a href="articles/2606.27377-danceopd-on-policy-generative-field-distillation.html">1 つの画像生成モデルに複数の能力を共存させる — 能力を「速度場」とみなして蒸留する DanceOPD</a>
+          </h2>
+          <p class="article-card__summary">1 つの画像生成モデルに、テキストからの画像生成・局所編集・大域編集という、本来は互いに干渉しがちな複数の能力をまとめて持たせる手法 DanceOPD を提案した論文です。各能力を「速度場（velocity field）」という共通の形で捉え直し、学習中のモデル自身が生成した状態を教師が監督する on-policy 蒸留で統合します。能力組み合わせの問題を「どの場・どこで・どの状態で問い合わせるか」に整理し、目標場の曖昧性・状態分布の不一致・軌道クエリ相関という 3 つの落とし穴に 1 対 1 で対策を当てて、単純な速度 MSE で学習します。GEditBench 平均を最良 OPD ベースラインより 8.1%、競合合成より 16.1% 改善し、realism 吸収では student と teacher の報酬差の 85.3% を埋めるなど、狙った能力を強化しつつ土台の生成品質も保てることを示しました。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2606.26095-action-priors-cross-embodiment-manipulation.html">
             <img src="assets/2026-06-24-2606.26095-action-priors-cross-embodiment-manipulation-cover.png"
                  alt="ロボット操作の VLA モデルで、視覚も言語も使わず行動軌跡だけからステージ1で「動き方の事前知識（action prior）」を学び、それをデコーダ再利用・潜在蒸留・履歴圧縮の3経路でステージ2の VLA 学習へ転移する二段階の枠組みを、13タスク平均成功率55.3%から68.0%への向上とともに示したインフォグラフィック">

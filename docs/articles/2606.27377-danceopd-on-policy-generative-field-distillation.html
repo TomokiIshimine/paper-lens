@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>1 つの画像生成モデルに複数の能力を共存させる — 能力を「速度場」とみなして蒸留する DanceOPD — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-25-2606.27377-danceopd-on-policy-generative-field-distillation-cover.png"
+           alt="1 つの画像生成モデルに、テキストからの画像生成・局所編集・大域編集という互いに干渉しがちな複数の能力を、各能力を「速度場」とみなして on-policy 蒸留で統合する DanceOPD を、GEditBench 平均を最良 OPD ベースラインより 8.1% 改善・realism の報酬ギャップを 85.3% 埋めるといった成果とともに示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">1 つの画像生成モデルに複数の能力を共存させる — 能力を「速度場」とみなして蒸留する DanceOPD</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-25</span>
+      <span>arXiv：2606.27377</span>
+      <span>カテゴリ：cs.CV / cs.CL / cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>1 つの画像生成モデルに、テキストからの画像生成・局所的な画像編集・大域的な画像編集といった、本来は互いに干渉しがちな複数の能力をまとめて持たせる手法 DanceOPD を提案した論文です。各能力を「速度場（velocity field）」という共通の形で捉え直し、学習中のモデル自身が生成した状態を教師が監督する on-policy 蒸留（on-policy distillation）で統合します。狙った能力を強化しつつ、土台となる基礎的な生成品質も保てることを示しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">8.1%</span>
+          <span class="stat__label">GEditBench 平均改善<br>（最良の再現 OPD ベースライン比・設定 A）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">16.1%</span>
+          <span class="stat__label">GEditBench 平均改善<br>（最良の競合合成ベースライン比・設定 B）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">85.3%</span>
+          <span class="stat__label">埋めた報酬ギャップ<br>（realism 吸収・student と teacher の差・設定 C）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">15.2%</span>
+          <span class="stat__label">MSE 平均改善<br>（ハードルーティング vs soft mixing）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>近年の画像生成モデルは品質が大きく向上し、1 つのデプロイ済みモデルに対して複数の役割を同時にこなしてほしいという要求が強まっています。たとえば「文章から絵を描く」「画像の一部だけを直す」「画像全体の雰囲気や色を変える」といった操作を、別々のモデルに分けずに 1 つで担いたいというニーズです。</p>
+      <p>しかし、これらの能力は素朴にまとめると互いに足を引っ張り合います。論文ではこれを<strong>能力干渉（capability interference）</strong>と呼びます。編集の能力を鍛えると文章からの生成品質が落ちたり、局所編集と大域編集が「保存」と「変換」という正反対の方向に引っ張り合ったりするのです。この研究は、こうした能力同士の衝突を避けながら 1 つのモデルに能力を共存させる、実用的な道筋を示そうとしています。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>画像生成の主流の一つに <strong>flow matching</strong> と呼ばれる枠組みがあります。これは画像の生成を、ノイズから完成画像へ向かう連続的な「流れ」として捉える考え方です。この枠組みの上で、1 つのモデルに次の 3 種類の能力を同時に求めたいという場面が増えています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">能力 1</span>テキストからの画像生成<br>（T2I）</p>
+          <p>文章を入力に、見栄えの良い画像を自由に描く。自由な見栄えとプロンプト追従を重視します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">能力 2</span>局所編集<br>（local editing）</p>
+          <p>元画像をできるだけ保ったまま、一部だけを精密に変更する。「保存」を重視します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">能力 3</span>大域編集<br>（global editing）</p>
+          <p>スタイル・色・レイアウトなど、画像全体の見た目をあえて大きく変える。「変換」を重視します。</p>
+        </div>
+      </div>
+
+      <p>これらは要求の方向性が異なります。そのため素朴に同時に最適化すると、能力固有の教師信号が薄まり（capability dilution、能力希釈）、複数の目標を同時に学ぶときに勾配が衝突する（gradient conflict、勾配衝突）といった問題が起きます。論文は既存のやり方の限界を次のように整理しています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>既存手法の限界。</strong>データを混ぜて一緒に学習する方法は、能力ごとの教師信号を希釈し、勾配衝突を招きます。複数モデルの重みを混ぜ合わせる方法（weight merge）やアダプタの合成は、妥協的な中間解になりがちです。推論時にスコアを合成する方法は、合成がデプロイ済みモデルの外側で行われ、モデル本体には取り込まれません。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>能力を「速度場」とみなす視点</h3>
+      <p>DanceOPD の出発点は、各能力を「速度場（velocity field）」として捉え直すことです。速度場とは、生成の途中状態ごとに「次にどちらへどれだけ進むべきか」を示す矢印の場のようなものです。凍結した（学習で固定した）各能力モデル、たとえば T2I モデルや編集モデルを、共通の生成状態空間の上に張られた速度場とみなします。</p>
+      <p>この視点に立つと、能力を組み合わせる問題は「どの場を、どこで、どう参照するか」という問い合わせ（field-query）の問題に整理できます。具体的には、次の 3 つの選択に帰着します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 250" role="img" aria-label="能力を速度場とみなす field-query の定式化。能力組み合わせの問題は、どの能力場から教師信号を取るか、状態空間のどこで問い合わせるか、モデルの生成軌道のどの状態を教師付けに使うか、という3つの選択に帰着する。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="95" width="180" height="60" rx="8"></rect>
+          <text class="node-label" x="110" y="120" text-anchor="middle">能力の組み合わせ</text>
+          <text class="edge-label" x="110" y="142" text-anchor="middle">＝ field-query 問題</text>
+
+          <path class="edge" d="M200,125 L250,75" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M200,125 L250,125" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M200,125 L250,175" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="250" y="46" width="490" height="50" rx="8"></rect>
+          <text class="node-label" x="275" y="76" text-anchor="start">① どの場</text>
+          <text class="edge-label" x="380" y="76" text-anchor="start">どの能力の場から教師信号を取るか</text>
+
+          <rect class="node" x="250" y="100" width="490" height="50" rx="8"></rect>
+          <text class="node-label" x="275" y="130" text-anchor="start">② どこで</text>
+          <text class="edge-label" x="380" y="130" text-anchor="start">状態空間のどこで場に問い合わせるか</text>
+
+          <rect class="node" x="250" y="154" width="490" height="50" rx="8"></rect>
+          <text class="node-label" x="275" y="184" text-anchor="start">③ どの状態</text>
+          <text class="edge-label" x="380" y="184" text-anchor="start">生成軌道のどの状態を教師付けに使うか</text>
+        </svg>
+        <figcaption class="diagram__caption">各能力を速度場とみなすと、能力の組み合わせは「どの場・どこで・どの状態で問い合わせるか」という 3 つの選択に整理できる。</figcaption>
+      </figure>
+
+      <p>この捉え方は <strong>on-policy distillation（OPD、on-policy 蒸留）</strong> と自然に噛み合います。OPD とは、あらかじめ用意した固定の軌道ではなく、いま学習中のモデル（student）が実際に生成した状態を教師（teacher）が監督する蒸留のやり方です。</p>
+
+      <h3>3 つの課題と、それぞれへの対策</h3>
+      <p>論文は、上記の問い合わせから生じる 3 つの落とし穴を特定し、それぞれに 1 対 1 で対策を用意しています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>課題</th>
+            <th>何が起きるか</th>
+            <th>対策</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>目標場の曖昧性<br>（target-field ambiguity）</td>
+            <td>複数の場を 1 サンプル内で線形に混ぜると、どの能力にも対応しない中途半端な監督方向が生まれ、各能力の個性が失われる</td>
+            <td class="is-best">Hard-Routed<br>Sample-Wise Field Matching</td>
+          </tr>
+          <tr>
+            <td>状態分布の不一致<br>（state-distribution mismatch）</td>
+            <td>モデルが生成時には実際には通らない状態で場を評価すると、本番で訪れる状態への監督が足りず、学習と推論にずれが生じる</td>
+            <td class="is-best">On-Policy<br>Field Querying</td>
+          </tr>
+          <tr>
+            <td>軌道クエリ相関<br>（trajectory-query correlation）</td>
+            <td>同じ軌道の複数状態から密に目標を取ると、似た監督信号を重複して数え、勾配に偏りが生じる</td>
+            <td class="is-best">Semantic-Side<br>Single Query</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">対策 1</span>Hard-Routed Sample-Wise Field Matching</p>
+          <p>各サンプルをちょうど 1 つの能力場へ「ハードに」振り分け、その能力の個性を保ちます。振り分け確率は調整せず、既定では有効な能力に一様に割り当てます（2 つを組み合わせる場合は 1:1）。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">対策 2</span>On-Policy Field Querying</p>
+          <p>振り分けた場を、学習中のモデル自身が生成した状態で問い合わせ、モデルが実際に訪れる状態に監督を合わせます。このとき <strong>stop-gradient</strong>（勾配を切り離す操作）を使い、生成の手続き全体ではなく、その場での速度予測だけを微分します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">対策 3</span>Semantic-Side Single Query</p>
+          <p>1 サンプルにつき、ノイズの少ない（low-noise、low-t）側の問い合わせを 1 つだけ使います。ノイズの少ない状態は完成画像に近く、スタイル・美的特徴・局所属性・タスク固有の編集情報が集中しているため、能力固有の情報を効率よく取り出せます。</p>
+        </li>
+      </ol>
+
+      <h3>学習の目的と適用範囲</h3>
+      <p>学習の目的関数は、問い合わせた状態に対する単純な速度の二乗誤差（velocity MSE）です。決定論的な速度場に対する自然な回帰の形であり、凝った損失を持ち込みません。</p>
+      <p>さらに、推論時にだけ効く操作として知られる <strong>classifier-free guidance（CFG）</strong> も、guidance 付きの速度場とみなすことで、同じ MSE の目的でモデル内部に取り込めます。1 回の学習ステップは、次の 3 段にまとまります。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 150" role="img" aria-label="DanceOPD の 1 学習ステップ。(A) 1 つの能力場へ振り分け、(B) モデル自身の軌道のノイズの少ない側の状態で問い合わせ、(C) その場での速度を MSE で合わせる、という手順で進む。">
+          <defs>
+            <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="45" width="200" height="60" rx="8"></rect>
+          <text class="node-label" x="120" y="72" text-anchor="middle">(A) 振り分け</text>
+          <text class="edge-label" x="120" y="94" text-anchor="middle">1 つの能力場へハードに</text>
+
+          <path class="edge" d="M220,75 L270,75" marker-end="url(#arrow2)"></path>
+
+          <rect class="node" x="270" y="45" width="220" height="60" rx="8"></rect>
+          <text class="node-label" x="380" y="72" text-anchor="middle">(B) 問い合わせ</text>
+          <text class="edge-label" x="380" y="94" text-anchor="middle">自分の軌道の low-noise 側</text>
+
+          <path class="edge" d="M490,75 L540,75" marker-end="url(#arrow2)"></path>
+
+          <rect class="node" x="540" y="45" width="200" height="60" rx="8"></rect>
+          <text class="node-label" x="640" y="72" text-anchor="middle">(C) 合わせる</text>
+          <text class="edge-label" x="640" y="94" text-anchor="middle">速度 MSE で回帰</text>
+        </svg>
+        <figcaption class="diagram__caption">1 学習ステップ：(A) 1 つの能力場へ振り分け → (B) モデル自身の軌道のノイズの少ない側で問い合わせ → (C) その場での速度を MSE で合わせる。</figcaption>
+      </figure>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価では、主に Z-Image というモデルを能力場を統合する土台（student）として使い、一部の設定では SD3.5-M を使っています。評価指標には、一般的な T2I 能力に <strong>GenEval</strong>、一般的な編集能力に <strong>GEditBench（GEditBench-EN）</strong> を用いています。比較対象は、ジョイント学習・重みマージ・オフポリシー蒸留・DiffusionOPD・Flow-OPD です。次の 4 つの設定が検証されました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>設定</th>
+            <th>内容</th>
+            <th>主な結果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>(A)</td>
+            <td>T2I と編集の組み合わせ</td>
+            <td>GEditBench 平均を最良 OPD ベースライン比 <strong>8.1%</strong>・編集元比 8.5% 改善。GenEval overall は T2I 元比 2.0%・最強合成比 1.6% 改善（GEdit 平均 5.347 / GenEval 0.849）</td>
+          </tr>
+          <tr>
+            <td>(B)</td>
+            <td>局所編集と大域編集の組み合わせ</td>
+            <td>GEditBench 平均を最良の競合合成比 <strong>16.1%</strong>・局所編集元比 7.9% 改善。GenEval overall は最強合成比 2.5% 改善（GEdit 平均 5.498 / GenEval 0.848）</td>
+          </tr>
+          <tr>
+            <td>(C)</td>
+            <td>realism の場の吸収<br>（土台 T2I 能力の保存付き）</td>
+            <td>realism 報酬をオフポリシー蒸留比 9.9% 改善し、student と teacher の差の <strong>85.3%</strong> を埋めた。T2I は土台比 7.6% 向上、オフポリシー蒸留と 0.1% 以内で一致</td>
+          </tr>
+          <tr>
+            <td>(D)</td>
+            <td>CFG の吸収</td>
+            <td>吸収側 α と推論側 β が乗算的（およそ αβ）に効く。最良合成は GEditBench 平均を学習時のみ吸収比 7.6%・評価時のみ CFG 比 1.4% 改善</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>CFG 吸収の注意点。</strong>設定 (D) では、吸収した guidance（強さ α）と推論時の guidance（強さ β）が独立ではなく、実効的な強さがおよそ αβ になります。そのため、外部 CFG の既定の流儀でそのまま評価すると効かせすぎになり得ます。</p>
+        </div>
+      </div>
+
+      <h3>設計選択の妥当性（アブレーション）</h3>
+      <p>設計選択の妥当性も多角的に検証されています。検証項目ごとに整理すると次の通りです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>検証項目</th>
+            <th>既定の選択</th>
+            <th>比較対象に対する改善</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>ルーティング</td>
+            <td>1 場へのハードルーティング</td>
+            <td class="is-best">soft mixing 比 MSE 平均 15.2% 改善</td>
+          </tr>
+          <tr>
+            <td>問い合わせの位置</td>
+            <td>ノイズの少ない状態で問い合わせ</td>
+            <td class="is-best">中程度ノイズ比 23.7% / 多ノイズ比 19.5% 改善（GEditBench 平均）</td>
+          </tr>
+          <tr>
+            <td>問い合わせの数</td>
+            <td>1 サンプル 1 回</td>
+            <td class="is-best">2 / 4 / 8 / 16 回比それぞれ 16.6% / 7.9% / 10.2% / 12.2% 改善（GEditBench 平均）</td>
+          </tr>
+          <tr>
+            <td>目的関数</td>
+            <td>単純な速度 MSE</td>
+            <td>時刻重み付き MSE・DMD-EMA 混成・consistency matching より安定して上回る</td>
+          </tr>
+          <tr>
+            <td>初期化</td>
+            <td>最も関連する能力が強いチェックポイント</td>
+            <td>他の初期化より最良</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>意義と限界</h2>
+      <p>DanceOPD は、各能力を共通の生成状態空間上の速度場とみなし、能力の組み合わせを「場への問い合わせ」の問題として定式化しました。3 つの落とし穴（目標場の曖昧性・状態分布の不一致・軌道クエリ相関）に対し、1 場へのハードな振り分け・モデル自身が訪れる状態での問い合わせ・ノイズの少ない側の 1 問い合わせで対応し、単純な速度 MSE で学習します。ジョイント学習・パラメータのマージ・外部でのスコア合成に頼らずに能力場を組み合わせ・吸収できる点が特徴です。著者らは、この on-policy generative field distillation が、複数能力を持つ視覚生成をスケールさせる実用的な道筋になると述べています。</p>
+      <p>一方で、論文は次の限界も認めています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 1</span>共有される場の前提<br>（Shared Field Support）</p>
+          <p>凍結した各能力モデルが、共通の生成状態空間の上で互換性のある速度場を提供できることを前提とします。本実験では同じ系統のバックボーン・潜在表現・スケジューラの流儀・速度の表し方から構築しているため成立していますが、この前提が崩れる場合には適用が難しくなります。なお著者らは、この種の要件は DanceOPD に固有ではなく、他の OPD 系手法も互換な表現を必要とすると補足しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 2</span>事前定義された振り分け<br>（Predefined Routing）</p>
+          <p>能力のまとまりをあらかじめ決め、サンプル単位でハードに振り分けます。タスクの境界が曖昧な場合や、1 つのプロンプトが複数の能力を同時に求める場合には、この前提が弱まります。自然な発展として、モデルの挙動や編集の成功度合いに応じて振り分けを決める verifier や報酬モデルの導入が挙げられています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>DanceOPD は、画像生成の複数能力を「速度場」という共通の言葉で捉え直し、モデル自身が生成した状態で 1 つの能力場に問い合わせて単純な MSE で学習することで、能力同士の干渉を避けながら統合する手法です。実験では、狙った能力を強化しつつ土台の生成品質を保てることが、複数の設定と豊富なアブレーションで示されました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>flow matching / 速度場（velocity field）</dt>
+        <dd>画像生成を、状態ごとに「次に進む向きと量」を与える速度場の学習として捉える枠組み。各能力モデルを共通状態空間上の速度の監督源として扱える。</dd>
+
+        <dt>on-policy distillation（OPD、on-policy 蒸留）</dt>
+        <dd>固定の軌道ではなく、学習中のモデルが実際に生成した状態を教師が監督する蒸留の方式。学習時と推論時の状態のずれに対処する。</dd>
+
+        <dt>能力合成（capability composition）</dt>
+        <dd>1 つのデプロイ済みモデルが、強化したい能力（target）を伸ばしつつ、保つべき基礎能力（anchor）を保存すること。</dd>
+
+        <dt>能力干渉 / 能力希釈（capability interference / capability dilution）</dt>
+        <dd>能力同士が衝突して品質が落ちる現象、およびジョイント学習が監督信号を平均化して薄めてしまう現象。</dd>
+
+        <dt>hard routing と soft mixing</dt>
+        <dd>各サンプルを 1 つの場へ振り分けるのが hard routing、全教師の場を 1 つの目標に平均するのが soft mixing。後者はサンプルごとの能力の個性を失う。</dd>
+
+        <dt>stop-gradient</dt>
+        <dd>問い合わせ状態を勾配計算から切り離す操作。生成の手続き全体ではなく、その場の速度予測だけを微分させる。</dd>
+
+        <dt>low-noise（low-t）クエリ</dt>
+        <dd>軌道のノイズの少ない（完成画像に近い）側での問い合わせ。スタイルや編集情報が集中し、能力固有の監督を与えやすい。</dd>
+
+        <dt>classifier-free guidance（CFG）の吸収</dt>
+        <dd>推論時にだけ効く guidance を速度場とみなしてモデル内部に取り込む設定。吸収側 α と推論側 β が乗算的（αβ）に効く点が評価上の注意点。</dd>
+
+        <dt>GenEval / GEditBench(-EN)</dt>
+        <dd>それぞれ一般的な text-to-image 生成能力・画像編集能力を測る評価ベンチマーク。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">DanceOPD: On-Policy Generative Field Distillation</p>
+      <a href="https://arxiv.org/abs/2606.27377" target="_blank" rel="noopener noreferrer">arXiv:2606.27377 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
