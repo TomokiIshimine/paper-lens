@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>正解がなくても LLM は強くなる — 「実行して比べる」だけで鍛える強化学習フレームワーク RiVER — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-25-2606.27369-river-rl-without-ground-truth-cover.png"
+           alt="正解（ground-truth）を一切使わず、候補プログラムを実行して目的スコアで相対比較するだけで LLM を強化学習で鍛えるフレームワーク RiVER を、インスタンス単位ランキング・勝者重視の整形・GRPO 更新の 3 段の報酬設計と、ALE rating rank を最大 9.4% 改善し正解照合ベンチへ最大 +3.5% 転移するという成果とともに示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">正解がなくても LLM は強くなる — 「実行して比べる」だけで鍛える強化学習フレームワーク RiVER</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-25</span>
+      <span>arXiv：2606.27369</span>
+      <span>カテゴリ：cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>大規模言語モデル（LLM）を強化学習で鍛えるとき、これまでは「正解と一致したかどうか」で報酬を与えるのが主流でした。この論文は、正解（ground-truth solution）がそもそも存在しない／未知の最適化タスクでも、候補を実際に実行してスコアで比べるだけで LLM を訓練できる枠組み <strong>RiVER（Ranking-induced VERifiable framework）</strong> を提案します。正解を一切使わずスコアベースのタスクだけで訓練したにもかかわらず、正解照合型のコーディングベンチマーク（LiveCodeBench, USACO）にも性能が転移することを示しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">8.9%</span>
+          <span class="stat__label">ALE rating rank 改善<br>（Qwen3-8B・最適化ベンチ）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">9.4%</span>
+          <span class="stat__label">ALE rating rank 改善<br>（GLM-Z1-9B-0414・最適化ベンチ）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+2.4%</span>
+          <span class="stat__label">正解照合ベンチへの転移<br>（Qwen3-8B・LCB＋USACO 平均）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+3.5%</span>
+          <span class="stat__label">正解照合ベンチへの転移<br>（GLM-Z1-9B-0414・LCB＋USACO 平均）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>近年の LLM の推論能力向上を支えてきたのが、<strong>RLVR（Reinforcement Learning with Verifiable Rewards）</strong>と呼ばれる強化学習の枠組みです。これは「検証可能な報酬」、つまり機械的に正誤を判定できる信号でモデルを最適化するアプローチです。</p>
+      <p>ただしその支配的な形は「答えの照合（answer matching）」に強く結びついています。モデルの出力が決められた正解と一致したときだけ報酬を与える、いわば二値（binary）の正誤判定です。この方式は、単一の正解が決まっている問題には有効ですが、そうでない問題には使いにくいという弱点があります。</p>
+      <p>世の中には、答えが一つに決まらない問題が数多くあります。アルゴリズム設計・最適化・計画立案などがその例で、実行可能な解が無数にあり、それぞれ品質が異なり、最適解は未知だったり計算困難（NP-hard）だったりします。こうしたタスクで LLM をどう鍛えるかは、応用範囲を広げるうえで重要な課題でした。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>著者らが注目したのは、答えが一つに決まらないタスクも「広い意味では検証可能」だという点です。候補となる解を実際に実行し、エラーなく動くか（実行可能性）を確認し、目的関数のスコアで互いに<strong>比較</strong>できるからです。正解と照合しなくても、「どちらがより良いか」は判定できます。</p>
+      <p>では、この目的スコアをそのまま強化学習の報酬に使えばよいかというと、話は単純ではありません。著者らは、連続値のスコアを素朴に報酬として使うと生じる 2 つの問題を特定しました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">問題 1</span>スケール支配<br>（scale dominance）</p>
+          <p>問題インスタンスごとにスコアの数値の大きさがそろっていません。インスタンスのサイズ、グラフ構造、重みのスケール、外れ値などで値が大きく変わります。生のスコアを横断的に集計すると、たまたま数値レンジの大きいインスタンスが報酬信号を独占してしまいます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">問題 2</span>頻度支配<br>（frequency dominance）</p>
+          <p>モデルが生成する候補群（ロールアウト）には、同じありふれた解法のわずかな変種が何度も含まれがちです。サンプル単位で報酬（credit）を割り当てると、何度も出てくる平凡な解のほうが、稀にしか見つからない強い解よりも大きな勾配（学習の力）を集めてしまいます。</p>
+        </div>
+      </div>
+
+      <p>この 2 つを放置したまま生スコアで訓練すると、最適化向けのスコアは上がっても、汎用的なコーディング能力には結びつかない、というのが既存手法の限界でした。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>RiVER は、正解なしで実行可能な最適化タスクから LLM を訓練するフレームワークです。土台には、価値モデルを使わず群（グループ）内サンプルの相対的な報酬から優劣を推定する強化学習アルゴリズム <strong>GRPO（Group Relative Policy Optimization）</strong> を用い、その報酬部分だけを「順位に基づく・勝者重視」の報酬に置き換えます。</p>
+
+      <h3>訓練タスクの組み立て方</h3>
+      <p>各訓練タスクは、問題プロンプト、決定的な評価器、そして隠れたテストインスタンスの集合からなります。モデルは推論を含む応答を生成し、最後に完全な実行可能プログラムを出力します。このプログラムを各インスタンスで実行し、次の信号を得ます。</p>
+
+      <ul>
+        <li>クラッシュ・タイムアウト・制約違反・不正な形式なら「無効（invalid）」</li>
+        <li>正しく動けばその目的スコア</li>
+      </ul>
+
+      <p>スコアは「大きいほど良い（larger-is-better）」に統一し、最小化問題は値の符号を反転させて扱います。一つのプロンプトに対して複数の候補応答（論文では群サイズ G 個）をサンプルし、すべて同じ隠れインスタンスで実行します。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>教師信号の正体。</strong>ここで重要なのは、教師信号が「参照解と一致するか」ではなく「同じインスタンス上で、他の候補プログラムより良い出力を出せるか」である点です。正解を持たず、候補同士の相対比較だけで学習が進みます。</p>
+        </div>
+      </div>
+
+      <h3>順位に基づく勝者重視の報酬</h3>
+      <p>RiVER の中核は、報酬を次の 3 段階で組み立てるところにあります。それぞれが、前述の「スケール支配」「頻度支配」への対処に対応しています。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 170" role="img" aria-label="RiVER の報酬を作る 3 段のパイプライン。隠れインスタンスごとに候補を目的スコアで順位付けし（インスタンス単位ランキング）、無効に -1・最良に 1・その他に -0.5〜0.5 の段階的フィードバックを与え（勝者重視の整形）、インスタンスにわたって平均して GRPO の advantage として更新する（集約と GRPO 更新）。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="14" y="50" width="220" height="68" rx="8"></rect>
+          <text class="node-label" x="124" y="78" text-anchor="middle">① インスタンス単位</text>
+          <text class="node-label" x="124" y="96" text-anchor="middle">ランキング</text>
+          <text class="edge-label" x="124" y="114" text-anchor="middle">スコアの大きさに不変</text>
+
+          <path class="edge" d="M234,84 L268,84" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="268" y="50" width="220" height="68" rx="8"></rect>
+          <text class="node-label" x="378" y="78" text-anchor="middle">② 勝者重視の整形</text>
+          <text class="edge-label" x="378" y="98" text-anchor="middle">無効 -1／最良 1</text>
+          <text class="edge-label" x="378" y="114" text-anchor="middle">非勝者 -0.5〜0.5</text>
+
+          <path class="edge" d="M488,84 L522,84" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="522" y="50" width="224" height="68" rx="8"></rect>
+          <text class="node-label" x="634" y="78" text-anchor="middle">③ 集約と</text>
+          <text class="node-label" x="634" y="96" text-anchor="middle">GRPO 更新</text>
+          <text class="edge-label" x="634" y="114" text-anchor="middle">平均を advantage に</text>
+        </svg>
+        <figcaption class="diagram__caption">RiVER の報酬は 3 段で組み立てる：① 各インスタンス内で順位付け（スケール支配に対処）→ ② 勝者を際立たせつつ非勝者の情報も残す整形 → ③ インスタンス平均を GRPO の advantage として用いる。</figcaption>
+      </figure>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">段階 1</span>インスタンス単位ランキング（instance-wise ranking）</p>
+          <p>隠れインスタンスごとに、候補を目的スコアで順位付けします。無効な候補は別扱いで最低の報酬とします。同点の候補には中央順位（average-tie ranking / midrank）を割り当て、同じ解を重複して過大評価しないようにします。順位付けを各インスタンス内で行うため、インスタンスごとのスコアの大きさの違いに影響されません（順位はスコアの単調変換に対して不変）。これが<strong>スケール支配への対処</strong>になります。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">段階 2</span>勝者重視の整形（winner-heavy shaping）</p>
+          <p>その上で報酬を整形します。無効な解には -1、最良の妥当な解には 1、それ以外の妥当な非勝者には -0.5〜0.5 の範囲に収まる段階的なフィードバックを与えます。最良の候補とその他のあいだに明確な差（マージン）を作りつつ、勝者ではない解にも含まれる有益な情報を捨てずに残します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">段階 3</span>集約と GRPO 更新（aggregation and GRPO update）</p>
+          <p>整形した報酬を隠れインスタンスにわたって平均し、それを GRPO のサンプル単位の advantage（優位度）として用います。GRPO のクリップ目的や KL 正則化はそのままで、報酬だけを差し替えます。平均した報酬はもともと有界なので、追加の標準化は行いません。</p>
+        </li>
+      </ol>
+
+      <p>著者らは、こうして得られる RiVER の報酬が次の 3 つの性質を持つと整理しています。正解を必要としない（ground-truth-free）、同一インスタンス内でのみ順位付けするためスケールに不変（scale-invariant）、そして勝者を重視しつつも二値ではない（最良候補には分離した報酬、妥当な非勝者には段階的フィードバック）という点です。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>著者らは、AtCoder Heuristic Contest（AHC）というスコアベースのヒューリスティックコンテストの問題で訓練を行いました。評価用の ALE-Bench と重複しないよう選んだ 12 タスクを使い、各候補プログラムを 10 個の隠れテストインスタンスで評価しています。バックボーンには Qwen3-8B と GLM-Z1-9B-0414 という 2 つのオープンソースの推論モデルを用いました。</p>
+      <p>評価は 2 種類で行われます。一つは正解のない最適化タスクのベンチ ALE-Bench（指標は Rating と、人間参加者中のパーセンタイル順位 Rank %。Rank % は低いほど良い）。もう一つは、厳密なテストケースの正誤で判定する正解照合型のベンチ LiveCodeBench（v5/v6）と USACO です。すべて 3 回の独立実行の平均 Pass@1 で報告されています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">+142</span>
+          <span class="stat__label">ALE Rating 向上<br>（Qwen3-8B：845 → 987）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+157</span>
+          <span class="stat__label">ALE Rating 向上<br>（GLM-Z1-9B-0414：805 → 962）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">5 / 5</span>
+          <span class="stat__label">改善した評価指標数<br>（Qwen3-8B で全指標改善は RiVER のみ）</span>
+        </div>
+      </div>
+
+      <p>主な結果は次のとおりです。</p>
+      <ul>
+        <li><strong>最適化ベンチでの改善</strong>：RiVER は ALE の rating rank を Qwen3-8B で 8.9%、GLM-Z1-9B-0414 で 9.4% 改善しました。絶対点で見ると、ALE Rating は Qwen3-8B で 845 から 987（+142 点）、GLM-Z1-9B-0414 で 805 から 962（+157 点）に向上しています。</li>
+        <li><strong>正解照合ベンチへの転移</strong>：正解を一切使わずスコアベースのタスクだけで訓練したにもかかわらず、LiveCodeBench と USACO で平均して Qwen3-8B で +2.4%、GLM-Z1-9B-0414 で +3.5% の絶対改善が得られました。</li>
+      </ul>
+
+      <p>ベースラインとの対比も整理されています。生の実行スコアで訓練したベースライン（Raw-GRPO など）は ALE Rating を上げるものの、正解照合ベンチには転移しませんでした。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法</th>
+            <th>最適化ベンチ（ALE Rating）</th>
+            <th>正解照合ベンチへの転移</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="is-best">RiVER（提案手法）</td>
+            <td class="is-best">向上（Qwen3-8B +142／GLM +157）</td>
+            <td class="is-best">転移（Qwen3-8B で 5 指標すべて改善）</td>
+          </tr>
+          <tr>
+            <td>生スコア系（Raw-GRPO 等）</td>
+            <td>向上する</td>
+            <td>転移せず（強い Qwen3-8B では横ばいか低下）</td>
+          </tr>
+          <tr>
+            <td>インスタンス単位ランキングのみ等</td>
+            <td>一定の改善</td>
+            <td>少なくとも 1 つの正解照合ベンチで性能が低下</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>難易度別に見ると、RiVER の利得は medium・hard の問題で最も大きくなりました。たとえば LiveCodeBench v5 では、Qwen3-8B で medium が +5.0%、hard が +1.4%、GLM-Z1-9B では +7.0%・+5.7% の改善です。easy はベースモデルがすでに 93% を超えているため、変動は小さくなっています。</p>
+      <p>著者らはアブレーション（要素を取り除く検証）も行い、勝者重視の整形（winner-anchored shaping）を加えると、順位に均等間隔の報酬を割り当てるだけの Rank-uniform に比べ、ALE が Qwen3-8B で +27 点、GLM-Z1-9B で +31 点さらに向上し、LiveCodeBench と USACO を平均 2.4% 改善することを確認しています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、「検証可能性」の捉え方を広げた点にあります。厳密な答え照合だけでなく、候補解を実行可能性でチェックし目的値で比較できる広いクラスの環境を、有効な訓練環境として使えると示しました。最適化問題は評価対象としてだけでなく、一般的な推論・コーディング能力を伸ばすための訓練環境にもなる、というわけです。</p>
+      <p>著者らはなぜスコアベースのタスクが有用なのかについても考察しています。単に数値フィードバックが多いからではなく、モデルが生成したサンプル同士のあいだに、より豊かな相対的な区別を生み出せるからだと論じます。これを <strong>Group-relative feedback resolution（GFR、群相対フィードバック解像度）</strong> という量で定式化し、解像度が高いほど、群内のサンプルがすべて同じフィードバック値につぶれてしまう「フィードバック衝突（feedback collision）」が起きにくくなることを示しました。二値の検証器は、ポリシーが弱いときも強いときも解像度が限られ、群内の相対情報に乏しいというわけです。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>豊かさは校正と組み合わせる必要がある。</strong>フィードバックの解像度が高いだけでは報酬信号として信頼できません。アブレーションの結果は、濃いスコアフィードバックが最適化志向の rating を一貫して上げる一方、正解照合ベンチへの転移は同じ程度には及ばないことを示しており、豊かさ（richness）は校正（calibration）と組み合わせる必要がある、と著者らは述べています。RiVER は、インスタンス単位の順位付けと勝者重視の整形によってこの校正を与えている、という位置づけです。</p>
+        </div>
+      </div>
+
+      <p>そのうえで、正解なしの RLVR 環境を作る実用的な基準として、「検証可能であり、かつモデルのサンプルを複数のフィードバックレベルに分離できること」を挙げています。スコアベースの最適化タスクはこの基準を自然に満たすとしています。</p>
+
+      <h2>まとめ</h2>
+      <p>RiVER は、正解や最適解が得られない設定でも、候補を実行してスコアで比べるだけで LLM を強化学習で鍛えられることを示したフレームワークです。鍵となるのは、スケールに左右されない順位付けと、勝者を際立たせつつ非勝者の情報も残す報酬設計でした。最適化タスクだけで訓練しても正解照合型のコーディングベンチに性能が転移したことは、答え照合を超えた「相対的・実行可能・正解なし」の検証が、LLM のスケーラブルな強化学習の有望な方向であることを示唆しています。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>RLVR（Reinforcement Learning with Verifiable Rewards）</dt>
+        <dd>機械的に正誤を判定できる信号でモデル出力を最適化する強化学習の枠組み。本論文は、その支配的形態が「答えの照合」に依存する点を限界として指摘します。</dd>
+
+        <dt>ground-truth-free（正解なし）</dt>
+        <dd>参照プログラム・正解出力・認定された最適解を使わない設定。RiVER の中核となる前提です。</dd>
+
+        <dt>score-based optimization tasks（スコアベース最適化タスク）</dt>
+        <dd>単一の正解ではなく、実行して目的関数で品質を比較できる開放的な最適化タスク。AHC などが該当します。</dd>
+
+        <dt>GRPO（Group Relative Policy Optimization）</dt>
+        <dd>価値モデルを使わず、群内サンプルの相対報酬から優位度を推定する強化学習アルゴリズム。RiVER はこの上に独自の報酬を載せます。</dd>
+
+        <dt>scale dominance（スケール支配）</dt>
+        <dd>インスタンスごとにスコアの数値スケールがそろわず、レンジの大きいインスタンスが報酬信号を独占してしまう現象。</dd>
+
+        <dt>frequency dominance（頻度支配）</dt>
+        <dd>何度もサンプルされる平凡な解が、稀だがより強い解より大きな学習の力を集めてしまう不整合。</dd>
+
+        <dt>instance-wise ranking（インスタンス単位ランキング）</dt>
+        <dd>隠れインスタンスごとに候補を目的スコアで順位付けする操作。スコアの大きさに影響されません。</dd>
+
+        <dt>winner-heavy shaping（勝者重視の整形）</dt>
+        <dd>最良候補に分離した報酬を与え、妥当な非勝者には有界な段階的フィードバックを与える報酬の整形。</dd>
+
+        <dt>ALE-Bench</dt>
+        <dd>AHC 問題から構築された、正解のない最適化志向のアルゴリズムタスクのベンチ。Rating と Rank %（パーセンタイル、低いほど良い）で評価します。</dd>
+
+        <dt>LiveCodeBench（v5/v6）・USACO</dt>
+        <dd>厳密なテストケースの正誤で判定する正解照合型のコーディングベンチ。Pass@1 で評価します。</dd>
+
+        <dt>Group-relative feedback resolution（GFR）</dt>
+        <dd>モデルのサンプル群がフィードバック値でどれだけ区別されるかを測る量。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Reinforcement Learning without Ground-Truth Solutions can Improve LLMs</p>
+      <a href="https://arxiv.org/abs/2606.27369" target="_blank" rel="noopener noreferrer">arXiv:2606.27369 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

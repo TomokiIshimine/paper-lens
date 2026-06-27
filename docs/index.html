@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2606.27369-river-rl-without-ground-truth.html">
+            <img src="assets/2026-06-25-2606.27369-river-rl-without-ground-truth-cover.png"
+                 alt="正解（ground-truth）を一切使わず、候補プログラムを実行して目的スコアで相対比較するだけで LLM を強化学習で鍛えるフレームワーク RiVER を、インスタンス単位ランキング・勝者重視の整形・GRPO 更新の 3 段の報酬設計と、ALE rating rank を最大 9.4% 改善し正解照合ベンチへ最大 +3.5% 転移するという成果とともに示したインフォグラフィック">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-06-25</p>
+          <h2 class="article-card__title">
+            <a href="articles/2606.27369-river-rl-without-ground-truth.html">正解がなくても LLM は強くなる — 「実行して比べる」だけで鍛える強化学習フレームワーク RiVER</a>
+          </h2>
+          <p class="article-card__summary">LLM を強化学習で鍛えるとき、これまでは「正解と一致したか」で報酬を与えるのが主流でした。この論文は、正解（ground-truth）がそもそも存在しない／未知の最適化タスクでも、候補を実際に実行してスコアで比べるだけで LLM を訓練できる枠組み RiVER（Ranking-induced VERifiable framework）を提案します。連続スコアを素朴に報酬にすると、レンジの大きいインスタンスが信号を独占する「スケール支配」と、平凡な解が勾配を集める「頻度支配」が起きます。RiVER は、各インスタンス内での順位付け・勝者を際立たせつつ非勝者の情報も残す整形・GRPO 更新という 3 段の報酬でこれに対処します。正解を一切使わずスコアベースのタスクだけで訓練したにもかかわらず、ALE の rating rank を最大 9.4% 改善し、正解照合型のコーディングベンチ（LiveCodeBench, USACO）にも平均 +2.4〜+3.5% 性能が転移することを示しました。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2606.27377-danceopd-on-policy-generative-field-distillation.html">
             <img src="assets/2026-06-25-2606.27377-danceopd-on-policy-generative-field-distillation-cover.png"
                  alt="1 つの画像生成モデルに、テキストからの画像生成・局所編集・大域編集という互いに干渉しがちな複数の能力を、各能力を「速度場」とみなして on-policy 蒸留で統合する DanceOPD を、GEditBench 平均を最良 OPD ベースラインより 8.1% 改善・realism の報酬ギャップを 85.3% 埋めるといった成果とともに示したインフォグラフィック">
