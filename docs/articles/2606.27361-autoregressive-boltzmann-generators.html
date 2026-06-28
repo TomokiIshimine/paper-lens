@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>分子サンプリングを「正規化フロー」から「自己回帰」に置き換える — LLM 風に賢くなる Boltzmann Generator — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-25-2606.27361-autoregressive-boltzmann-generators-cover.png"
+           alt="分子サンプリングの枠組み Boltzmann Generator の中核生成モデルを、長く主流だった正規化フローから LLM 風の自己回帰モデルへ置き換える ARBG を、座標を一様ビンのカテゴリ分布として 1 つずつ予測する中核手法・生成途中で無理な構造を枝刈りする Twisted SMC・転移版 ROBIN が 8 残基系のエネルギー誤差を従来 SOTA より 60% 超削減するという成果とともに示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">分子サンプリングを「正規化フロー」から「自己回帰」に置き換える — LLM 風に賢くなる Boltzmann Generator</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-25</span>
+      <span>arXiv：2606.27361</span>
+      <span>カテゴリ：cs.LG / cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>分子が自然に取りやすい立体構造を効率よく生成する「Boltzmann Generator（ボルツマン生成器）」という枠組みがあります。この論文は、その内部で長く主流だった「正規化フロー（normalizing flow）」という生成モデルを、大規模言語モデル（LLM）でおなじみの「自己回帰（autoregressive）」モデルに置き換えた新しい手法 <strong>ARBG</strong> を提案しました。フロー特有の制約や高い計算コストを避けつつ、LLM 的なスケーリング（モデルや計算を増やすほど賢くなる性質）と生成途中での介入を可能にし、ベンチマークでフロー系の手法を上回りました。特に未知のペプチドにも対応する転移版モデル <strong>ROBIN</strong> は、8 残基系のエネルギー誤差を従来の最高性能手法より 60% 超削減しています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">60%超</span>
+          <span class="stat__label">8 残基系のエネルギー誤差削減<br>（ROBIN vs 従来 SOTA Prose）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">132M</span>
+          <span class="stat__label">転移版 ROBIN のパラメータ数<br>（未知ペプチドへゼロショット適用）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 1/10</span>
+          <span class="stat__label">Prose 比のサンプル数<br>（T-W2 で同等性能に到達）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 1/1000</span>
+          <span class="stat__label">MD 比のサンプル数<br>（T-W2 で同等性能に到達）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>タンパク質の折りたたみや結晶の形成といった現象は、分子がどんな立体構造をどんな確率で取るかという「平衡分布」に支配されています。この分布から代表的な構造を効率よく取り出せれば、創薬や材料設計の基礎になる物性を計算で見積もれます。</p>
+      <p>ところが、この「分布から構造を引いてくる（サンプリングする）」作業が計算上とても重いことが、長年の課題でした。代表的な計算手法である分子動力学（Molecular Dynamics, MD）は、原子の動きをフェムト秒（10 のマイナス 15 乗秒）刻みで追いかけます。しかし分子が別の安定構造へ移り変わるには、マイクロ秒から秒という桁違いに長い時間がかかります。そのため計算時間の大半が、構造変化に直接寄与しない細かな振動の再現に費やされてしまいます。</p>
+      <p>この問題に対し、生成モデルで構造を一気に大量生成する Boltzmann Generator という枠組みが提案されてきました。本論文は、その心臓部の生成モデルを刷新することで、サンプリングの効率と精度を底上げします。専門外の読者にとっても、「LLM の進歩を物理シミュレーションに持ち込む」という発想の橋渡しとして読みどころがあります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>まず Boltzmann Generator（BG, Noé et al., 2019）の考え方を整理します。BG は生成モデルが提案した構造に対して、その構造を引く確率（尤度, likelihood）と目標となるエネルギーを使って「重み付け補正」を行います。これにより、安定構造の間を一歩ずつ移動することなく、正しい平衡分布に従う独立な構造を並列に大量生成できます。</p>
+      <p>ただしこの補正には、生成モデルが「自分の出した構造の確率」を正確に計算できる必要があります。この「扱いやすい確率計算」という要請から、BG はこれまでほぼ正規化フロー（normalizing flow, NF）に頼ってきました。NF は、単純な確率分布（事前分布、通常はガウス分布）を可逆な変換で目標分布へと変形する生成モデルです。</p>
+      <p>しかし NF には二つのトレードオフがありました。「表現力を取れば計算が重く、計算を軽くすれば表現力が足りない」という板挟みが、フロー系 BG の根本的な悩みでした。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">トレードオフ 1</span>離散時間の NF</p>
+          <p>厳密な可逆性が求められるため、表現力が制限されます。NF は数学的に「位相（つながり方や穴の有無）を保つ変換」であるため、事前分布とは形のつながり方が違う分布をうまく表せません。分子の平衡分布は、高いエネルギーの壁で隔てられた離れ離れのピーク（モード）を持つため、まさにこの苦手なケースに当たり、無理に変形しようとすると数値的に不安定になります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">トレードオフ 2</span>連続時間の NF（CNF）</p>
+          <p>表現力は高い一方、確率の計算に重い微分方程式（ODE）の数値積分が必要です。そのため重み付け補正の計算が現実的でなくなってしまい、せっかくの表現力を BG の枠組みで活かしきれませんでした。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>本論文の Autoregressive Boltzmann Generators（ARBG）は、この板挟みを「自己回帰（autoregressive, AR）」という別系統の生成モデルで断ち切ります。</p>
+
+      <h3>自己回帰という発想</h3>
+      <p>自己回帰モデルは、分子全体の確率を「条件付き確率の積」に分解します。式で書くと、構造 x の確率を p<sub>θ</sub>(x) = Π<sub>j</sub> p(x<sub>j</sub> | x<sub>&lt;j</sub>) と表します。これは「前に決めた部分を見ながら、次の部分を一つずつ決めていく」という、LLM が文章を 1 単語ずつ生成するのと同じ枠組みです。本論文は、原子の座標（x, y, z のデカルト座標）を直接この方式で順番に生成します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 220" role="img" aria-label="従来のフロー系 BG はガウス事前分布を可逆変換で目標分布へ一気に変形するため、離れたモードを表すのが苦手で計算も重い。一方 ARBG は座標 x1, x2, x3, … を前の座標を見ながら一つずつ自己回帰的に生成するため、無理な変形を学ばず離れたモードも素直に表せる。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="edge-label" x="20" y="30">従来：フロー系 BG（一気に変形）</text>
+          <rect class="node" x="20" y="40" width="150" height="50" rx="8"></rect>
+          <text class="node-label" x="95" y="70" text-anchor="middle">ガウス事前分布</text>
+          <path class="edge" d="M170,65 L250,65" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="210" y="55" text-anchor="middle">可逆変換</text>
+          <rect class="node" x="250" y="40" width="160" height="50" rx="8"></rect>
+          <text class="node-label" x="330" y="70" text-anchor="middle">目標分布（一括）</text>
+          <text class="edge-label" x="540" y="60">離れたモードが苦手・</text>
+          <text class="edge-label" x="540" y="78">計算が重い</text>
+
+          <text class="edge-label" x="20" y="135">ARBG：自己回帰（一つずつ）</text>
+          <rect class="node" x="20" y="145" width="110" height="50" rx="8"></rect>
+          <text class="node-label" x="75" y="175" text-anchor="middle">x₁ を予測</text>
+          <path class="edge" d="M130,170 L168,170" marker-end="url(#arrow)"></path>
+          <rect class="node" x="168" y="145" width="150" height="50" rx="8"></rect>
+          <text class="node-label" x="243" y="170" text-anchor="middle">x₂ を予測</text>
+          <text class="edge-label" x="243" y="188" text-anchor="middle">（x₁ を見て）</text>
+          <path class="edge" d="M318,170 L356,170" marker-end="url(#arrow)"></path>
+          <rect class="node" x="356" y="145" width="160" height="50" rx="8"></rect>
+          <text class="node-label" x="436" y="170" text-anchor="middle">x₃ を予測</text>
+          <text class="edge-label" x="436" y="188" text-anchor="middle">（x₁,x₂ を見て）</text>
+          <path class="edge" d="M516,170 L554,170" marker-end="url(#arrow)"></path>
+          <text class="node-label" x="600" y="175">…</text>
+          <text class="edge-label" x="630" y="155">離れたモードも素直に表せる</text>
+          <text class="edge-label" x="630" y="173">・確率計算が軽い</text>
+        </svg>
+        <figcaption class="diagram__caption">フロー系 BG は事前分布を可逆変換で一括変形するため離れたモードが苦手で計算も重い。ARBG は座標を「前を見ながら一つずつ」生成する自己回帰方式で、無理な変形を学ばずに離れたモードを素直に表せる。</figcaption>
+      </figure>
+
+      <p>この分解には三つの利点があります。</p>
+      <ul>
+        <li><strong>表現力と計算の両立</strong>：離散時間フローの表現力の限界を、連続時間フローの重い計算なしに乗り越えられます。</li>
+        <li><strong>離れたモードを素直に表せる</strong>：無理な変形を学習する必要がないため、離れたモードや不連続なジャンプを自然に表現できます。</li>
+        <li><strong>LLM の進歩を取り込める</strong>：LLM を支えてきた離散生成モデリングの進歩をそのまま活かせ、モデルサイズと推論サンプル数の両方で予測可能なスケーリングを享受できます。</li>
+      </ul>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>diffeomorphism-free という位置づけ。</strong>ARBG は分子系に対する「最初の微分同相写像に依存しない（diffeomorphism-free）自己回帰モデル」だと位置づけられています。微分同相写像（diffeomorphism）とは、なめらかで可逆な座標変換のことで、正規化フローが使う変換の正体にあたります。diffeomorphism-free とは、この変換に縛られない、という意味です。</p>
+        </div>
+      </div>
+
+      <h3>座標をどう確率にするか</h3>
+      <p>連続的な座標を 1 つずつ予測するために、本論文はいくつかのパラメータ化を検討しています。最も単純な「一様ビン」方式が ARBG の中核です。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">ベースライン</span>離散化混合（Discretized Mixtures）</p>
+          <p>座標を一定幅 ∆ のビン（区間）に区切り、複数の単純な分布を混ぜ合わせて確率を表します。画像生成の PixelCNN++（Salimans et al., 2017）に倣った方式で、Mixture of Logistics（MoL）や Gaussian Mixture Model（GMM）を用いた版をベースラインとしています。ただし、使う分布が一部に偏る「モード崩壊」を起こしやすいという弱点があります。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">中核手法</span>一様ビンパラメータ化（Uniform Bin Parameterization）</p>
+          <p>そこで本論文は混合をやめ、ビンの中心を LLM の次トークン予測と同じカテゴリ分布として直接予測する、最も単純な方式を導入しました。推論時はサンプルしたビン中心に一様な微小ノイズを足して、連続的な座標に戻します。これが ARBG の中核となるパラメータ化です。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title"><span class="badge">理論保証</span>既約な誤差の定量化（Proposition 1）</p>
+          <p>論文は Proposition 1 として、この一様ビン方式で原理的に避けられない最小の誤差を厳密に定量化しています。ビン幅 ∆ の中で真の密度が完全には一様でないことに由来する「既約な誤差」が存在することを示しています。</p>
+        </li>
+      </ol>
+
+      <h3>自己回帰だからできる「途中介入」</h3>
+      <p>フロー系のように全座標を一気に生成する方式では難しい操作も、1 つずつ生成する ARBG なら可能になります。</p>
+      <ul>
+        <li><strong>温度スケーリング</strong>：生成の多様性を制御する操作を、分子領域に持ち込みます。</li>
+        <li><strong>Autoregressive Twisted Sequential Monte Carlo（Twisted SMC）</strong>：分子をすべて作り終える前に、途中の部分構造が物理的に妥当かどうかを「部分エネルギー」で評価し、原子同士がぶつかる（steric clash）ような無理な構造を早い段階で枝刈りして作り直す仕組みです（Algorithm 1）。</li>
+      </ul>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>「作り終えてから」ではなく「作りながら」直せる。</strong>完全な候補を生成し終えてからしか作り直せない従来手法（SBG, Tan et al., 2025a）と違い、ARBG はエラーを検出しながら部分構造の単位で生成を操舵できます。これは座標を順番に生成する自己回帰だからこそ可能になる介入です。</p>
+        </div>
+      </div>
+
+      <h3>転移可能モデル ROBIN</h3>
+      <p>ARBG の枠組みに追加の条件付け情報を加えて学習したのが、1 億 3,200 万（132 million）パラメータの転移可能モデル ROBIN です。ManyPeptidesMD データセット（Tan et al., 2025b）で学習し、学習時に見ていない未知のペプチドへ追加学習なし（zero-shot）で適用できます。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価は、アラニンジペプチド（2 残基）から Chignolin（10 残基）までの単一ペプチド系と、未知ペプチドへの転移設定（長さ 4・8 残基）の両方で行われました。指標は次の 3 つです。</p>
+      <ul>
+        <li><strong>E-W2</strong>：局所的な物理精度を測る、エネルギー分布の 2-Wasserstein 距離。</li>
+        <li><strong>T-W2</strong>：大域的な構造の差や欠けたモードを捉える、ねじれ角空間の距離。</li>
+        <li><strong>TICA-W2</strong>：分子のゆっくりした構造変化を捉える低次元表現（TICA）上で、最も遅い動的モードを比べる距離。</li>
+      </ul>
+
+      <h3>単一ペプチド系での結果</h3>
+      <p>単一ペプチド系（Table 1, エネルギー評価 2×10<sup>5</sup> 回）では、温度を調整した ARBG が、特に難しい Chignolin で従来手法 SBG を大幅に上回りました。温度調整なし（T=1）でも全体で最良の手法であり、温度を調整すると全系・全指標（E-W2, T-W2）で全ベースラインを上回りました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>系（E-W2, 小さいほど良い）</th>
+            <th>ARBG（温度調整）</th>
+            <th>従来手法 SBG</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>トリアラニン（AL3）</td>
+            <td class="is-best">0.202</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>テトラペプチド（AL4）</td>
+            <td class="is-best">0.449</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>ヘキサアラニン（AL6）</td>
+            <td class="is-best">0.328</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>Chignolin（難しい 10 残基系）</td>
+            <td class="is-best">1.723</td>
+            <td>10.819（不安定・標準偏差大）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Chignolin（配列 GYDPETGTWG、β-hairpin（ベータヘアピン、ペプチド鎖が折れ返ってヘアピン状になる二次構造）を持つ難しい 10 残基系）では、再重み付け後のエネルギー分布が MD の結果とよく一致し、Ramachandran プロット（主鎖の二面角の分布）でもテストセットのほぼすべての構造モードを正確に捉えました。</p>
+
+      <h3>未知ペプチドへの転移</h3>
+      <p>転移設定（Table 2, 長さ 4 と 8 各 30 系, 2×10<sup>5</sup> 評価）では、ROBIN が同条件の従来 SOTA である Prose を上回りました。8 残基系のすべてで Prose を上回り、4 残基系でも競争力ある性能を示しています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>系（E-W2, 小さいほど良い）</th>
+            <th>ROBIN（提案）</th>
+            <th>従来 SOTA Prose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>4 残基（30 系）</td>
+            <td class="is-best">0.531</td>
+            <td>0.646</td>
+          </tr>
+          <tr>
+            <td>8 残基（30 系）</td>
+            <td class="is-best">3.615</td>
+            <td>9.360</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>8 残基系の <strong>3.615 対 9.360</strong> という差が、「8 残基系のエネルギー誤差を 60% 超削減」という冒頭の成果に対応します。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">約 1/10</span>
+          <span class="stat__label">Prose 比のサンプル数<br>（T-W2 で同等性能）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 1/1000</span>
+          <span class="stat__label">MD 比のサンプル数<br>（T-W2 で同等性能）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">約 7%</span>
+          <span class="stat__label">問題構造の割合<br>（8 残基, 1 万サンプル中の高部分エネルギー）</span>
+        </div>
+      </div>
+
+      <p>推論効率の面でも、ROBIN は T-W2 で見て、Prose に比べて約 10 分の 1、MD に比べて約 1,000 分の 1 のサンプル数で同等の性能に達しました。一方で Twisted SMC による途中介入は、単純な重み付け補正（SNIS）をわずかに上回る程度にとどまりました。これは ROBIN の提案分布がもともと高品質なため、改善の余地が小さい（収穫逓減）ことが理由とされています。ただし途中介入が機能すること自体は確認されており、たとえば 8 残基ペプチドでは 1 万サンプルのうち約 7% が、最終的に高すぎる部分エネルギーを示す問題構造でした。</p>
+
+      <h2>意義と限界</h2>
+      <p>本研究の意義は、Boltzmann Generator の生成モデルを自己回帰方式に置き換えることで、離散フローの表現力・効率の制約を回避しつつ、連続時間フローよりも確率計算が軽くなる点にあります。さらに、スケーリング則やトークン単位の操舵といった LLM の道具立てを、Boltzmann Generator の枠組みで初めて分子領域に持ち込みました。</p>
+      <p>一方で、論文は次の限界を認めています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 1</span>座標順序の選択</p>
+          <p>自己回帰モデルは座標に何らかの順序を課す必要がありますが、分子に自然な順序は存在しません。この順序の選び方が、特に小さな分子で性能に影響しうると述べています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 2</span>ビン幅が精度上限</p>
+          <p>一様ビンを使うため、ビン幅 ∆ がモデル精度の上限を決めてしまいます。よりエネルギー分布が鋭くなる大きな系では、これが課題になる可能性があります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 3</span>事前分布の活用は今後</p>
+          <p>フロー系の BG は、より情報量の多い事前分布を使える利点がありますが、自己回帰モデルでの同様の検討は今後の課題として残されています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>ARBG は、Boltzmann Generator の中核を正規化フローから自己回帰モデルへ置き換えることで、表現力と計算コストの板挟みを解消した手法です。転移版 ROBIN は未知ペプチドへゼロショットで適用でき、エネルギー誤差と推論効率の両面で従来手法を上回りました。LLM のスケーリングと途中介入の発想を分子サンプリングに接続した点が、本研究の核心です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>平衡分布 / ボルツマン分布（Boltzmann distribution）</dt>
+        <dd>分子が各立体構造を取る確率の分布。エネルギー E(x) を使って µ(x) ∝ exp(−E(x)) と表されます。</dd>
+
+        <dt>Boltzmann Generator（BG）</dt>
+        <dd>生成モデルで構造の候補を作り、確率とエネルギーによる重み付け補正で正しい平衡分布のサンプルを並列生成する枠組み（Noé et al., 2019）。</dd>
+
+        <dt>分子動力学（Molecular Dynamics, MD）</dt>
+        <dd>原子の運動方程式を微小な時間刻みで解いて分子の動きを追う、代表的な計算手法。</dd>
+
+        <dt>正規化フロー（Normalizing Flow, NF）</dt>
+        <dd>単純な分布を可逆な変換で目標分布へ変形する生成モデル。表現力と計算コストにトレードオフがあります。</dd>
+
+        <dt>自己回帰（Autoregressive, AR）モデル</dt>
+        <dd>全体の確率を条件付き確率の積に分解し、要素を一つずつ順番に予測するモデル。LLM の文章生成と同じ枠組みです。</dd>
+
+        <dt>尤度（likelihood）</dt>
+        <dd>生成モデルがある構造を出力する確率。BG の重み付け補正に必要です。</dd>
+
+        <dt>重要度サンプリング補正（SNIS, 自己正規化重要度サンプリング）</dt>
+        <dd>提案分布から引いたサンプルに重みを付け、目標分布に対する正しい推定値へ補正する手法。</dd>
+
+        <dt>一様ビンパラメータ化（Uniform Bin Parameterization）</dt>
+        <dd>座標を一定幅のビンに区切り、ビン中心をカテゴリ分布として直接予測する ARBG の中核手法。</dd>
+
+        <dt>Twisted SMC（Twisted Sequential Monte Carlo）</dt>
+        <dd>生成途中の部分構造を部分エネルギーで評価し、物理的に無理な構造を早期に枝刈り・再生成する推論時の介入手法。</dd>
+
+        <dt>ROBIN</dt>
+        <dd>ARBG の枠組みで学習した 1 億 3,200 万パラメータの転移可能モデル。未知ペプチドへゼロショットで適用できます。</dd>
+
+        <dt>E-W2 / T-W2 / TICA-W2</dt>
+        <dd>評価指標。順にエネルギー分布の距離（局所精度）、ねじれ角空間の距離（大域構造）、分子のゆっくりした構造変化を捉える低次元表現（TICA）上での最も遅い動的モードの距離を測ります。</dd>
+
+        <dt>Chignolin</dt>
+        <dd>β-hairpin（ベータヘアピン、ペプチド鎖が折れ返ってヘアピン状になる二次構造）を持つ 10 残基のペプチド（配列 GYDPETGTWG）。難しい評価系として使われます。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Autoregressive Boltzmann Generators</p>
+      <a href="https://arxiv.org/abs/2606.27361" target="_blank" rel="noopener noreferrer">arXiv:2606.27361 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

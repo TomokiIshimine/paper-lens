@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2606.27361-autoregressive-boltzmann-generators.html">
+            <img src="assets/2026-06-25-2606.27361-autoregressive-boltzmann-generators-cover.png"
+                 alt="分子サンプリングの枠組み Boltzmann Generator の中核生成モデルを、長く主流だった正規化フローから LLM 風の自己回帰モデルへ置き換える ARBG を、座標を一様ビンのカテゴリ分布として 1 つずつ予測する中核手法・生成途中で無理な構造を枝刈りする Twisted SMC・転移版 ROBIN が 8 残基系のエネルギー誤差を従来 SOTA より 60% 超削減するという成果とともに示したインフォグラフィック">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-06-25</p>
+          <h2 class="article-card__title">
+            <a href="articles/2606.27361-autoregressive-boltzmann-generators.html">分子サンプリングを「正規化フロー」から「自己回帰」に置き換える — LLM 風に賢くなる Boltzmann Generator</a>
+          </h2>
+          <p class="article-card__summary">分子が自然に取りやすい立体構造を効率よく生成する Boltzmann Generator（ボルツマン生成器）という枠組みがあります。この論文は、その内部で長く主流だった正規化フロー（normalizing flow）を、LLM でおなじみの自己回帰（autoregressive）モデルに置き換えた新手法 ARBG を提案しました。正規化フローは「表現力を取れば計算が重く、計算を軽くすれば表現力が足りない」という板挟みを抱えていましたが、座標を一様ビンのカテゴリ分布として 1 つずつ予測する自己回帰方式はこれを解消し、離れたモードも素直に表せます。さらに、生成途中で無理な構造を枝刈りする Twisted SMC など、LLM 的なスケーリングと途中介入を分子領域に持ち込みました。未知ペプチドへゼロショット適用できる 1 億 3,200 万パラメータの転移版 ROBIN は、8 残基系のエネルギー誤差を従来 SOTA より 60% 超削減し、MD の約 1,000 分の 1 のサンプル数で同等性能に到達しています。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2606.27369-river-rl-without-ground-truth.html">
             <img src="assets/2026-06-25-2606.27369-river-rl-without-ground-truth-cover.png"
                  alt="正解（ground-truth）を一切使わず、候補プログラムを実行して目的スコアで相対比較するだけで LLM を強化学習で鍛えるフレームワーク RiVER を、インスタンス単位ランキング・勝者重視の整形・GRPO 更新の 3 段の報酬設計と、ALE rating rank を最大 9.4% 改善し正解照合ベンチへ最大 +3.5% 転移するという成果とともに示したインフォグラフィック">
