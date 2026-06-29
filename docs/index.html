@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2606.28307-second-order-kkt-bregman-admm.html">
+            <img src="assets/2026-06-26-2606.28307-second-order-kkt-bregman-admm-cover.png"
+                 alt="勾配の大域的なめらかさの上限が存在しない多項式の非凸最適化でも、Bregman ADMM がランダム初期化のもとで狭義の鞍点をほぼ確実に避け、収束先が二次の停留点になることを、1 反復を力学系の写像とみなし安定多様体定理で証明した理論研究のインフォグラフィック">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-06-26</p>
+          <h2 class="article-card__title">
+            <a href="articles/2606.28307-second-order-kkt-bregman-admm.html">「なめらかさ」が壊れた最適化でも鞍点を避けられる ── Bregman ADMM に二次の停留性保証を与える</a>
+          </h2>
+          <p class="article-card__summary">非凸最適化を分割して解く ADMM の発展版「Bregman ADMM」を、勾配の変化の激しさが場所によって青天井になり得る（＝大域的な「なめらかさの上限」が存在しない）多項式最適化に適用したときの理論を扱った研究です。従来の多くの解析は「一次停留点（勾配がゼロの点）に着く」までしか保証せず、そこには避けたい鞍点も含まれていました。さらに鞍点回避を示した既存結果は勾配の大域的リプシッツ性を前提にしており、多項式目的では前提が崩れます。著者らは、Bregman ADMM の 1 反復（x 更新 → y 更新 → 双対上昇）を 1 つの「力学系の写像」とみなすと、狭義の鞍点がその不安定な不動点になることを示し、安定多様体定理によって、ランダムな初期値から鞍点へ吸い込まれる確率がゼロになることを証明しました。鍵は「二側相対なめらかさ」という、目的のヘッシアンをカーネルのヘッシアンで上下から挟む条件で、適切な多項式カーネルを選べば大域的リプシッツ定数が無くても成立します。一次収束の仮定と組み合わせれば収束先はほぼ確実に二次の停留点となり、良性のランドスケープでは大域最適と一致します。理論論文であり、分散行列分解と対称テンソル分解の 2 つの多項式モデルで例示しています。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2606.28308-solver-dependent-nash-equilibrium-selection.html">
             <img src="assets/2026-06-26-2606.28308-solver-dependent-nash-equilibrium-selection-cover.png"
                  alt="2 人ゼロサムゲームでナッシュ均衡が集合（ナッシュ多面体）になるとき、どの均衡が選ばれるかはシードではなくソルバーの系統で体系的に決まることを、正解が解析的に分かる小規模テストベッドで実証し、正則化 last-iterate 法（R-NaD）は最大エントロピー均衡を選び、リグレット平均法（CFR/CFR+）は低エントロピーの面へずれることを示した研究のインフォグラフィック">
