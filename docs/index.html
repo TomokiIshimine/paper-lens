@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2606.28323-dexcompose-dexterous-policy-composition.html">
+            <img src="assets/2026-06-26-2606.28323-dexcompose-dexterous-policy-composition-cover.png"
+                 alt="多指ロボットハンドに、別々に学習させた 2 つの操作スキルを片手で同時に実行させる枠組み DexCompose を、学習済みポリシーを凍結したまま指ごとに役割を割り当てる指の帰属付けと、干渉を抑える二重残差スタビライザの 2 段階で実現し、16 種類の合成タスクで平均 77.4% の成功率を達成して直接連結や残差学習を上回るという成果とともに示したインフォグラフィック">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-06-26</p>
+          <h2 class="article-card__title">
+            <a href="articles/2606.28323-dexcompose-dexterous-policy-composition.html">片手で 2 つの作業を同時にこなすロボットハンド — 学習済みポリシーを「指の分担」で合成する DexCompose</a>
+          </h2>
+          <p class="article-card__summary">ロボットの多指ハンドに、別々に学習させた 2 つの操作スキルを「片手で同時に」実行させる枠組み DexCompose を提案した研究です。学習済みのスキル（ポリシー）を一切作り直さず凍結したまま、どの指がどちらの作業を担当するかを明示的に割り当てて合成します。単純に 2 つのポリシーを連結すると、後続のスキルが手全体を操作してしまい、握っていた物を落とす「破壊的干渉」が起きます。DexCompose は、解放テストと LLM による割り当てで「どの指がどちらの作業を担当するか」を学習なしで決める指の帰属付けと、Task A の保持指に有界残差・Task B の解放指に文脈認識残差を加える二重残差スタビライザの 2 段階で、この干渉を抑えます。シミュレータ Isaac Lab 上の Shadow Hand で、保持 4 × 操作 4 の 16 合成タスクを評価し、平均 77.4% の成功率を達成。直接連結（3.09%）を 74.3 ポイント、最強ベースラインの残差学習（61.6%）を 15.8 ポイント上回りました。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2606.27361-autoregressive-boltzmann-generators.html">
             <img src="assets/2026-06-25-2606.27361-autoregressive-boltzmann-generators-cover.png"
                  alt="分子サンプリングの枠組み Boltzmann Generator の中核生成モデルを、長く主流だった正規化フローから LLM 風の自己回帰モデルへ置き換える ARBG を、座標を一様ビンのカテゴリ分布として 1 つずつ予測する中核手法・生成途中で無理な構造を枝刈りする Twisted SMC・転移版 ROBIN が 8 残基系のエネルギー誤差を従来 SOTA より 60% 超削減するという成果とともに示したインフォグラフィック">

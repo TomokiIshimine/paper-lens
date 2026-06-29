@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>片手で 2 つの作業を同時にこなすロボットハンド — 学習済みポリシーを「指の分担」で合成する DexCompose — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-26-2606.28323-dexcompose-dexterous-policy-composition-cover.png"
+           alt="別々に学習させた 2 つの操作スキルを片手で同時に実行させる枠組み DexCompose を、学習済みポリシーを凍結したままどの指がどちらの作業を担当するかを割り当てる「指の帰属付け」と、干渉を補う「二重残差スタビライザ」の 2 段階手法と、16 種類の合成タスクで平均 77.4% の成功率を達成し直接連結を 74.3 ポイント上回るという成果とともに示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">片手で 2 つの作業を同時にこなすロボットハンド — 学習済みポリシーを「指の分担」で合成する DexCompose</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-26</span>
+      <span>arXiv：2606.28323</span>
+      <span>カテゴリ：cs.RO / cs.AI / cs.CV / cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ロボットの多指ハンドに、別々に学習させた 2 つの操作スキルを「片手で同時に」実行させる枠組み <strong>DexCompose</strong> を提案した研究です。学習済みのスキル（ポリシー）を一切作り直さず凍結したまま、どの指がどちらの作業を担当するかを明示的に割り当てて合成します。例えば「棒を握ったまま、同じ手でドアハンドルを押す」といった作業を実現し、16 種類の合成タスクで平均 <strong>77.4%</strong> の成功率を達成しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">77.4%</span>
+          <span class="stat__label">16 合成タスク平均の成功率<br>（DexCompose 完全版, 77.43±2.64%）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+74.3pt</span>
+          <span class="stat__label">直接連結（Frozen grasp 3.09%）<br>を上回った差</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">+15.8pt</span>
+          <span class="stat__label">最強ベースライン残差学習<br>（61.60%）を上回った差</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">16</span>
+          <span class="stat__label">合成タスク数<br>（保持 4 種 × 操作 4 種）</span>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>人間は片手で器用に複数のことを同時にこなせます。ペンを握ったまま、その手の親指でスマートフォンを操作する、といった具合です。ロボットの多指ハンドにも同じことをさせたい場面は多くあります。</p>
+      <p>ところが、ロボットに「棒を握るスキル」と「ドアを押すスキル」を別々に学習させても、それを単純につなげて実行すると、後から動くスキルが手全体を操作してしまい、せっかく握っていた棒を落としてしまいます。スキルどうしが手の動きを奪い合うのです。</p>
+      <p>この研究は、すでに学習済みのスキルをそのまま再利用しつつ、片手で複数作業を両立させる方法を示しました。スキルを作り直さなくてよいため、再利用しやすく、組み合わせ数が増えてもスケールしやすい方向性を提示している点に意義があります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>器用な操作（dexterous manipulation）、つまり多指ハンドによる細かい操作では、片手であるスキルの結果を保ったまま別のスキルを実行する必要がある場面が多くあります。論文が挙げる例は「棒を握った後、同じ手でドアハンドルを押す」です。</p>
+      <p>しかし、2 つの単一タスク用ポリシー（policy、ロボットが状況に応じて行動を決める方策）を単純に連結（chaining）すると不安定になります。後続のポリシーが手全体を制御してしまい、握りを維持するための指の動きを上書きしてしまうからです。論文はこれを、同じ行動空間（action space、ロボットが取りうる動作の集合）を共有する 2 つの目的、すなわち「既存の握りの保持」と「新しい操作の実行」のあいだに起こる破壊的干渉（destructive interference）と呼んでいます。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>専用ポリシーを学習し直す方法はスケールしない。</strong>合成タスクごとに専用ポリシーを学習し直せばよいように思えますが、論文はこれをスケールしない方法だと指摘します。n 個の握り保持スキルと m 個の下流操作があると、その組み合わせとして <strong>n×m 個</strong>のポリシーが必要になってしまうからです。</p>
+        </div>
+      </div>
+
+      <p>既存の指割り当て（finger allocation）の研究も、握りの生成・データ構築・ポリシー学習の段階で、あらかじめ決めた指の割り当てやタスク構成に依存しており、異なる組み合わせへ広げにくいという課題がありました。一方で近年は、大規模な器用な握りのデータセットが整い、再利用できる手全体（full-hand）の握りコントローラが入手しやすくなっています。そこで論文は「学習済みの器用操作ポリシーを、タスク間で余っている手の自由度を見つけて活用しながら合成できないか」という問いを立てます。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>中核となる着想（key insight）は、「学習済みポリシーの中で実質的に使われていない自由度（idle DoFs、遊んでいる自由度）は、別の動作を付け足すための再利用可能な資源だ」というものです。論文はタスクの組み合わせを、身体（embodiment）レベルでの資源割り当て問題としてとらえ直します。</p>
+      <p>この問題を 2 つに分解します。1 つは discovery（各ポリシーが実際に必要としている動作の次元を特定すること）、もう 1 つは composition（各ポリシーを割り当てられた自由度だけで動かし、2 つの目的を同時に達成すること）です。DexCompose はこれらを次の 2 段階で実現します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 250" role="img" aria-label="DexCompose の 2 段階。段階 1 の指の帰属付けは、解放テストで握りに必要な指を見つけ、5 本の指それぞれを Task A 保持か Task B 解放かに割り当てる二値の所有権マスクを LLM が選ぶ（学習不要）。段階 2 の二重残差スタビライザは、決めた分担で凍結した 2 ポリシーを動かしつつ、Task A 保持用の有界残差と Task B 用の文脈認識残差の 2 つだけを学習して干渉を補い、最終的な合成行動を作る。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="edge-label" x="20" y="28">段階 1：指の帰属付け（学習不要）</text>
+          <rect class="node" x="20" y="40" width="150" height="54" rx="8"></rect>
+          <text class="node-label" x="95" y="62" text-anchor="middle">解放テスト</text>
+          <text class="edge-label" x="95" y="82" text-anchor="middle">必須の指を特定</text>
+          <path class="edge" d="M170,67 L210,67" marker-end="url(#arrow)"></path>
+          <rect class="node" x="210" y="40" width="170" height="54" rx="8"></rect>
+          <text class="node-label" x="295" y="62" text-anchor="middle">所有権マスク</text>
+          <text class="edge-label" x="295" y="82" text-anchor="middle">保持=1 / 解放=0</text>
+          <path class="edge" d="M380,67 L420,67" marker-end="url(#arrow)"></path>
+          <rect class="node" x="420" y="40" width="170" height="54" rx="8"></rect>
+          <text class="node-label" x="505" y="62" text-anchor="middle">LLM が選択</text>
+          <text class="edge-label" x="505" y="82" text-anchor="middle">保持・解放を両立</text>
+
+          <text class="edge-label" x="20" y="148">段階 2：二重残差スタビライザ（残差だけ学習）</text>
+          <rect class="node" x="20" y="160" width="200" height="54" rx="8"></rect>
+          <text class="node-label" x="120" y="182" text-anchor="middle">Task A：保持する指</text>
+          <text class="edge-label" x="120" y="202" text-anchor="middle">＋ 有界残差</text>
+          <rect class="node" x="240" y="160" width="200" height="54" rx="8"></rect>
+          <text class="node-label" x="340" y="182" text-anchor="middle">Task B：手首＋解放指</text>
+          <text class="edge-label" x="340" y="202" text-anchor="middle">＋ 文脈認識残差</text>
+          <path class="edge" d="M440,187 L480,187" marker-end="url(#arrow)"></path>
+          <rect class="node node--accent" x="480" y="160" width="180" height="54" rx="8"></rect>
+          <text class="node-label" x="570" y="182" text-anchor="middle">合成行動</text>
+          <text class="edge-label" x="570" y="202" text-anchor="middle">マスクで結合</text>
+        </svg>
+        <figcaption class="diagram__caption">DexCompose の 2 段階。まず学習不要の「指の帰属付け」で所有権マスクを決め、次に凍結した 2 ポリシーに対し 2 つの残差だけを学習する「二重残差スタビライザ」で干渉を抑えて合成行動を作る。</figcaption>
+      </figure>
+
+      <h3>段階 1：指の帰属付け（Finger Attribution、学習不要）</h3>
+      <p>まず、どの指がどちらの作業を担当するかを決めます。この段階は追加の学習を必要としません（training-free）。</p>
+      <ul>
+        <li>まず Task A（例: 棒を握る）を成功させた後の状態を集めます。そして「解放テスト（release test）」を行います。これは一部の指をあえて解放してみて、それでもオブジェクトが安定して保持され続けるかを観察する手続きで、握りに本当に必要な指を見つけ出します。</li>
+        <li>5 本の指それぞれについて、Task A のために保持する指（マスク値 1）か、Task B のために解放する指（マスク値 0）かを表す二値の所有権マスク（ownership mask）を定義します。この指単位のマスクは、関節単位のマスクへと展開されます。</li>
+        <li>各マスクの候補は 2 つの指標で評価されます。保持率（retention rate）は、解放テスト中に Task A が成功し続けるかを測ります。クリーン解放率（clean-release rate）は、解放した指が接触の支えを残さずきれいに離れるかを測ります。</li>
+        <li>最終的なマスクは、保持の安定性・クリーンな解放・残った器用さのバランスを取って選ばれます。この選択は「タスクを考慮した割り当てエージェント（task-aware allocation agent）」が担い、論文ではこれを大規模言語モデル（large language model、LLM）で実装しています。</li>
+      </ul>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>「あえて成功率の高い握りを選ばない」判断。</strong>ボールを握るとき、親指と人差し指で持つと保持の成功率は約 7% 高くなりますが、人差し指がふさがるため後続のボタン押しやドア開けが制限されます。LLM は保持率がやや低い「親指・薬指・小指」での握りをあえて選び、人差し指を次の作業のために空けておく、という判断をします。</p>
+        </div>
+      </div>
+
+      <h3>段階 2：二重残差スタビライザ（Dual Residual Stabilizer）</h3>
+      <p>次に、決めた分担にもとづいて 2 つのポリシーを実際に動かします。マスクが行動の所有権を定めます。すなわち、Task A は保持する指の関節だけを制御でき、Task B は手首と解放された指の関節を制御します。</p>
+      <p>ここで、合成によって生じる外乱を補うため、2 つの残差（residual、既存の出力に加える補正）モジュールを学習します。これが「二重」スタビライザの名前の由来です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">Task A 側</span>有界残差スタビライザ</p>
+          <p>下流の動きや指の解放による揺さぶりを補償するため、保持する指の関節に対して有界な（一定の範囲に収まる）補正を加えます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Task B 側</span>文脈認識残差</p>
+          <p>凍結した下流ポリシーが出す本来の行動に対し、Task B が所有する行動の範囲内だけで有界な補正を加えます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">結合</span>合成行動の生成</p>
+          <p>最終的な合成行動は、固定した所有権マスクで Task A 側と Task B 側を組み合わせて作られます。</p>
+        </div>
+      </div>
+
+      <p>これらの残差モジュールはゼロに近い値で初期化されます。そのため、残差を学習する前の状態は、保持する指には Task A の参照動作を、手首と解放した指には凍結した Task B ポリシーをそのまま実行する状態から始まります。学習の際は、マスク・2 つの元ポリシーは固定したまま、2 つの残差モジュールだけを最適化します。</p>
+      <p>この手法の重要な特徴は、元の 2 つの学習済みポリシーを一切改変せず、推論時（実行時）に合成する点です。タスクのペアごとにポリシーを学習し直す必要がありません。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>実験はシミュレータ Isaac Lab 上で、多指ロボットハンド Shadow Hand を使って行われました。</p>
+      <p>タスクは、Task A に 4 つのオブジェクト保持スキル（ボールを握る、マグを注ぐ、缶を持つ、棒を持つ）、Task B に 4 つの操作スキル（ドアを開ける、ボタンを押す、電子レンジを開ける、スイッチを入れる）を割り当て、その組み合わせとして 4×4＝16 の合成タスクを構成しています。評価指標は合成成功率（Composition Success Rate）で、Task A のオブジェクトが実行を通じて保持され、かつ Task B も成功した場合のみ成功とみなします。</p>
+      <p>主要な結果は次のとおりです（数値は原論文の Table 1 などにもとづきます）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法</th>
+            <th>合成成功率（平均, 高いほど良い）</th>
+            <th>DexCompose との差</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>DexCompose（完全版）</td>
+            <td class="is-best">77.43±2.64%</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>残差学習（最強ベースライン）</td>
+            <td>61.60±2.31%</td>
+            <td>−15.8 ポイント</td>
+          </tr>
+          <tr>
+            <td>直接連結（Frozen grasp）</td>
+            <td>3.09±0.72%</td>
+            <td>−74.3 ポイント</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>直接連結ではほぼ完全に失敗しており、独立に学習した 2 つのポリシーをそのままつなぐと深刻な干渉が起きることを示しています。特に大きな改善は、電子レンジを開ける・スイッチを入れる、といった難しいタスクで見られました。</p>
+
+      <p>論文は、合成しても元のポリシーの性能を大きく損なわないかも分析しています。直接連結方式では Task A 側の保持率が <strong>0.102</strong> と非常に低く、最初に握ったものを頻繁に失っていました。これに対し DexCompose は Task A 側 <strong>0.811</strong>・Task B 側 <strong>0.893</strong> という高い保持率を達成しています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <span class="stat__value">0.811</span>
+          <span class="stat__label">DexCompose の Task A 保持率<br>（握ったものを保ち続ける）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.893</span>
+          <span class="stat__label">DexCompose の Task B 保持率<br>（下流操作の達成度）</span>
+        </div>
+        <div class="stat">
+          <span class="stat__value">0.102</span>
+          <span class="stat__label">直接連結の Task A 保持率<br>（握ったものを頻繁に失う）</span>
+        </div>
+      </div>
+
+      <p>失敗の内訳を見ると、スキルが切り替わる遷移段階での失敗が支配的でした。これは遷移が最も難しく、スタビライザが握りの安定性を保つうえで重要であることを示しています。</p>
+
+      <h3>アブレーションとマスク選択エージェントの比較</h3>
+      <p>各構成要素を取り除くアブレーション（ablation、機能を 1 つずつ外して効果を測る実験）では、Task A 側の残差を外すと平均成功率が <strong>9.13%</strong> まで大きく落ち込みました。これが「第一のタスクの結果を保持する」中心的な仕組みであることが確認されています。また、行動マスクを外して全次元に補正を書き込む方式（従来の残差学習に相当）よりも、マスクで所有権を構造的に強制するほうが大幅に優れていました。</p>
+      <p>マスクを選ぶエージェントについても比較しています。LLM による選択（平均 <strong>73.0%</strong>）は、保持率を優先するヒューリスティック（平均 66.5%）を上回りました。なお LLM には OpenAI の GPT-5.4 を温度パラメータ 0（決定的な選択）で用いています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>マスク選択エージェント</th>
+            <th>平均成功率（高いほど良い）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>LLM（GPT-5.4, 温度 0）</td>
+            <td class="is-best">73.0%</td>
+          </tr>
+          <tr>
+            <td>保持率を優先するヒューリスティック</td>
+            <td>66.5%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、身体に内在する冗長性（余った自由度）を再利用可能な資源としてとらえ、学習済みの器用操作ポリシーを、タスクごとの作り直しなしに柔軟に合成できる方向性を示した点にあります。論文は、構造化された行動の所有権がタスク間の干渉を減らし、合成操作の成功に重要であることを実証しました。</p>
+      <p>一方で限界も明示されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 1</span>合成は 2 スキルまで</p>
+          <p>現在の枠組みは、一度に 2 つの逐次的なスキルを合成することに焦点を当てています。複数のスキルが相互に作用する、より長い時間にわたる合成への拡張が、今後の重要な課題として挙げられています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 2</span>シミュレーション環境</p>
+          <p>本研究の実験はシミュレーション環境（Isaac Lab）で行われている点にも留意が必要です。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>DexCompose は、学習済みの 2 つのハンド操作ポリシーを凍結したまま、指ごとに役割を割り当てて合成し、片手で 2 つの作業を同時に実現する枠組みです。指の帰属付けで担当を決め、二重残差スタビライザで干渉を抑えることで、16 タスク平均 77.4% の合成成功率を達成し、直接連結や残差学習を上回りました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>器用な操作（dexterous manipulation）</dt>
+        <dd>多指ハンドによる細かい操作。本論文では片手で複数タスクを両立させることが課題。</dd>
+
+        <dt>ポリシー（policy）／ポリシー合成（policy composition）</dt>
+        <dd>ポリシーは状況に応じて行動を決める方策。合成は学習済みの複数ポリシーを組み合わせて複合タスクを実行すること。本論文では実行時に元ポリシーを改変せず合成する。</dd>
+
+        <dt>破壊的干渉（destructive interference）</dt>
+        <dd>既存の握り保持と新タスク実行が同じ行動空間を奪い合い、互いを壊してしまう現象。</dd>
+
+        <dt>指の帰属付け（finger attribution）／行動の所有権（action ownership）</dt>
+        <dd>どの指（または関節）をどちらのタスクが制御するかを明示的に割り当てること。</dd>
+
+        <dt>解放テスト（release test）</dt>
+        <dd>一部の指を解放してオブジェクトが安定保持され続けるか観察し、保持に必須の指を特定する手続き。</dd>
+
+        <dt>所有権マスク（ownership mask）</dt>
+        <dd>指または関節ごとに Task A 保持か Task B 解放かを示す二値マスク。</dd>
+
+        <dt>二重残差スタビライザ（dual residual stabilizer）</dt>
+        <dd>Task A 保持用の有界残差と、Task B 用の文脈認識残差という 2 つの補正モジュール。</dd>
+
+        <dt>残差（residual）</dt>
+        <dd>既存コントローラの出力に加える学習済みの加法的な補正。</dd>
+
+        <dt>遊んでいる自由度（idle DoFs）</dt>
+        <dd>学習済みポリシー内で実質使われていない動作の次元。合成のための再利用資源とみなす。</dd>
+
+        <dt>Shadow Hand</dt>
+        <dd>実験で用いた多指ロボットハンド。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">DexCompose: Reusing Dexterous Policies for Multi-Task Manipulation with a Single Hand</p>
+      <a href="https://arxiv.org/abs/2606.28323" target="_blank" rel="noopener noreferrer">arXiv:2606.28323 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
