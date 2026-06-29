@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>「正例しか見られない」学習はどこまで可能か——いつでも答えを出せる学習器（proper learner）の条件を解明した理論研究 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-26-2606.28309-proper-positive-only-learning-cover.png"
+           alt="正例だけを観測して二値分類を学ぶ「正例のみ学習」で、出力が必ず仮説クラスに収まる proper な学習器が成立する条件を、有限 VC 次元に加えて新しい組合せ条件「一様外部分離可能性（UES）」を満たすことと同値だと証明した理論研究を示したインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">「正例しか見られない」学習はどこまで可能か——いつでも答えを出せる学習器（proper learner）の条件を解明した理論研究</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-26</span>
+      <span>arXiv：2606.28309</span>
+      <span>カテゴリ：stat.ML / cs.LG / math.ST</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ラベル付きの「正例」だけを与えられて二値分類を学ぶ「正例のみ学習（positive-only learning）」において、出力が必ず仮説クラスの中に収まる「proper（適格）」な学習器がどんな問題で成立するのかを、理論的に完全に特徴づけた研究です。著者らは、有限の VC 次元に加えて「一様外部分離可能性（uniform exterior separability）」という新しい組合せ条件を満たすことが、proper に学習できることと同値だと証明しました。さらに、この設定が通常の PAC 学習とは大きく異なる「意外な」性質をいくつも持つことを示しています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＝</span>
+        <div class="callout__body">
+          <p><strong>本論文の中心的な結論（主特徴づけ）。</strong>「H が proper に正例のみ学習できる」⇔「H が一様外部分離可能性（UES）を満たし、かつ VC 次元が有限である」。つまり UES は、通常の PAC 学習における「有限 VC 次元」に相当する役割を、proper な正例のみ学習で果たします。</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>機械学習の多くの理論は、正例（あるラベルに属する例）と負例（属さない例）の両方を観測できる前提で組み立てられています。しかし現実には、負例を集めるのが高コストだったり、そもそも存在しなかったりする場面が珍しくありません。</p>
+      <p>論文はいくつかの例を挙げています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">例</span>医療診断</p>
+          <p>ある病気が確定した症例は記録されますが、健康な対照群はラベルが付かないことがあります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">例</span>Web 検索・推薦</p>
+          <p>ユーザーが反応した（クリックした）ことは正のフィードバックになりますが、反応しなかったことが「興味がない」を意味するとは限りません。</p>
+        </div>
+      </div>
+
+      <p>こうした「正例しか手に入らない」状況をどう学習に落とし込むかは、実用上の重要な問いです。この設定の理論的な解析は、PAC 学習の枠組みを自然に拡張する形で古くから研究されてきました。ただし、後述するように「proper（適格）」な学習器に限ったときの成立条件は長年未解決のままでした。本研究はそこに決着をつけたものです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>まず前提となる枠組みを整理します。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>用語</th>
+            <th>意味</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>PAC 学習</td>
+            <td>未知の分布から正例・負例の両方を観測し、誤分類が小さい分類器を出力することを目指す、機械学習理論の基本モデル。</td>
+          </tr>
+          <tr>
+            <td>正例のみ学習</td>
+            <td>学習器は未知のターゲットの「正の領域」からだけ i.i.d. サンプルを受け取る。一方で誤りは、正・負の両方に確率質量を持つ「元の分布」のもとで評価される。見えるのは正例だけだが、負の領域で「正」と判定しすぎないようにも気を配る必要がある。古く Nat87 にさかのぼる。</td>
+          </tr>
+          <tr>
+            <td>VC 次元</td>
+            <td>仮説クラスの「複雑さ・表現力」を測る代表的な指標。通常の PAC 学習では、これが有限であることが学習可能性と同値。</td>
+          </tr>
+          <tr>
+            <td>proper / improper</td>
+            <td>出力が常に仮説クラス H の中に収まる学習器を proper（適格）、クラスの外の仮説を出してもよい学習器を improper（不適格）と呼ぶ。</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>通常の PAC 学習では、proper と improper の力は同じで、どちらの場合も「VC 次元が有限であること」が学習可能性の条件になります。さらに、観測サンプルと矛盾しない仮説を返すどんな経験誤差最小化（empirical risk minimization, ERM）規則も学習器になります。</p>
+      <p>正例のみ学習でも、improper な場合はきれいな特徴づけが知られていました。H の有限個の概念の共通部分からなるクラスを H∩ と書くと、「H が improper に正例のみ学習できる ⇔ H∩ の VC 次元が有限」となります（Ger89、KV94 では教科書の演習問題にもなっています）。この improper な学習器は単純で、正例の集合 S を受け取ったら、その「閉包（closure）」CLOSH(S)——S を含むすべての仮説の共通部分——を出力すればよい、というものです。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">？</span>
+        <div class="callout__body">
+          <p><strong>長年未解決だった問い。</strong>この閉包は H∩ には属しても H 自身には属さないことが一般にあり、そのままでは improper です。<strong>proper に、つまり常に H の中に収めて学習できる条件は何か</strong>——この問いが長年未解決でした。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>著者らはこの未解決問題に決着をつけ、proper な正例のみ学習が「驚くほど豊かな」構造を持つことを示しました。中核となる道具立てが、閉包の「外側」をどう制御するかに関する新しい条件です。</p>
+      <p>正例サンプル S を受け取ったとき、閉包 CLOSH(S) に含まれる点は「サンプルから必ず正だと強制される点」です。問題は閉包の外側です。閉包の外の点 x はサンプルからは正だと強制されないため、proper な学習器は、H の中の仮説を出しつつ、この外側の領域を正と判定しすぎないようにしなければなりません。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 280" role="img" aria-label="正例サンプル S から作る閉包 CLOSH(S) の内側は「必ず正だと強制される領域」、外側は「サンプルから正だと強制されない領域」。proper な学習器は H の中の仮説を出しつつ、この外側を正と判定しすぎないように制御しなければならない。">
+          <rect class="node" x="40" y="50" width="680" height="180" rx="14" fill="none"></rect>
+          <text class="edge-label" x="60" y="40">入力空間</text>
+          <circle cx="250" cy="140" r="78" class="node"></circle>
+          <text class="node-label" x="250" y="130" text-anchor="middle">閉包 CLOSH(S)</text>
+          <text class="edge-label" x="250" y="152" text-anchor="middle">必ず正だと強制</text>
+          <text class="edge-label" x="250" y="168" text-anchor="middle">される領域</text>
+          <text class="edge-label" x="560" y="118" text-anchor="middle">閉包の外側</text>
+          <text class="edge-label" x="560" y="138" text-anchor="middle">正だと強制されない</text>
+          <text class="edge-label" x="560" y="158" text-anchor="middle">＝ ここを正と判定</text>
+          <text class="edge-label" x="560" y="174" text-anchor="middle">しすぎないよう制御</text>
+        </svg>
+        <figcaption class="diagram__caption">正例サンプル S から作る閉包の内側は「必ず正」と強制される領域。proper な学習はこの外側をどう制御するかが鍵になる。論文はこの「外側の制御」を強さの異なる複数の条件として定式化した。</figcaption>
+      </figure>
+
+      <p>論文はこの「外側の制御」を、強さの異なる 3 つの条件として定式化しています。強い順に並べると次のようになります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">最も強い</span>正確な外部分離（exact exterior separation）</p>
+          <p>任意の実現可能な有限サンプル S について、閉包 CLOSH(S) がそのまま H に属する、という最も強い条件です。これが成り立てば、improper な閉包戦略をそのまま proper に使えます。ただしこれは強すぎて、これを満たさなくても proper に学習できるクラスが存在します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">本論文の主役</span>一様外部分離可能性（UES）</p>
+          <p>より弱い条件です。1 つの仮説で外側のすべてを避けるのではなく、S に対して「整合する仮説の有限個のリスト」を用意します。各仮説は個別には誤検出してもよいのですが、リスト全体で平均すると、外側のどの 1 点も「まれにしか」正と判定されないようにします。リストの長さ M(η) は許容度 η だけで決まり、S には依存しません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">最も弱い</span>分布的外部分離可能性（DES）</p>
+          <p>有限リスト上の一様分布の代わりに、HS（S と整合する仮説の集合）上の任意の確率分布を許す条件です。ランダム化された学習器にとって自然な形になります。</p>
+        </div>
+      </div>
+
+      <p>言い換えると UES は、リストから一様ランダムに 1 つ仮説を選んだとき、外側の固定した点を正と判定する確率が η 以下に抑えられる、という性質です。これらの条件の間には次の含意関係があります。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 200" role="img" aria-label="3 つの外部分離条件の含意関係。正確な外部分離 ならば 一様外部分離可能性（UES） ならば 分布的外部分離可能性（DES）。最初の含意は厳密で逆は成り立たない。さらに VC 次元が有限ならば、DES から UES が逆に導ける。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+          <rect class="node" x="20" y="60" width="180" height="60" rx="8"></rect>
+          <text class="node-label" x="110" y="86" text-anchor="middle">正確な外部分離</text>
+          <text class="edge-label" x="110" y="106" text-anchor="middle">最も強い</text>
+          <path class="edge" d="M200,90 L268,90" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="234" y="80" text-anchor="middle">厳密</text>
+          <rect class="node" x="270" y="60" width="200" height="60" rx="8"></rect>
+          <text class="node-label" x="370" y="86" text-anchor="middle">一様外部分離可能性</text>
+          <text class="edge-label" x="370" y="106" text-anchor="middle">UES（主役）</text>
+          <path class="edge" d="M470,90 L538,90" marker-end="url(#arrow)"></path>
+          <rect class="node" x="540" y="60" width="200" height="60" rx="8"></rect>
+          <text class="node-label" x="640" y="86" text-anchor="middle">分布的外部分離可能性</text>
+          <text class="edge-label" x="640" y="106" text-anchor="middle">DES（最も弱い）</text>
+          <path class="edge" d="M540,135 C440,175 340,175 270,135" marker-end="url(#arrow)"></path>
+          <text class="edge-label" x="405" y="172" text-anchor="middle">VC 次元が有限なら逆も成立（DES ⇒ UES）</text>
+        </svg>
+        <figcaption class="diagram__caption">「正確な外部分離 ⇒ UES ⇒ DES」という含意関係があり、最初の含意は厳密（逆は成り立たない）。さらに VC 次元が有限なら DES から UES を逆に導ける（この向きはサンプル圧縮の研究で用いる道具で証明される）。</figcaption>
+      </figure>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>論文の主要な結果は以下の通りです。いずれも理論的な定理として証明されています。実験は行わない、統計的学習理論の理論論文です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">Theorem 4</span>主特徴づけ</p>
+          <p>H が proper に正例のみ学習できる ⇔ H が UES を満たし、かつ VC 次元が有限。UES は通常の PAC 学習における「有限 VC 次元」に相当する役割を果たします。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Theorem 14</span>proper と improper の分離</p>
+          <p>この特徴づけは improper の特徴づけよりも厳密に強い。通常の PAC 学習では proper を要求しても学習可能なクラスは変わらないのに、正例のみ学習では proper と improper で特徴づけが異なります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Theorem 6</span>ランダム化と決定性の分離</p>
+          <p>ランダム化された proper 学習器では学習できるのに、どんな決定性（randomness を使わない）proper 学習器でも学習できないクラスが存在します。通常の PAC 学習では両者の特徴づけは一致するため、対照的です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Theorem 7</span>ERM は万能ではない</p>
+          <p>proper な決定性学習器で学習できるのに、どんな決定性 proper ERM 規則でも学習できないクラスが存在します。通常の PAC 学習では学習可能ならどんな ERM でも学習できたのと対照的です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Theorem 8</span>有限 VC 次元では足りない</p>
+          <p>VC 次元がともに 1 でありながら、片方は「整合的だが非一様には proper 学習できない」、もう片方は「非一様には proper 学習できるが（一様には）proper 学習できない」という 2 つのクラスが存在します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">Theorem 9</span>安定な学習器の特徴づけ</p>
+          <p>サンプルを追加しても出力が変わらない「安定性」を課した proper 学習器では、学習できる ⇔ 最も強い「正確な外部分離」を満たし、かつ VC 次元が有限。安定性を求めると最強の閉包条件に戻ってきます。</p>
+        </div>
+      </div>
+
+      <h3>必要なランダムビットはごく少数でよい（Theorem 5）</h3>
+      <p>H が確率的な proper 学習器で学習できるなら、わずかなランダムビットで学習する学習器も存在します。ここで学習の精度は 2 つのパラメータで測ります。許容する誤差の大きさを表す ε（イプシロン、許容誤差）と、運悪く学習に失敗してしまう確率の上限を表す δ（デルタ、許容失敗確率）です。ε・δ が小さいほど「高精度で確実に」学習することを要求します。</p>
+      <p>双対クラス（dual class）H⋆ の VC 次元を d⋆、H の VC 次元を d とすると、必要なオーダーはおおよそ次の通りです（Õ は対数的な係数を無視したおおまかなオーダーを表す記法です）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>量</th>
+            <th>おおまかなオーダー</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>必要なランダムビット数</td>
+            <td>Õ(log(d⋆ / εδ))</td>
+          </tr>
+          <tr>
+            <td>必要な正例サンプル数</td>
+            <td>Õ((1/ε)(d + log(1/δ)))</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>要点だけ言えば、VC 次元が定数オーダー（d = O(1)）のクラスでは、必要なランダムビット数は正例サンプル数より指数的に少なくて済みます。一方で、Theorem 6 が示すように、ランダム性を完全に取り除くことはできません。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>Natarajan の予想を反証（Theorem 15）。</strong>著者らは Natarajan（Nat87）が立てた予想を、主特徴づけ（Theorem 4）を用いて反証しています。Natarajan は「誤検出を一切しない」という追加制約を課した片側誤差モデルで proper 学習可能性を特徴づけ、その特徴づけが、本論文が扱う（追加制約のない、両側誤差の）proper な正例のみ学習にもそのまま拡張されると予想していました。本論文の主特徴づけは、この予想が成り立たないことを示しています。</p>
+        </div>
+      </div>
+
+      <p>これらをまとめると、proper な正例のみ学習の世界は、通常の PAC 学習とはいくつもの点で「意外なほど」異なる、というのが本論文の発見です。</p>
+
+      <h2>意義と限界</h2>
+      <p>本研究の意義は、長年未解決だった「proper な正例のみ学習の特徴づけ」に決着をつけたことにあります。さらに、そのために導入した「外部分離可能性」という組合せ的な条件は、VC 次元などの既存の指標とは一致せず、限られた教師情報から外挿が必要になる他の設定でも役立つと著者らは期待しています。証明の途中では、サンプル圧縮の研究で使われる道具（双対クラスに対する一様収束の議論）が本質的に効いてくる点が、著者らによれば意外で非自明な要素だとされています。</p>
+      <p>一方で、論文自身が認める限界・今後の課題もあります。</p>
+
+      <ul>
+        <li>本研究は学習可能性の「特徴づけ」に焦点を当てており、計算量の意味で効率的なアルゴリズムの設計は目的にしていません（統計的学習理論で標準的な立場です）。</li>
+        <li>学習可能性は特徴づけたものの、必要なランダムビット数の正確な複雑さは未解決のままです。</li>
+        <li>今回の特徴づけは、非一様学習可能性や整合性についても類似の結果を示唆しており、その完全な解明は今後の課題です。</li>
+        <li>学習可能なクラスを特定したうえで、最適な統計的レート（収束の速さ）や効率的なアルゴリズムを求めることも自然な次の問いです。</li>
+      </ul>
+
+      <h2>まとめ</h2>
+      <p>正例しか観測できない設定で、出力が必ず仮説クラスに収まる proper な学習器が成立する条件は、「有限 VC 次元」に加えて新しい組合せ条件「一様外部分離可能性」を満たすことだ、というのが本論文の中心的な発見です。この設定は、proper と improper の分離や、ランダム化が本質的に必要になるなど、通常の PAC 学習とは大きく異なる構造を持つことも明らかになりました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>PAC 学習（PAC learning）</dt>
+        <dd>未知の分布から例を観測し、誤分類確率が小さい分類器を高い確率で出力することを目指す、機械学習理論の基本モデル。</dd>
+
+        <dt>正例のみ学習（positive-only learning）</dt>
+        <dd>正解概念の正の領域からのみサンプルを受け取り、正負両方に質量を持つ元の分布のもとで誤りを評価される学習設定。</dd>
+
+        <dt>VC 次元（VC dimension）</dt>
+        <dd>仮説クラスの表現力・複雑さを測る指標。通常の PAC 学習では有限であることが学習可能性と同値。</dd>
+
+        <dt>proper / improper（適格 / 不適格）な学習器</dt>
+        <dd>出力が常に仮説クラス H の中に収まるものを proper、クラス外の仮説を出してよいものを improper と呼ぶ。</dd>
+
+        <dt>閉包（closure, CLOSH(S)）</dt>
+        <dd>正例サンプル S と整合するすべての仮説の共通部分。サンプルから「必ず正」と強制される領域を表す。</dd>
+
+        <dt>一様外部分離可能性（uniform exterior separability, UES）</dt>
+        <dd>サンプルに依存しない長さの仮説リストで、閉包の外側のどの点も平均的にまれにしか正と判定されないようにできる、という本論文の中心的条件。</dd>
+
+        <dt>ERM（empirical risk minimization, 経験誤差最小化）</dt>
+        <dd>観測サンプルと矛盾しない仮説を返す規則の総称。</dd>
+
+        <dt>双対クラス（dual class, H⋆）</dt>
+        <dd>各データ点を「仮説に対する評価関数」とみなして作るクラス。その VC 次元 d⋆ がランダムビット数の解析などに現れる。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Surprises in Proper Positive-Only Learning</p>
+      <a href="https://arxiv.org/abs/2606.28309" target="_blank" rel="noopener noreferrer">arXiv:2606.28309 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
