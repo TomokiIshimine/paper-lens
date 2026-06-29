@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>「ナッシュ均衡を解く」は同じ答えを返さない：均衡の選び方はソルバーで決まる — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-26-2606.28308-solver-dependent-nash-equilibrium-selection-cover.png"
+           alt="2 人ゼロサムゲームでナッシュ均衡が集合（ナッシュ多面体）になるとき、どの均衡が選ばれるかはシードではなくソルバーの系統で体系的に決まることを、正解が解析的に分かる小規模テストベッドで実証し、正則化 last-iterate 法（R-NaD）は最大エントロピー均衡を選び、リグレット平均法（CFR/CFR+）は低エントロピーの面へずれることを示した研究のインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">「ナッシュ均衡を解く」は同じ答えを返さない：均衡の選び方はソルバーで決まる</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-26</span>
+      <span>arXiv：2606.28308</span>
+      <span>カテゴリ：cs.GT / cs.AI / cs.LG / cs.MA</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>2 人で利得が真っ向から対立するゲーム（ゼロサムゲーム）では、最適な戦略「ナッシュ均衡」が 1 つに定まらず、複数の均衡が集合（ナッシュ多面体）をなすことがよくあります。この論文は、そんなときに「どの均衡が選ばれるか」が乱数の種（シード）ではなく、<strong>使うソルバー（均衡を計算するアルゴリズム）の系統によって体系的に決まる</strong>ことを、正解が数式で解析的に分かる小さなテストベッド（検証用の例題集）で実証しました。具体的には、ソルバーには大きく 2 系統あり、片方の系統（R-NaD などの「最後の反復だけを使う」手法）は戦略が最もばらつく均衡を選び、もう片方の系統（CFR などの「途中経過を平均する」手法）はより偏った均衡へずれていく、という分かれ方が示されています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">＝</span>
+        <div class="callout__body">
+          <p><strong>本論文の核心。</strong>ナッシュ集合が 1 点でないとき、ソルバーは均衡を「見つける」のではなく集合の中から 1 つを「選ぶ」。そしてどれを選ぶかは、乱数や計算予算ではなく、アルゴリズムの系統という体系的な性質で決まる。</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>ゲーム理論や強化学習の実務では、「ナッシュ均衡を解くソルバー」を互いに交換可能なものとして扱いがちです。CFR でも R-NaD でも、同じナッシュ均衡にたどり着くだろう、という暗黙の前提です。</p>
+      <p>しかしこの論文は、その前提が崩れる場合があることを指摘します。均衡が 1 つに定まらないとき、ソルバーは均衡を「見つける」のではなく、集合の中から 1 つを「選ぶ（select）」のです。そして、どれを選ぶかはアルゴリズムの種類によって変わります。</p>
+      <p>これは、ポーカー AI やマルチエージェント学習で「どのソルバーを使うか」という選択が、出てくる戦略の性質そのものを左右することを意味します。同じ「ナッシュ均衡」という看板でも、中身が違うのです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>計算ゲーム理論では「ナッシュ均衡は一意の目標」とみなす単純化が一般的です。たしかに 2 人ゼロサム（2-player zero-sum, 2p0s）ゲームでは、ミニマックス定理（minimax theorem）によって<strong>ゲームの価値 V* は一意</strong>に決まります。ここで「相手が自分の戦略に対して利得を最大化する最善の応じ方を打ってくる」状況を <strong>best response（最適応答）</strong> と呼びます。価値 V* とは、相手がこの best response（最適応答）を打ってくるときに全ての均衡が共有する利得のことで、どの均衡を選んでもこの値は変わりません。</p>
+      <p>ところが、<strong>戦略の振る舞い（behaviour）のレベルでは均衡が一意でないこと</strong>がよくあります。利得が縮退した（複数の戦略が同じ利得を生んでしまう）ゲーム、対称な構造を持つゲーム、そして実用上重要な多くのゲームは、均衡が 1 点ではなく凸集合（ナッシュ多面体, Nash polytope）になります。</p>
+      <p>ナッシュ集合が 1 点でないとき、各ソルバーは「選ぶ」役割を担います。にもかかわらず、ソルバーは互換的に扱われてきました。そこでこの論文は、次の問いを立てます。「2p0s ゲームが均衡の集合を持つとき、異なるソルバーは集合の異なるメンバーを選ぶのか。その選択はアルゴリズムの体系的な性質なのか」。</p>
+      <p>なお、「エントロピー正則化が最適集合の最大エントロピー点を選ぶ」という原理自体は、ゲーム解法の外で既に確立されています（線形計画の消失ペナルティ極限や、エントロピー正則化最適輸送など）。この論文の問いは「その選択原理が存在するか」ではなく、「標準的に使われるゲームソルバーのうち、どれがそれを実現するか」という点にあります。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>著者は、ナッシュ集合が<strong>解析的に分かっている</strong>小規模なゲーム群を用意し、そこに 6 つの代表的なソルバーを走らせて、それぞれが集合のどこに着地するかを直接比べました。</p>
+
+      <h3>評価の物差し</h3>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">尺度 1</span>exploitability（NashConv）</p>
+          <p>収束を測る尺度です。非負の値で、ナッシュ均衡でちょうど 0 になります。この論文では best response（最適応答、相手への最善の応じ方）を純戦略（確率的に混ぜず 1 つの行動に決め打つ戦略）の全列挙で厳密に計算するため、誤差のない exact な値が得られます。収束の判定は exploitability &lt; 0.02 を「収束した（converged）」とします。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">尺度 2</span>最大エントロピーメンバー σ_ME</p>
+          <p>ナッシュ集合のうち、平均方策エントロピー H（戦略のばらつきの大きさ）を最大化するメンバーです。式の上で、エントロピー最大化は一様分布への相対エントロピー（KL ダイバージェンス）最小化と同じになります。つまり σ_ME は、一様な方策をナッシュ集合へ最も近づける<strong>情報射影（I-projection）</strong>にあたります。</p>
+        </div>
+      </div>
+
+      <h3>比較した 6 つのソルバー</h3>
+      <p>単一の表形式エンジンで、exact な counterfactual value（反実仮想的な利得＝「もしその局面に必ず到達していたら得られたはずの利得」）を使って動かします。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">時間平均</span>CFR / CFR+</p>
+          <p>counterfactual regret minimization。リグレット（後悔）を最小化する手法。CFR+ は regret-matching+ と線形重み付き平均を使う改良版です。どちらも<strong>時間平均</strong>の戦略を最終的に採用します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">時間平均</span>Hedge</p>
+          <p>同じリグレットを使うが、戦略をソフトマックスで作る（正の象限への射影をしない）方法。アブレーション（要素を外して検証する実験）専用です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">時間平均</span>Fictitious play（FP）</p>
+          <p>厳密な best response（最適応答、最善の応じ方）を、その実現確率で重み付けて平均する古典的手法です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">最終 iterate</span>MMD（Magnetic Mirror Descent）</p>
+          <p>参照分布（マグネット）と温度に基づく正則化更新。この論文では<strong>固定</strong>の一様参照で動かします（弱い固定マグネット）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">最終 iterate</span>R-NaD（Regularized Nash Dynamics）</p>
+          <p>ポーカー AI「DeepNash」のエンジン。MMD と同じ正則化更新ですが、参照を周期的に現在の方策へリセットする<strong>移動する参照</strong>を使います。最終 iterate（最後の反復の戦略）を採用します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">最終 iterate</span>MWU / NeuRD</p>
+          <p>正則化なしの last-iterate 法。最終 iterate を採用します。</p>
+        </div>
+      </div>
+
+      <p>ここで重要なのが<strong>2 つの系統の区別</strong>です。リグレット平均法は時間平均を採用し、正則化／非正則化の last-iterate 法は最終 iterate を採用します。この採用方法の違いが、後の選択の違いにつながります。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 300" role="img" aria-label="6 つのソルバーが 2 系統に分かれる図。リグレット平均法（CFR・CFR+・Hedge・FP）は時間平均を採用し、非対称ゲームで低エントロピーの面へずれる。正則化／非正則化 last-iterate 法（MMD・R-NaD・MWU/NeuRD）は最終 iterate を採用し、一様参照のとき最大エントロピー均衡を選ぶ。この採用方法の違いが選択の違いにつながる。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+          <text class="edge-label" x="20" y="30">6 つのソルバー</text>
+
+          <rect class="node" x="20" y="50" width="320" height="110" rx="10" fill="none"></rect>
+          <text class="node-label" x="180" y="74" text-anchor="middle">リグレット平均法</text>
+          <text class="edge-label" x="180" y="94" text-anchor="middle">採用方法：時間平均</text>
+          <text class="edge-label" x="180" y="122" text-anchor="middle">CFR ／ CFR+ ／ Hedge ／ FP</text>
+
+          <rect class="node" x="420" y="50" width="320" height="110" rx="10" fill="none"></rect>
+          <text class="node-label" x="580" y="74" text-anchor="middle">last-iterate 法</text>
+          <text class="edge-label" x="580" y="94" text-anchor="middle">採用方法：最終 iterate</text>
+          <text class="edge-label" x="580" y="122" text-anchor="middle">MMD ／ R-NaD ／ MWU・NeuRD</text>
+
+          <path class="edge" d="M180,160 L180,210" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M580,160 L580,210" marker-end="url(#arrow)"></path>
+
+          <rect class="node" x="20" y="212" width="320" height="68" rx="10"></rect>
+          <text class="node-label" x="180" y="240" text-anchor="middle">低エントロピーの面へずれる</text>
+          <text class="edge-label" x="180" y="262" text-anchor="middle">（非対称ゲームで偏った均衡を選ぶ）</text>
+
+          <rect class="node" x="420" y="212" width="320" height="68" rx="10"></rect>
+          <text class="node-label" x="580" y="240" text-anchor="middle">最大エントロピー均衡を選ぶ</text>
+          <text class="edge-label" x="580" y="262" text-anchor="middle">（一様参照のとき、最もばらつく均衡）</text>
+        </svg>
+        <figcaption class="diagram__caption">6 つのソルバーは「時間平均を採用するリグレット平均法」と「最終 iterate を採用する last-iterate 法」の 2 系統に分かれる。この採用方法の違いが、非対称ゲームでの選択の分かれ方につながる。</figcaption>
+      </figure>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>テストベッド</h3>
+      <p>著者はナッシュ集合が既知の 6 つのゲームを用意しました。ナッシュ集合は選択座標 c ∈ [0,1] でパラメータ化されます（2 次元になるのは polytope4 のみ）。たとえば pennies_safe や two_safe は matching-pennies（コイン合わせ）に安全な行動を足した非対称なゲーム、kuhn は不完全情報の Kuhn poker（ゲーム値 V* = −1/18）です。</p>
+      <p>まず<strong>グラウンドトゥルース検証（§4.1）</strong>で、用意した最大エントロピー座標が均衡条件を厳密に満たすことを確認しています（Kuhn 族で最大 exploitability &lt; 10⁻⁶、族メンバーの exploitability &lt; 10⁻¹⁵）。テストベッド自体の正しさが裏付けられています。</p>
+
+      <h3>中核となる結果：系統で選択が分かれる</h3>
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">対称なゲーム</span>pennies_safe / two_safe / dup_action</p>
+          <p>FP を除く全ての収束ソルバーが、最大エントロピー座標でぴたりと一致しました。FP だけが境界へずれます（たとえば pennies_safe で 0.000、他のソルバーは 0.333）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">非対称なゲーム</span>asym_safe / polytope4 / kuhn</p>
+          <p>ここで系統がはっきり分離します。<strong>R-NaD は最大エントロピー座標に乗り</strong>、<strong>CFR / CFR+ は明確に低エントロピーの内部・境界点へずれます</strong>。</p>
+        </div>
+      </div>
+
+      <p>非対称ゲームでの具体的な数値を、R-NaD（最大エントロピーに乗る）と CFR+（ずれる）で比べると次の通りです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ゲーム（指標）</th>
+            <th>R-NaD（最大エントロピー側）</th>
+            <th>CFR+（ずれる側）</th>
+            <th>解析的な最大エントロピー値</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>asym_safe（選択座標）</td>
+            <td>0.218</td>
+            <td>0.275</td>
+            <td>0.218</td>
+          </tr>
+          <tr>
+            <td>polytope4（座標 1）</td>
+            <td>0.162</td>
+            <td>0.246</td>
+            <td>0.161</td>
+          </tr>
+          <tr>
+            <td>kuhn（ブラフ頻度）</td>
+            <td>0.180</td>
+            <td>0.068</td>
+            <td>0.201</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>2 次元の polytope4 では、R-NaD は両座標とも小数 3 桁で最大エントロピー点 (0.162, 0.257) に着地し exploitability は 0、CFR+ は (0.246, 0.135) で残差 exploitability が非ゼロでした。2 つの自由度を同時に満たすことから、正則化の不動点が「一様参照の情報射影」を計算していることの最もきれいな確認になっています。</p>
+
+      <h3>大規模なアンサンブルでも再現</h3>
+      <p>ランダムに作った 180 個の非対称ゲームでも傾向が確認されました。両ソルバーが収束した 162 ゲームでの結果を、主要な数値で示します。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">100%</p>
+          <p class="stat__label">R-NaD が解析的な最大エントロピーメンバーに着地（座標誤差の中央値 2×10⁻⁴）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">94%</p>
+          <p class="stat__label">CFR+ のゲームでエントロピーが厳密に下回った</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">+0.121</p>
+          <p class="stat__label">CFR+ の平均エントロピーギャップ（95% ブートストラップ信頼区間 [+0.103, +0.139]）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">p &lt; 10⁻²⁷</p>
+          <p class="stat__label">Wilcoxon 符号付き順位検定で帰無仮説を棄却（統計的に明確な差）</p>
+        </div>
+      </div>
+
+      <h3>選択はアルゴリズム的で、シードにも予算にも依存しない</h3>
+      <p>表形式ソルバーは決定的なので、シードを変えても結果は同じです（asym_safe で 4 シード再実行し、選択座標の標準偏差は 0.00000）。さらに反復予算を 2 桁ぶん増やしても、R-NaD は最大エントロピー 0.218 のまま不変、CFR+ はむしろ<strong>予算を増やすほど最大エントロピーから遠ざかります</strong>（2,000 反復→200,000 反復で 0.272→0.283）。つまり CFR+ のずれは「収束が足りないから」ではなく、アルゴリズムの体系的な性質だということです。</p>
+
+      <h3>2 つの教科書的直観を反証</h3>
+      <p>著者は、ありがちな説明を統制実験で否定しています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">×</span>
+        <div class="callout__body">
+          <p><strong>否定結果 1（§4.10）：射影は原因ではない。</strong>「CFR の境界ドリフトは max(R,0) の射影（リグレットを正の値に切り詰める処理）が原因」という説。同じリグレットを使い射影をソフトマックスに置き換えた Hedge を試すと、原因ならば最大エントロピー方向へ動くはずが、<strong>逆に境界ドリフトが増大</strong>しました（asym_safe で CFR のエントロピー 0.796 → Hedge 0.649）。射影は原因ではありません（境界ドリフトの真の機構は未解明）。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">×</span>
+        <div class="callout__body">
+          <p><strong>否定結果 2（§4.9）：R-NaD の選択は無条件ではない。</strong>R-NaD の選択は「<strong>アンカー追従（anchor-following）</strong>」です。初期参照にバイアスをかけると（Kuhn で b=0.1→0.9）、選択座標が 0.08〜0.18 の範囲を動きます（いずれも exploitability 0 の厳密なナッシュ均衡）。最大エントロピーを選ぶのは「初期参照が一様分布」という特殊ケースであって、初期化に依存しない性質ではないのです。</p>
+        </div>
+      </div>
+
+      <h3>選択の違いがもたらす影響</h3>
+      <p>均衡が違っても、best response（最適応答、最善の応じ方）を打ってくる相手に対しては全メンバーが同じ価値 V* を共有します。違いが出るのは、相手が最善でない手を打つ場面（off-path、本来の最適経路から外れた局面）に対してだけです。Kuhn では R-NaD（最大エントロピー）のメンバーが CFR+ のメンバーを<strong>弱く支配</strong>していました。「弱く支配する」とは、どの相手の打ち方に対しても劣ることがなく、ある相手の打ち方に対しては明確に勝る、という関係です。つまり追加コストなしで、より安全な備え（ヘッジ）になっていたということです。ただしこの優位は Kuhn の逐次構造に固有で、行列ゲームではどちらの均衡も相手を支配しません。頑健性ギャップ |V(R-NaD)−V(CFR+)| は Kuhn で 0.0181、行列ゲームで 0.0032〜0.0078（約 5.6 倍）でしたが、いずれも 0.02 未満に有界です。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、「実証した現象」と「予想にとどまる機構」を明確に切り分けた点にあります。確立されたのは、(i) 選択はソルバーの体系的な性質でシードにも予算にも依存しないこと、(ii) 一様参照のとき正則化 last-iterate 法が最大エントロピーメンバーを選ぶこと（2 次元多面体で厳密、Kuhn で 99.7%、180 ゲームで 100%）、(iii) その選択はアンカー追従で無条件ではないこと、(iv) リグレット平均法のドリフトは max(R,0) 射影が原因ではないこと、です。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">？</span>
+        <div class="callout__body">
+          <p><strong>機構は予想にとどまる（Conjecture 1）。</strong>「R-NaD を初期参照 ρ₀ で動かすと、最終的な選択は ρ₀ をナッシュ集合へ情報射影したものになる（ρ₀ が一様なら最大エントロピー均衡）」という予想で、データの裏付けは強いものの証明ではありません。著者はこれを反証可能な予想として明示しています。</p>
+        </div>
+      </div>
+
+      <p>限界も率直に述べられています。テストベッドはグラウンドトゥルースを厳密にするため表形式・小規模に限られ、関数近似やサンプリングの効果は未検討です。Conjecture 1 は未証明。設定は厳密なゼロサムなので、「異なる選択で異なるゲーム価値になる」という最も強い形は、ミニマックス定理により原理的に範囲外です。最大エントロピーメンバーの頑健性の優位は展開形（Kuhn）に限られ、ランダムアンサンブルも行列ゲームしか広げていません。また、R-NaD の最終 iterate 収束は学習率を通じて利得スケールに敏感で、ゲームごとに学習率の調整が必要でした（リグレット平均法は不要）。</p>
+
+      <h2>まとめ</h2>
+      <p>ナッシュ均衡を「見つける」保証のあるソルバーでも、「同じ」均衡を見つけるとは限りません。非対称なナッシュ多面体の上では、正則化 last-iterate 法は最大エントロピーメンバーを選び、リグレット平均法は低エントロピーの面へずれます。この選択はアルゴリズムの性質であり、乱数や計算予算では決まらない、というのが本論文の核心です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>ナッシュ均衡（Nash equilibrium）/ ナッシュ集合 N(G)</dt>
+        <dd>どのプレイヤーも一方的に戦略を変えても得をしない戦略の組。複数あるときは凸集合（多面体）になる。</dd>
+
+        <dt>ナッシュ多面体（Nash polytope）</dt>
+        <dd>系列形（realization）座標（各局面に到達する確率で戦略を表す座標系）で凸となるナッシュ均衡の集合。</dd>
+
+        <dt>2 人ゼロサム（2p0s）/ ミニマックス定理 / ゲーム価値 V*</dt>
+        <dd>2 人の利得が完全に対立するゲームと、その均衡が共有する一意の価値を保証する定理。</dd>
+
+        <dt>best response（最適応答）</dt>
+        <dd>相手の戦略に対して、自分の利得を最大化する最善の応じ方。</dd>
+
+        <dt>off-path</dt>
+        <dd>相手が最善（best response）でない手を打つ、本来の最適経路から外れた局面。</dd>
+
+        <dt>弱く支配（weakly dominate）</dt>
+        <dd>どの相手の打ち方に対しても劣らず、ある相手の打ち方に対しては明確に勝る関係。</dd>
+
+        <dt>exploitability（NashConv）</dt>
+        <dd>収束を測る尺度。非負でナッシュ均衡でちょうど 0。</dd>
+
+        <dt>最大エントロピーメンバー σ_ME</dt>
+        <dd>ナッシュ集合上で平均方策エントロピー（戦略のばらつき）を最大化するメンバー。</dd>
+
+        <dt>情報射影（I-projection）</dt>
+        <dd>参照分布から凸集合への KL ダイバージェンス最小化点。一様参照なら σ_ME に一致。</dd>
+
+        <dt>リグレット平均法（regret-averaging）</dt>
+        <dd>CFR, CFR+, Hedge, FP。時間平均の戦略を採用する系統。</dd>
+
+        <dt>正則化 last-iterate 法（regularized last-iterate）</dt>
+        <dd>MMD, R-NaD。最終 iterate を採用する系統。</dd>
+
+        <dt>R-NaD（Regularized Nash Dynamics）</dt>
+        <dd>DeepNash のエンジン。参照を周期的に現方策へリセットする「移動する参照」の正則化動学。</dd>
+
+        <dt>アンカー追従（anchor-following）</dt>
+        <dd>選択が初期参照に依存し、それを追う性質。初期化に依存しないわけではないことを意味する。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Which Nash Equilibrium? Solver-Dependent Selection on Zero-Sum Nash Polytopes</p>
+      <a href="https://arxiv.org/abs/2606.28308" target="_blank" rel="noopener noreferrer">arXiv:2606.28308 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
