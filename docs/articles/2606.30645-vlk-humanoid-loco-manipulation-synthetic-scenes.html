@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>人手のデモなしでヒューマノイドに「歩いて運ぶ」を教える — 再構成した実空間のなかで全身動作を合成する VLK — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-06-29-2606.30645-vlk-humanoid-loco-manipulation-synthetic-scenes-cover.png"
+           alt="スマホでスキャンした実際の室内を 3D Gaussian Splatting で再構成し、その中でヒューマノイド G1 の全身動作を人手のデモなしに自動合成して画像・言語・運動の対応がそろった 48,000 本のデータを作り、学習した VLK 方策を実機 Unitree G1 にそのまま転移してナビゲーションと箱の運搬を実行する研究のインフォグラフィック">
+    </figure>
+
+    <h1 class="article__title">人手のデモなしでヒューマノイドに「歩いて運ぶ」を教える — 再構成した実空間のなかで全身動作を合成する VLK</h1>
+    <div class="article__meta">
+      <span>公開日：2026-06-29</span>
+      <span>arXiv：2606.30645</span>
+      <span>カテゴリ：cs.RO / cs.AI / cs.GR / eess.SY</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ヒューマノイドロボットに「部屋を見回し、指示を聞いて、歩いて物を運ぶ」を教えるには、一人称視点の画像・言語指示・全身の動きをそろえた学習データが必要です。しかし、その三つをそろえたデータを大量に集めるのは困難でした。この研究は、スマホでスキャンした実際の室内を 3D で再構成し、その中でヒューマノイドの全身動作を「人手の操作デモなしに」自動合成して、画像・指示・動作の対応がそろった 48,000 本のデータを作りました。このデータで学習した方策を実機のヒューマノイド（Unitree G1）にそのまま転移し、ナビゲーションと箱の運搬を実行できることを示しています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">★</span>
+        <div class="callout__body">
+          <p><strong>本論文の核心。</strong>欠けていたのは技術の断片ではなく、それらをつなぐ「データ生成システム」だった。実空間を <strong>3DGS で再構成</strong>し、その中で全身動作を<strong>人手デモなしに合成</strong>し、<strong>後から一人称画像を描く</strong>（事後レンダリング）ことで、画像・言語・運動がそろったデータを大規模に作り、学習方策を実機 G1 へそのまま転移する。</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>ロボットが部屋の中を自分の目で見ながら動き、人の言葉に従って物を運ぶ。こうした「移動と操作を一体で行う」全身タスクは、ヒューマノイドの実用化に直結する課題です。この能力を学習させるには、ロボットが見ている一人称視点の画像、与えられた言語指示、そして実際に取った全身の動きの三つが、同じ瞬間ごとにそろったデータが要ります。</p>
+      <p>ところが、この三つ組（tuple）をそろえて大量に集める手段が、これまで存在しませんでした。人がロボットを遠隔操作してデータを取る方法は高品質ですが、全身動作の収集はコストが高く、多様な部屋・物体・動作にスケールさせるのが難しいのです。</p>
+      <p>この研究は、その不足を「実空間の再構成」と「動作の自動合成」で埋めようとします。データ収集のボトルネックを解消できれば、ヒューマノイドの全身制御を学習させる道が大きく開けるため、重要な一歩といえます。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>知覚にもとづくヒューマノイドの loco-manipulation（移動と操作を結合した全身タスク）を学習するには、先に述べた完全な三つ組データが必要です。しかし既存のデータ源は、いずれもこの三つ組を大規模には提供できませんでした。論文は次の限界を挙げています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">データ源 1</span>実世界の遠隔操作</p>
+          <p>高品質な対応デモを作れますが、全身データの収集が高コストで、多様なシーン・物体・相互作用へスケールさせるのが困難です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">データ源 2</span>人体モーションキャプチャ</p>
+          <p>豊富な全身の動きを持ちますが、ロボットの一人称視点の観測が欠けています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">データ源 3</span>一人称視点の動画</p>
+          <p>視覚的な経験は豊富ですが、ロボットが実行できる運動（キネマティクス）や行動と対応づいていません。</p>
+        </div>
+      </div>
+
+      <p>そこで「データを合成で作る」という発想になりますが、これには二つの難所があります。一つは、視覚的にリアルで多様な合成世界をどう作るか（実空間からシミュレーションを作る Real2Sim の問題）。もう一つは、その合成世界の見た目だけで学んだ方策を、どう実機で動かすか（シミュレーションから実機へ移す Sim2Real の問題）です。</p>
+      <p>著者は、この二つに対して既存技術の断片がすでにあることに着目します。室内環境をフォトリアルかつ実寸大で再構成できる手法（後述の 3D Gaussian Splatting）が前者の一部を、シミュレーションで学んだ全身動作の追従が後者の一部を、それぞれ解いています。欠けていたのは、この断片どうしをつなぐ「データ生成システム」だったのです。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>提案手法 VLK の核は、問題を「合成データ生成 → VLK 方策の学習 → 全身動作の追従 → 実機デプロイ」という流れに分解したことです。全体としては、高レベルの方策が短期の全身の動きの「予定」を予測し、低レベルの追従器がそれを実機で実行可能な行動へ変換する、という二段構えになっています。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 230" role="img" aria-label="VLK の二段構えの図。高レベルの VLK 方策が一人称画像・言語指示・運動状態を入力に短期の全身運動軌道（予定）を予測し、低レベルの全身トラッカーがそれを実機で実行可能な関節制御目標へ変換して実機 G1 を動かす。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="18" y="40" width="210" height="100" rx="10" fill="none"></rect>
+          <text class="node-label" x="123" y="74" text-anchor="middle">高レベル：VLK 方策</text>
+          <text class="edge-label" x="123" y="98" text-anchor="middle">入力：一人称画像・指示・状態</text>
+          <text class="edge-label" x="123" y="118" text-anchor="middle">出力：短期の全身運動軌道</text>
+
+          <rect class="node" x="275" y="40" width="210" height="100" rx="10" fill="none"></rect>
+          <text class="node-label" x="380" y="74" text-anchor="middle">低レベル：全身トラッカー</text>
+          <text class="edge-label" x="380" y="98" text-anchor="middle">画像・言語には盲目</text>
+          <text class="edge-label" x="380" y="118" text-anchor="middle">参照軌道＋身体状態 → 制御目標</text>
+
+          <rect class="node" x="532" y="40" width="210" height="100" rx="10"></rect>
+          <text class="node-label" x="637" y="84" text-anchor="middle">実機 G1</text>
+          <text class="edge-label" x="637" y="108" text-anchor="middle">ナビゲーション・箱の運搬</text>
+
+          <path class="edge" d="M228,90 L275,90" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M485,90 L532,90" marker-end="url(#arrow)"></path>
+
+          <text class="edge-label" x="251" y="80" text-anchor="middle">予定</text>
+          <text class="edge-label" x="508" y="80" text-anchor="middle">行動</text>
+        </svg>
+        <figcaption class="diagram__caption">高レベルの VLK 方策が運動の「予定」を予測し、低レベルの全身トラッカーがそれを実機で動く行動へ変換する二段構え。トラッカーは画像・言語には盲目で、参照軌道と自分の身体状態だけを見る。</figcaption>
+      </figure>
+
+      <h3>パイプライン全体の流れ</h3>
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">① 合成データ生成</p>
+          <p>スマホでスキャンした実空間を 3DGS で再構成し、その中で G1 の全身動作を人手デモなしに合成。事後レンダリングで対応する一人称画像を描く。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">② VLK 方策の学習</p>
+          <p>合成データで方策をファインチューン。一人称画像・指示・運動状態から、少し先までの全身運動軌道（と手首接触ラベル）を予測する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">③ 全身動作の追従</p>
+          <p>予測された運動軌道の「予定」を、全身トラッカーが実機で動かせる各関節の制御目標へ変換する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">④ 実機デプロイ</p>
+          <p>推論を高速化し、Unitree G1 上でナビゲーションと箱の運搬を実行する。</p>
+        </li>
+      </ol>
+
+      <h3>1. 再構成したシーンの中で動作データを合成する</h3>
+      <p>まず、実際の部屋をデータ生成の舞台にします。iPhone 14 Pro の Polycam スキャン（RGB と LiDAR 深度）から室内を実寸大で再構成し、3D Gaussian Splatting（3DGS）という表現に最適化します。3DGS は、無数のガウシアン（ぼかした点のようなもの）の集まりで空間を表し、リアルな見た目をリアルタイムに描画できる手法です。</p>
+      <p>再構成したシーンには、物体の意味付き 3D バウンディングボックスや歩行可能領域を注釈し、その意味ラベルから言語指示をテンプレートで自動生成します（例: "walk toward the [object]"〈その物体に向かって歩く〉、"pick up the box from the floor"〈床から箱を拾う〉など）。</p>
+      <p>次に、その部屋の中でヒューマノイド G1 の動作を合成します。対象は「物体に向かうナビゲーション」と「物体との相互作用（箱の運搬など）」の 2 種類です。相互作用の合成には、人と物体の相互作用を生成する既存手法の条件付き拡散モデル（conditional diffusion model、与えた条件に沿うようノイズから目的の軌道を少しずつ生成する生成モデル）を G1 の表現に適応させ、物体の形状特徴・望ましい手首の姿勢・手首の接触ラベルを条件に加えて、ロボットと物体が連動した軌道を生成します。</p>
+      <p>最後に、合成した G1 の軌道をシミュレータ（Isaac Sim）で再生し、頭部に取り付けた仮想カメラから一人称視点の画像をレンダリングします。先に動作を作り、後から対応する画像を描く、この「事後レンダリング（hindsight rendering）」がデータを大規模化する鍵です。さらに、合成画像と実画像の見た目の差を埋めるため、照明・カメラのパラメータ・色味などをランダムに揺らす「ドメインランダム化（domain randomization）」を適用します。</p>
+
+      <h3>2. VLK 方策</h3>
+      <p>VLK（Vision-Language-Kinematics）方策は、現在の一人称 RGB 画像・タスク指示・現在の G1 の運動状態を入力として受け取り、少し先までの全身の運動軌道（と左右手首の接触ラベル）を予測します。具体的には 30 Hz で 1 秒分にあたる 30 フレーム先までを出力します。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">30 Hz</p>
+          <p class="stat__label">予測の時間解像度（1 秒分にあたる 30 フレーム先までを出力）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">VLK ≠ VLA</p>
+          <p class="stat__label">行動を直接出力する VLA と異なり、運動（キネマティクス）軌道を出力し実行は別の追従器に任せる</p>
+        </div>
+      </div>
+
+      <p>ここが VLK という名前の由来です。行動を直接出力する一般的な VLA（Vision-Language-Action）方策とは異なり、VLK は運動（キネマティクス）の軌道を出力し、その実行は別の追従器に任せます。学習は、事前学習済みの基盤モデルから初期化し、合成した VLK データセットでファインチューンします。軌道の再構成損失を主損失とし、足と床の接触予測や順運動学（forward kinematics、関節角度から手足の位置を求める計算）の精度など、複数の補助損失を併用しています。</p>
+
+      <h3>3. 全身動作の追従</h3>
+      <p>VLK が予測した運動軌道の「予定」を、実機で動かせる行動に変換するのが全身トラッカー（追従器）です。このトラッカーは一人称画像や言語指示には盲目で、変換済みの参照軌道と自分の身体の状態だけを受け取り、各関節の制御目標を出力します。手首の接触が有効なときは接触を意識した手首の挙動を働かせ、物体の保持を安定させます。</p>
+
+      <h3>4. デプロイ</h3>
+      <p>実機では、推論を高速化するシステムを組み、VLK の推論はハイエンド GPU 上で 31 ミリ秒という安定した速度で動作します。連続する動作のかたまり（チャンク）の間に重なりを設けて不連続を減らし、素早い屈み動作で生じる画像のブレ対策として、鮮鋭度にもとづくフレーム選択を導入しています。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価は、ラボ風とアパート風の 2 つの物理環境で行われました。各環境で家具配置を変えた 4 レイアウトずつを 3DGS で再構成し、実機には Unitree G1 を使っています。論文は主に「データ生成の効率」「実機への転移可否」「データ量の影響」「視覚のドメインランダム化の効果」の 4 点を調べています。</p>
+
+      <h3>データ生成の効率</h3>
+      <p>3DGS で再構成した室内環境のなかで、48,000 本の軌道を 600 GPU 時間・人手介入なしで合成しました。生成コストは、単一の GPU で 1 モード × 1 レイアウトあたり 1000 本の合成に約 4 時間、対応する一人称観測のレンダリングに約 8.3 時間です。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">48,000 本</p>
+          <p class="stat__label">合成した軌道の本数（人手介入なし）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">600 GPU 時間</p>
+          <p class="stat__label">全体の合成に要した計算コスト</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">31 ミリ秒</p>
+          <p class="stat__label">実機での VLK 推論の安定速度（ハイエンド GPU 上）</p>
+        </div>
+      </div>
+
+      <h3>実機への転移（フルシステム評価）</h3>
+      <p>6 つのモードについて、各モード 20 試行（計 120 試行）を実機で評価しました。ナビゲーションと床レベルの箱操作は高い成功率を示した一方、台の上（surface レベル）での操作はより難しくなっています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モード</th>
+            <th>ラボ実機</th>
+            <th>アパート実機</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Walk To（指定物体へ歩く）</th>
+            <td>20/20</td>
+            <td>19/20</td>
+          </tr>
+          <tr>
+            <th>Turn Around（旋回）</th>
+            <td>20/20</td>
+            <td>18/20</td>
+          </tr>
+          <tr>
+            <th>Pick (Floor)（床から拾う）</th>
+            <td>16/20</td>
+            <td>18/20</td>
+          </tr>
+          <tr>
+            <th>Put (Floor)（床へ置く）</th>
+            <td>20/20</td>
+            <td>20/20</td>
+          </tr>
+          <tr>
+            <th>Pick (Surface)（台から拾う）</th>
+            <td>11/20</td>
+            <td>13/20</td>
+          </tr>
+          <tr>
+            <th>Put (Surface)（台へ置く）</th>
+            <td>8/20</td>
+            <td>15/20</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>台の上での操作が難しいのは、リターゲットされた相互作用データが、異なる高さの支持面での箱操作を十分に覆えておらず、把持や配置の信頼性が下がるためだと論文は説明しています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">！</span>
+        <div class="callout__body">
+          <p><strong>接触ラベルの効果。</strong>手首の接触ラベルを使わずに「Pick (Floor)」を評価すると、ラボ・アパートとも実機で <strong>0/5</strong>（5 試行中 0 成功）になった。接触ラベルが操作の成立に重要であることを示す結果。</p>
+        </div>
+      </div>
+
+      <h3>データ量の影響</h3>
+      <p>合成軌道の本数を増やすと、評価モード全体で成功率が一貫して向上しました。ナビゲーション（Walk To）は少ないデータでも高い成功率（99%）に達する一方、Pick (Surface) は 10% のデータで 0% だったものが、全データで 46% へ改善しました。操作タスクはナビゲーションよりも、シーンに依拠した多くの教示を必要とすることが分かります。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">99%</p>
+          <p class="stat__label">Walk To の成功率（少ないデータでも高水準に到達）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">0% → 46%</p>
+          <p class="stat__label">Pick (Surface) の成功率（10% のデータ → 全データ）</p>
+        </div>
+      </div>
+
+      <h3>視覚ドメインランダム化の効果</h3>
+      <p>ラボシーンの歩行モードで比較すると、視覚の変動を学習に加えることが実機への転移に大きく効くことが分かりました。特に照明のランダム化が効果的です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ランダム化の設定</th>
+            <th>成功率</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>ランダム化なし</th>
+            <td>41%</td>
+          </tr>
+          <tr>
+            <th>カメラのランダム化</th>
+            <td>48%</td>
+          </tr>
+          <tr>
+            <th>照明のランダム化</th>
+            <td>87%</td>
+          </tr>
+          <tr>
+            <th>すべてのランダム化</th>
+            <td>90%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、再構成した実シーンの中でロボット互換の相互作用を合成することが、スケーラブルな知覚条件付きヒューマノイド制御への有望な道だと示した点にあります。シーンに依拠した合成の教示が、シミュレーションから実機へのヒューマノイド loco-manipulation を支えうることを実証しました。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">？</span>
+        <div class="callout__body">
+          <p><strong>論文が認める限界。</strong>現在の相互作用合成は、もとにした人-物体相互作用データセットの被覆に制約される。このデータセットは限られた大型物体との相互作用しか含まないため、生成される行動は<strong>箱状の物体を両手で運ぶのには向く</strong>が、カップや工具のような<strong>小物体の把持には不向き</strong>。</p>
+        </div>
+      </div>
+
+      <p>また、接触認識のトラッカーは手首と物体の接触で大型物体の操作を安定化しますが、精密な把持には対応していません。VLK を小物体の操作へ広げるには、より豊富な相互作用データと、精密な把持に向けた低レベルの制御器が必要だと論文は述べています。</p>
+
+      <h2>まとめ</h2>
+      <p>VLK は、スマホでスキャンした実空間を 3DGS で再構成し、その中でヒューマノイドの全身動作を人手のデモなしに合成して、画像・言語・運動の対応がそろったデータを大規模に作る仕組みです。このデータで学んだ方策は実機 G1 に（追加学習なしで）そのまま転移し、ナビゲーションと箱の運搬を実行できました。床レベルの操作やナビゲーションは高い成功率を示す一方、台の上の操作や小物体の精密な把持には課題が残ります。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>loco-manipulation（移動と操作の結合）</dt>
+        <dd>移動（locomotion）と物体操作（manipulation）を一体で行う全身タスク。本論文ではナビゲーションと箱の運搬を対象とします。</dd>
+
+        <dt>VLK（Vision-Language-Kinematics）</dt>
+        <dd>一人称画像・言語指示・現在状態から、短期の全身運動軌道（と手首接触ラベル）を予測する方策。行動を直接出力する VLA と異なり、運動軌道を出力し、別の追従器が行動へ変換します。</dd>
+
+        <dt>3D Gaussian Splatting（3DGS）</dt>
+        <dd>無数のガウシアンの集まりで空間を表し、リアルな見た目をリアルタイムに描画する手法。本論文では室内を実寸大で再構成する手段として使います。</dd>
+
+        <dt>全身トラッカー（接触認識トラッカー）</dt>
+        <dd>参照運動軌道と接触ラベルを受け取り、実機の関節制御目標を出力する低レベル制御器。一人称画像や言語には盲目です。</dd>
+
+        <dt>事後レンダリング（hindsight rendering）</dt>
+        <dd>先に動作軌道を合成し、後から対応する一人称画像を描いて対応づける手法。データ生成を大規模化する鍵です。</dd>
+
+        <dt>ドメインランダム化（domain randomization）</dt>
+        <dd>レンダリング時に照明・カメラパラメータ・見た目をランダムに揺らし、シミュレーションと実機の視覚的な差への頑健性を高める手法。</dd>
+
+        <dt>Sim2Real / Real2Sim</dt>
+        <dd>シミュレーションから実機へ（Sim2Real）、実空間からシミュレーションへ（Real2Sim）と、両方向をつなぐパイプライン全体の呼称です。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">VLK: Learning Humanoid Loco-Manipulation from Synthetic Interactions in Reconstructed Scenes</p>
+      <a href="https://arxiv.org/abs/2606.30645" target="_blank" rel="noopener noreferrer">arXiv:2606.30645 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
