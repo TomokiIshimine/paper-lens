@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2607.02513-lacuna-localization-precision-llm-unlearning.html">
+            <img src="assets/2026-07-02-2607.02513-lacuna-localization-precision-llm-unlearning-cover.png"
+                 alt="大規模言語モデルのアンラーニングが、本当にパラメータから知識を消せているのかを検証するテストベッド LACUNA のインフォグラフィック。知識をモデルに見せる前に格納場所を先に固定して正解を持たせ、消去手法が正しい重みを狙えたかを局在化精度（ROC AUC）で測ると、既存の最先端手法は 0.5 前後にとどまり、正解を知る OracleGrad だけが 0.915 と高精度で、既存手法は追加学習で情報が再浮上する攻撃に弱いことを示す">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-02</p>
+          <h2 class="article-card__title">
+            <a href="articles/2607.02513-lacuna-localization-precision-llm-unlearning.html">AIから知識を「消した」つもりが隠しただけ？ 消えた場所を検証できるテストベッド LACUNA</a>
+          </h2>
+          <p class="article-card__summary">大規模言語モデル（LLM）から特定の知識を後から取り除く「アンラーニング（unlearning）」が、本当にパラメータ（モデルの重み）から知識を消せているのかを検証する初のテストベッド LACUNA を提案した研究です。これまでのベンチマークは、質問しても答えなくなるかという出力レベルでしか性能を測れず、パラメータから知識が本当に消去されたのか、単に表に出ないよう隠蔽されただけなのかを区別できませんでした。LACUNA は、知識をモデルに見せる前に格納する場所（パラメータ）を先に固定する「マスク付き継続事前学習」で、あらかじめ決めた場所に個人情報を埋め込んで正解（グラウンドトゥルース）を持たせ、消去手法が正しい重みを狙えたかを局在化精度（ROC AUC）で初めて定量評価します。email アドレス・1B モデルでは、正解を知る OracleGrad だけが 0.915 と高精度で正しい重みを狙えた一方、SimNPO・AlphaEdit・MemFlex はいずれも 0.5 前後にとどまりました。SimNPO は出力上はうまく消せているのに実際の重みは狙えておらず、追加学習で消したはずの情報が再び出る再浮上攻撃では、局在化ベースの MemFlex・AlphaEdit が最も弱く、正しい重みを狙えた OracleGrad が最も頑健でした。ここから「正確に狙うことが、より頑健なアンラーニングにつながる」という示唆が得られます。「出力から消えた」と「モデルから消えた」を混同しないことの重要性を、定量的に示した研究です。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2607.02514-distributed-attacks-persistent-ai-control.html">
             <img src="assets/2026-07-02-2607.02514-distributed-attacks-persistent-ai-control-cover.png"
                  alt="AI コーディングエージェントが持続するコードベースの中で悪意ある動作を複数のプルリクエストに分散して仕込む「段階的攻撃」という新しい攻撃面を扱い、単一の監視役では段階的攻撃と単発攻撃の両方を防げないこと、PR を跨いで疑わしさのメモを持ち越す link-tracker と複数監視役のアンサンブルが最も強い防御になるが最強でも成功攻撃の 47% を見逃すことを示した研究のインフォグラフィック">

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AIから知識を「消した」つもりが隠しただけ？ 消えた場所を検証できるテストベッド LACUNA — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-02-2607.02513-lacuna-localization-precision-llm-unlearning-cover.png"
+           alt="大規模言語モデルのアンラーニングが、本当にパラメータから知識を消せているのかを検証するテストベッド LACUNA のインフォグラフィック。知識をモデルに見せる前に格納場所を先に固定して正解を持たせ、消去手法が正しい重みを狙えたかを局在化精度（ROC AUC）で測ると、既存の最先端手法は 0.5 前後にとどまり、正解を知る OracleGrad だけが 0.915 と高精度で、既存手法は追加学習で情報が再浮上する攻撃に弱いことを示す">
+    </figure>
+
+    <h1 class="article__title">AIから知識を「消した」つもりが隠しただけ？ 消えた場所を検証できるテストベッド LACUNA</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-02</span>
+      <span>arXiv：2607.02513</span>
+      <span>カテゴリ：cs.CL / cs.AI / cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>大規模言語モデル（LLM）から特定の知識を後から取り除く「アンラーニング（unlearning）」が、本当にパラメータ（モデルの重み）から知識を消せているのかを検証する初のテストベッド LACUNA を提案した研究です。あらかじめ決めた場所に個人情報を埋め込んで「知識がどこに格納されているか」の正解を持たせることで、消去手法が正しい場所を狙えているかを初めて定量評価できるようにしました。その結果、既存の最先端手法は出力の上では知識を隠せていても、実際には知識を格納する重みを正確に狙えておらず、追加学習で知識が再び表に出てくる攻撃に弱いことが分かりました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>本論文の核心。</strong>「モデルがその情報を<strong>出力しなくなった</strong>」ことと「モデルの中から情報が<strong>本当に消えた</strong>」ことは別物かもしれない。LACUNA は知識の格納場所を先に固定して正解を用意し、消去手法が<strong>正しい重みを狙えたか</strong>を初めて定量評価する。既存の最先端手法は出力上は消せても実際の重みは狙えておらず、追加学習で知識が再浮上する攻撃に弱い。</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>LLM は学習データに含まれる個人情報（PII、personally identifiable information、個人識別情報）を記憶してしまうことがあり、プライバシー上のリスクになります。最も素直な対処は、学習データから個人情報を取り除いてモデルを再学習することですが、現在の LLM の学習コストを考えるとこれは現実的ではありません。</p>
+      <p>そこで代替として注目されているのがアンラーニングです。モデルを丸ごと作り直すのではなく、覚えてしまった特定の情報だけを後から取り除こうという考え方です。しかし、ここには落とし穴があります。「モデルがその情報を出力しなくなった」ことと「モデルの中から情報が本当に消えた」ことは、実は別物かもしれないのです。この研究は、その違いを見分けるための土台を作ります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>これまでのアンラーニング用のベンチマーク（評価用データセット）は、モデルが対象の知識を出力しなくなるかどうかという<strong>出力レベル（output level）</strong>でしか性能を測ってきませんでした。つまり、質問しても答えなくなればよし、という評価です。</p>
+      <p>ところがこの評価では、モデルのパラメータから知識が本当に消去（erasure）されたのか、それとも単に表に出ないよう隠蔽（obfuscate）されただけなのかを区別できません。実際、アンラーニング済みとされた知識が、巧妙に作った攻撃で再び表面化したり、少し追加学習するだけで復活したりする例が報告されており、「消えていなかった」ことがうかがえます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">これまでの評価</span>出力レベルだけ</p>
+          <p>質問して答えなくなればよし、という評価。パラメータから消去されたのか、単に表に出ないよう隠蔽されただけなのかを区別できない。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">必要なもの</span>格納場所の正解</p>
+          <p>「ある知識がモデル内のどのパラメータに格納されているか」という正解情報（ground truth）。しかし現状、そうした正解は誰も持っていない。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">既存の代替</span>帰属手法は循環論法</p>
+          <p>在りかを推定する帰属（attribution）手法の結果を正解とみなす手もあるが、それでは「推定を正解として推定を評価する」循環論法になる。先行研究では、帰属手法が特定する重要ニューロンは入力間で大きく共有され、正解としては広がりすぎると指摘されている。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>この研究の中核アイデアはシンプルです。<strong>知識をモデルに見せる前に、格納する場所（パラメータ）を先に固定してしまう</strong>というものです。後から在りかを推定するのではなく、最初から「ここに入れる」と決めて埋め込めば、正解は設計の時点で手元にあります。著者らはこれを「データを見せる前に格納場所を固定することで循環論法を回避する」と表現しています。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 210" role="img" aria-label="LACUNA の 3 フェーズのパイプライン図。フェーズ 1 は局在化した情報注入で、あらかじめ決めたパラメータのマスクにだけ個人情報を注入する。フェーズ 2 はアンラーニングで、評価対象の消去手法に個人情報を消去させる。フェーズ 3 は LACUNA による評価で、正解のマスクを使って消去手法が正しい重みを狙えたかを局在化精度で測る。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="60" width="200" height="90" rx="10"></rect>
+          <text x="120" y="88" text-anchor="middle" font-size="12" font-weight="700">フェーズ 1</text>
+          <text x="120" y="110" text-anchor="middle" font-size="11">局在化した情報注入</text>
+          <text x="120" y="130" text-anchor="middle" font-size="10" fill="var(--color-accent)">決めた重みにだけ埋め込む</text>
+
+          <rect class="node" x="280" y="60" width="200" height="90" rx="10"></rect>
+          <text x="380" y="88" text-anchor="middle" font-size="12" font-weight="700">フェーズ 2</text>
+          <text x="380" y="110" text-anchor="middle" font-size="11">アンラーニング</text>
+          <text x="380" y="130" text-anchor="middle" font-size="10" fill="var(--color-accent)">評価対象の手法が消去</text>
+
+          <rect class="node" x="540" y="60" width="200" height="90" rx="10" stroke-width="2.5"></rect>
+          <text x="640" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">フェーズ 3</text>
+          <text x="640" y="110" text-anchor="middle" font-size="11" fill="var(--color-heading)">LACUNA による評価</text>
+          <text x="640" y="130" text-anchor="middle" font-size="10" fill="var(--color-accent)">正解マスクで局在化精度を測る</text>
+
+          <path class="edge" d="M220,105 L280,105" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M480,105 L540,105" marker-end="url(#arrow)"></path>
+
+          <text class="node-label" x="20" y="34">中核アイデア：知識を見せる前に「格納場所」を固定 → 正解が設計時点で手元にある（循環論法を回避）</text>
+        </svg>
+        <figcaption class="diagram__caption">LACUNA のパイプライン。あらかじめ格納場所を固定して正解（マスク）を持たせ、消去手法が正しい重みを狙えたかを局在化精度で評価する。</figcaption>
+      </figure>
+
+      <p>パイプラインは 3 つのフェーズからなります。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">フェーズ 1 ― 局在化した情報注入（Localized Information Injection）</p>
+          <p>合成した架空の人物の個人情報を、あらかじめ決めたパラメータにだけ注入する。このために「マスク付き継続事前学習（masked continual pretraining）」という手法を使う。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">フェーズ 2 ― アンラーニング（Unlearning）</p>
+          <p>評価対象のアンラーニング手法に、保持すべき知識（retain）を守りながら、記憶させた個人情報を消去させる。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">フェーズ 3 ― LACUNA による評価</p>
+          <p>正解のマスクを使って、消去手法が正しい重みを狙えたかを示す<strong>局在化精度（localization precision）</strong>を測る。同時に、出力レベルの挙動と、モデルの一般的な有用性（utility）が保たれているかも評価する。</p>
+        </li>
+      </ol>
+
+      <h3>情報を特定の場所だけに閉じ込める仕組み</h3>
+      <p>情報を特定の場所だけに閉じ込める仕組みが「マスク付き継続事前学習」です。個人情報のプロファイルをいくつかのグループに分け、各グループにモデル重みの一部を指し示す重複しないマスク（binary mask、対象の重みを 1、それ以外を 0 で表す印）を割り当てます。学習の逆伝播（backpropagation、誤差を使って重みを更新する計算）の際に、そのグループのマスク外にある重みの勾配（更新量）をゼロにすることで、指定した重みだけが更新されるようにします。マスクの対象は、モデルの各層の 5% にあたるパラメータで、フィードフォワード層と注意機構（attention）の重みに限定し、個々のパラメータ単位で細かくランダムに選びます。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">各層の 5%</p>
+          <p class="stat__label">マスク対象のパラメータ割合（FF 層と注意機構の重み、パラメータ単位でランダム選択）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1,200</p>
+          <p class="stat__label">埋め込むプロファイル数（合成 PII コーパス PANORAMA の 9,674 から選抜）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">4 フィールド</p>
+          <p class="stat__label">対象フィールド：email・出生都市・電話番号・運転免許証番号</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1B / 7B</p>
+          <p class="stat__label">対象モデルのサイズ（10 億・70 億パラメータの 2 種）</p>
+        </div>
+      </div>
+
+      <p>埋め込む個人情報は、合成された個人情報コーパス PANORAMA（9,674 プロファイル）から 1,200 プロファイルを選んで使い、email アドレス、出生都市、電話番号、運転免許証番号の 4 種類のフィールドを対象にしました。予測しやすいものから、しにくいものまでを含めるよう選んでいます。対象モデルは 10 億パラメータ（1B）と 70 億パラメータ（7B）の 2 サイズです。</p>
+
+      <h3>比較したアンラーニング手法</h3>
+      <p>評価対象として、次のアンラーニング手法を比較しました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">勾配ベース</span>SimNPO</p>
+          <p>勾配ベースの最先端手法。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">局在化ベース</span>AlphaEdit / MemFlex</p>
+          <p>知識の在りかを先に特定してから消す「局在化ベース」の手法。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">上限の基準</span>OracleGrad</p>
+          <p>著者らが基準として用意した「上限」の手法。正解の消去対象マスクをあらかじめ与えられ、その中でだけ編集する、いわば答えを知っている理想的な手法。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>まず、マスク付きの学習がモデルの一般的な能力をほとんど損なわないことが確認されています。マスク学習による重みの分布の変化を検出しようとした分類器の F1 スコアは 0.485 で、ランダムな推測（0.438）とほぼ変わらず、マスクの設計を単純に逆算する手立てはないことが示されました。一般能力のベンチマーク（ARC、HellaSwag、MMLU など）でも、学習前後で精度の差はわずかでした。</p>
+
+      <h3>中心となる結果：局在化精度の低さ</h3>
+      <p>中心となる結果は、局在化精度の低さです。email アドレス・1B モデルの場合、消去手法が正しい重みを狙えたかを表す ROC AUC という指標（1.0 なら完全に正しい重みを狙えており、0.5 なら無差別に重みをいじっており、0.5 未満なら主に狙うべきでない重みをいじっている、という読み方）で見ると、次の値になりました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法（email・1B）</th>
+            <th>局在化精度（ROC AUC）</th>
+            <th>読み方</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>AlphaEdit</th>
+            <td>0.500</td>
+            <td>無差別（狙えていない）</td>
+          </tr>
+          <tr>
+            <th>MemFlex</th>
+            <td>0.500</td>
+            <td>無差別（狙えていない）</td>
+          </tr>
+          <tr>
+            <th>SimNPO</th>
+            <td>0.515</td>
+            <td>ほぼ無差別</td>
+          </tr>
+          <tr>
+            <th>OracleGrad（正解を知る上限）</th>
+            <td class="is-best">0.915</td>
+            <td>高精度で正しい重みを狙えている</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><span class="badge badge--accent-2">読み方</span> 正解を知っている OracleGrad だけが 0.915 と高精度で正しい重みを狙えており、既存手法はいずれもほぼ 0.5 前後にとどまりました。SimNPO がわずかに高いものの、依然として消すべき重みをほとんど狙えていません。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>問題の核心。</strong>出力レベルの消去性能では <strong>SimNPO</strong> が最も強く、答えを知る OracleGrad にほぼ匹敵する（ただし有用性はやや大きく低下）。つまり SimNPO は<strong>出力の上ではうまく消せているのに、実際には正しい重みを狙えていない</strong>。出力を見ているだけでは、その事実に気づけない。</p>
+        </div>
+      </div>
+
+      <h3>「隠しただけかどうか」を突く再浮上攻撃</h3>
+      <p>この「隠しただけかどうか」を突くのが<strong>再浮上攻撃（resurfacing attack）</strong>です。アンラーニング済みのモデルを、学習に使っていない別の個人情報で少し追加学習し直し、消したはずの情報が再び出てくるかを調べます。email アドレスでの結果では、MemFlex と AlphaEdit は攻撃に非常に弱く、消したはずの情報の多くが復元されました。SimNPO はより頑健でしたが一部は復元されました。そして OracleGrad が最も漏洩が少なく、著しく頑健でした。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法（email・1B）</th>
+            <th>追加学習で情報が復活した割合</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>MemFlex</th>
+            <td>約 87%</td>
+          </tr>
+          <tr>
+            <th>AlphaEdit</th>
+            <td>約 74%</td>
+          </tr>
+          <tr>
+            <th>SimNPO</th>
+            <td>約 13%</td>
+          </tr>
+          <tr>
+            <th>OracleGrad（正解を知る上限）</th>
+            <td class="is-best">約 0%</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><span class="badge badge--accent-2">注記</span> これらはグラフからの読み取り値のため、正確な数値は原論文の図を参照してください。局在化ベースの MemFlex・AlphaEdit が最も再浮上しやすく、正しい重みを狙えた OracleGrad が最も頑健、という対比が読み取れます。</p>
+
+      <p>なお、漏洩したプロファイルを手法間で比べると、SimNPO と OracleGrad が漏らすプロファイルは大きく重なっていました。これは、手法固有の失敗というより「そもそも消しにくいデータ点」が存在することを示唆します（ただし著者らは、これは小さな集合に基づく補助的・定性的な観察だと断っています）。数値フィールドでは SimNPO と OracleGrad が同程度に頑健になるといった例外も報告されています。</p>
+
+      <h2>意義と限界</h2>
+
+      <h3>意義</h3>
+      <p>この研究が示したのは、従来の指標で高性能でも（特に SimNPO）、実際には知識を格納する重みを狙えておらず、再浮上攻撃に弱いままになりうる、という点です。対照的に、正解の在りかを与えられた単純な手法 OracleGrad は、消去・保持・有用性の望ましい組み合わせを達成し、攻撃にも最も頑健でした。ここから、<strong>正確に狙うことが、より頑健なアンラーニングにつながる</strong>という示唆が得られます。</p>
+      <p>LACUNA の意義は、「知識がどこにあるか」の正解を提供する初のテストベッドとして、アンラーニング手法が正しいパラメータを狙えているかを初めて定量的に評価できるようにした点にあります。著者らは今後の方向として、出力レベルだけでなくパラメータを直接狙える手法の設計と、より正確な知識の局在化技術の必要性を挙げています。</p>
+
+      <h3>限界</h3>
+      <p>限界として、著者らは知識の局在化が常に現実的とは限らないと述べています。密なモデルでは、記憶が必ずしも一部の重みに強く集中して格納されるとは限らないためです。そこで、機微な実データを扱う学習では、あらかじめ記憶を特定のパラメータやモジュールに閉じ込めておく方が望ましいかもしれない、と示唆しています。また、本文の詳細な結果は主に 1B モデル・email アドレスについて報告されており、7B や他のフィールドの結果は付録に置かれています。</p>
+
+      <h2>まとめ</h2>
+      <p>LACUNA は、知識の格納場所を先に固定することで、アンラーニングが正しい重みを狙えているかを検証できるようにした初のテストベッドです。既存の最先端手法は出力上は知識を消せていても実際の重みは狙えておらず、追加学習で情報が再浮上しやすいことが明らかになりました。「出力から消えた」と「モデルから消えた」を混同しないことの重要性を、定量的に示した研究といえます。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>アンラーニング（unlearning）</dt>
+        <dd>学習済みモデルから特定の情報を後から取り除くアルゴリズムの総称。</dd>
+
+        <dt>PII（personally identifiable information、個人識別情報）</dt>
+        <dd>個人を特定しうる情報。本研究では email アドレス・出生都市・電話番号・運転免許証番号を対象。</dd>
+
+        <dt>局在化精度（localization precision）</dt>
+        <dd>アンラーニングが、知識を格納している重みをどれだけ的確に狙えたかの度合い。本研究では ROC AUC で測定する。</dd>
+
+        <dt>マスク付き継続事前学習（masked continual pretraining）</dt>
+        <dd>マスクで逆伝播時の勾配をゼロにし、情報を特定のパラメータにだけ注入する学習法。</dd>
+
+        <dt>forget set / retain set</dt>
+        <dd>消去したい情報の集合 / 有用性を保つために残したい情報の集合。</dd>
+
+        <dt>再浮上攻撃（resurfacing attack）</dt>
+        <dd>アンラーニング済みモデルを別データで追加学習し直し、消したはずの情報が再び出るかを調べる頑健性テスト。真の消去と単なる隠蔽を区別する狙いがある。</dd>
+
+        <dt>ROC AUC（局在化の指標）</dt>
+        <dd>狙うべき重みが、狙うべきでない重みより高いスコアを得る確率に相当。1.0 で完全、0.5 で無差別、0.5 未満は主に狙うべきでない重みを改変。</dd>
+
+        <dt>OracleGrad</dt>
+        <dd>正解の消去対象マスクを与えられ、その中だけで編集する「上限」の基準手法。</dd>
+
+        <dt>PANORAMA</dt>
+        <dd>本研究で情報注入元に用いた合成の個人情報コーパス（9,674 プロファイル）。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">LACUNA: A Testbed for Evaluating Localization Precision for LLM Unlearning</p>
+      <a href="https://arxiv.org/abs/2607.02513" target="_blank" rel="noopener noreferrer">arXiv:2607.02513 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
