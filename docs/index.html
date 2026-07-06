@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-02-2607.02512-program-as-weights-fuzzy-functions.html">
+            <img src="assets/2026-07-02-2607.02512-program-as-weights-fuzzy-functions-cover.png"
+                 alt="自然言語で書いた「あいまいな関数（ファジー関数）」を、ニューラルコンパイラが小さなAIバイナリ（重みの塊）へと変換し、凍結された軽量なニューラルインタプリタが実行する Program-as-Weights（PAW）のインフォグラフィック。0.6B の小さなモデルが FuzzyBench で 73.78% の完全一致精度を達成し、直接指示した Qwen3-32B の 68.70% を約 50 分の 1 の推論メモリで上回ることを示す">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-02</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-02-2607.02512-program-as-weights-fuzzy-functions.html">自然言語で書いた「あいまいな関数」を小さなAIバイナリにコンパイルする — Program-as-Weights</a>
+          </h2>
+          <p class="article-card__summary">「壊れた JSON を直す」「ログの重要な行だけ拾う」といった、ルールでは書きにくいが人間には直感的なタスクを、自然言語で記述する新しいプログラミングのやり方を提案した研究です。この記述を「ニューラルコンパイラ」が小さなAIの部品（重みの塊）へと変換し、それを固定された軽量なAIが実行します。提案手法 Program-as-Weights（PAW）は、0.6B（6 億パラメータ）という小さなモデルで、はるかに大きな Qwen3-32B に直接指示を出すより高い正解率（73.78% 対 68.70%）を、約 50 分の 1 の推論メモリで達成しました。生成される「プログラム」は、仕様を言い換え＋少数例に整形した擬似プログラム（離散成分）と、コンパイラが関数ごとに生成する LoRA（連続成分）のハイブリッドで、学習で更新するのはコンパイラ部分だけです。評価には論文が新たに公開する 1000 万例のデータセット FuzzyBench を用い、コンパイラの有無を比べたアブレーションでは PAW（0.7378）が全パラメータ微調整（0.5840）を 15.4 ポイント、最も強い固定 LoRA（0.5210）を 21.7 ポイント上回り、性能の伸びがコンパイラ生成の LoRA に由来することを示しました。約 430 MB の共有ベースと関数ごと約 23 MB の LoRA を組み合わせれば MacBook M3 上で毎秒約 30 トークンで動き、仕様に誤字や書式ゆれを加えても精度低下はわずか、コンパイラを画像対応版に差し替えるだけで画像タスクにも広がります。基盤モデルの役割を「入力ごとの問題解決器」から「関数ごとのツール構築器」へ捉え直し、あいまいなタスクを外部 API に頼らず再現可能・配布可能なソフトウェア部品として扱う道を示した研究です。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2607.02513-lacuna-localization-precision-llm-unlearning.html">
             <img src="assets/2026-07-02-2607.02513-lacuna-localization-precision-llm-unlearning-cover.png"
                  alt="大規模言語モデルのアンラーニングが、本当にパラメータから知識を消せているのかを検証するテストベッド LACUNA のインフォグラフィック。知識をモデルに見せる前に格納場所を先に固定して正解を持たせ、消去手法が正しい重みを狙えたかを局在化精度（ROC AUC）で測ると、既存の最先端手法は 0.5 前後にとどまり、正解を知る OracleGrad だけが 0.915 と高精度で、既存手法は追加学習で情報が再浮上する攻撃に弱いことを示す">

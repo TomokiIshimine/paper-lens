@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>自然言語で書いた「あいまいな関数」を小さなAIバイナリにコンパイルする — Program-as-Weights — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-02-2607.02512-program-as-weights-fuzzy-functions-cover.png"
+           alt="自然言語で書いた「あいまいな関数（ファジー関数）」を、ニューラルコンパイラが小さなAIバイナリ（重みの塊）へと変換し、凍結された軽量なニューラルインタプリタが実行する Program-as-Weights（PAW）のインフォグラフィック。0.6B の小さなモデルが FuzzyBench で 73.78% の完全一致精度を達成し、直接指示した Qwen3-32B の 68.70% を約 50 分の 1 の推論メモリで上回ることを示す">
+    </figure>
+
+    <h1 class="article__title">自然言語で書いた「あいまいな関数」を小さなAIバイナリにコンパイルする — Program-as-Weights</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-02</span>
+      <span>arXiv：2607.02512</span>
+      <span>カテゴリ：cs.LG / cs.AI / cs.CL</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>「壊れた JSON を直す」「ログの重要な行だけ拾う」といった、ルールでは書きにくいが人間には直感的なタスクを、自然言語で記述する新しいプログラミングのやり方を提案しています。この記述を「ニューラルコンパイラ」が小さなAIの部品（重みの塊）へと変換し、それを固定された軽量なAIが実行します。提案手法 Program-as-Weights（PAW）は、0.6B（6 億パラメータ）という小さなモデルで、はるかに大きな Qwen3-32B に直接指示を出すより高い正解率（73.78% 対 68.70%）を、約 50 分の 1 の推論メモリで達成しました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>本論文の核心。</strong>基盤モデルの役割を「入力ごとの問題解決器」から「<strong>関数ごとのツール構築器</strong>」へ捉え直す。重い処理は<strong>コンパイル時に一度だけ</strong>起こし、日々の実行はローカルで安価・オフラインに行う。あいまいなタスクを、外部 API に頼らず再現可能で配布可能なソフトウェア部品として扱う道を示した。</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>ソフトウェア開発では、明快なルールでは書けないタスクにたびたび出くわします。たとえば「ユーザーの意図に沿って検索結果を並べ替える」「誤字を含んだ入力から答えを抜き出す」といった処理は、人間なら直感的にこなせても、正規表現や if 文で厳密に書き切るのは困難です。</p>
+      <p>現在、開発者はこうした「あいまいさ」を大規模言語モデル（large language model, LLM）の API に丸投げしがちです。しかしこのやり方には代償があります。論文は次の 4 点を挙げています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">代償 (a)</span>コストが高い</p>
+          <p>API 呼び出しのたびにコストがかかる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">代償 (b)</span>ノイズに脆い</p>
+          <p>入力のノイズ（誤字・書式のゆれ）に弱い。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">代償 (c)</span>再現できない</p>
+          <p>プロバイダがモデルを黙って更新するため、結果を再現できなくなる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">代償 (d)</span>外部依存</p>
+          <p>ソフトウェアが外部サービスなしでは完結できない。</p>
+        </div>
+      </div>
+
+      <p>この研究は、あいまいなタスクの処理を外部 API に頼らず、手元で動く自己完結したソフトウェア部品に閉じ込める道を示します。重い計算は「コンパイル時」に一度だけ済ませ、日々の実行はローカルで安価かつオフラインに行える点が新しさです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>論文はまず、ルールで書きにくいタスクを「ファジー関数（fuzzy function）」と呼びます。これは、記号的なコードよりも自然言語・例・制約で指定する方が自然な関数のことです。人間には直感的でも、厳密な記号ルールでは捉えきれません。</p>
+      <p>従来のアプローチは大きく 2 つでした。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">従来 1</span>手書きルール・正規表現</p>
+          <p>実世界の入力は誤字や書式のゆれ（フォーマットのドリフト）が多く、こうした手書きの実装は簡単に壊れてしまう。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">従来 2</span>LLM API への外部委託</p>
+          <p>前節で述べた 4 つの代償（高コスト・ノイズに脆い・再現できない・外部依存）を伴う。</p>
+        </div>
+      </div>
+
+      <p>つまり、「あいまいさを扱える柔軟さ」と「ローカルで完結し再現可能な堅牢さ」を両立する手段が欠けていた、というのが出発点です。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>PAW の中核は、古典的なコンパイラとランタイム（実行環境）の分業を、AI の世界に持ち込むことです。次の 3 ステップで動きます。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 230" role="img" aria-label="Program-as-Weights の 3 ステップの図。開発者が自然言語で関数（仕様）を書き、ニューラルコンパイラが仕様を小さなニューラルバイナリ（プログラム）に変換し、凍結された軽量なニューラルインタプリタがそのバイナリをユーザー定義関数のように実行する。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="20" y="70" width="200" height="100" rx="10"></rect>
+          <text x="120" y="98" text-anchor="middle" font-size="12" font-weight="700">ステップ 1</text>
+          <text x="120" y="120" text-anchor="middle" font-size="11">自然言語で関数を書く</text>
+          <text x="120" y="142" text-anchor="middle" font-size="10" fill="var(--color-accent)">＝仕様（specification）</text>
+
+          <rect class="node" x="280" y="70" width="200" height="100" rx="10"></rect>
+          <text x="380" y="98" text-anchor="middle" font-size="12" font-weight="700">ステップ 2</text>
+          <text x="380" y="120" text-anchor="middle" font-size="11">ニューラルコンパイラが変換</text>
+          <text x="380" y="142" text-anchor="middle" font-size="10" fill="var(--color-accent)">＝プログラム（重みの塊）</text>
+
+          <rect class="node" x="540" y="70" width="200" height="100" rx="10" stroke-width="2.5"></rect>
+          <text x="640" y="98" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">ステップ 3</text>
+          <text x="640" y="120" text-anchor="middle" font-size="11" fill="var(--color-heading)">凍結インタプリタが実行</text>
+          <text x="640" y="142" text-anchor="middle" font-size="10" fill="var(--color-accent)">再学習不要・ローカル実行</text>
+
+          <path class="edge" d="M220,120 L280,120" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M480,120 L540,120" marker-end="url(#arrow)"></path>
+
+          <text class="node-label" x="20" y="40">重い計算は「コンパイル時」に一度だけ。新しい関数の追加は、新しいプログラムをコンパイルするだけ（インタプリタは再学習不要）。</text>
+        </svg>
+        <figcaption class="diagram__caption">PAW の 3 ステップ。実行可能ファイルが「学習済みパラメータの塊」であり、実行環境がニューラルネットワークである点が古典的コンパイラと決定的に違う。</figcaption>
+      </figure>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">ステップ 1 ― 開発者が自然言語で関数を書く</p>
+          <p>これが「仕様（specification）」です。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">ステップ 2 ― ニューラルコンパイラが仕様を小さなニューラルバイナリに変換する</p>
+          <p>ここでできる成果物が「プログラム」です。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">ステップ 3 ― 凍結された軽量なニューラルインタプリタが実行する</p>
+          <p>そのバイナリを、ユーザー定義関数のように実行します。</p>
+        </li>
+      </ol>
+
+      <p>決定的に違うのは、実行可能ファイルが「学習済みパラメータの塊」であり、実行環境がニューラルネットワークである点です。インタプリタは再学習不要で、新しいファジー関数を追加したいときは、新しいプログラムをコンパイルするだけで済みます。</p>
+
+      <h3>生成される「プログラム」の中身</h3>
+      <p>生成される「プログラム」は、離散成分と連続成分のハイブリッドです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">離散成分</span>擬似プログラム（pseudo-program）</p>
+          <p>仕様を「言い換え＋少数の入出力例」に整形した、可変長のトークン列。インタプリタへの入力の一部として渡され、誤字や曖昧さからインタプリタを守る役目を持つ。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">連続成分</span>LoRA による PEFT</p>
+          <p>PEFT（parameter-efficient fine-tuning、パラメータ効率的微調整）で実装される部分。具体的には LoRA（Low-Rank Adaptation、線形変換への低ランクな更新）をインタプリタに注入し、テキストだけでは伝えきれない細かな挙動制御を担う。</p>
+        </div>
+      </div>
+
+      <h3>パイプラインを構成する 3 つの部品</h3>
+      <p>パイプラインは 3 つの部品からなります。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">1 つ目 ― 擬似コンパイラ（学習しない）</p>
+          <p>学習しない既製の 4B モデル（Qwen3-4B）を使い、仕様を擬似プログラムへ整形します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">2 つ目 ― LoRA コンパイラ（唯一の学習対象）</p>
+          <p>これだけが学習される部品です。仕様と擬似プログラムを 1 回モデルに通し、その内部状態から LoRA の重みを生成します。この変換を担うのが「LoRA mapper」というモジュールです。あらかじめ用意した複数の LoRA 部品（共有された学習可能な基底（base））を、どの割合で混ぜるかを表す重み（混合係数）へとモデルの隠れ状態を変換し、その混ぜ合わせた結果として LoRA 行列を組み立てます。つまり、部品そのものは使い回しつつ、混ぜる割合だけを仕様ごとに変えることで、関数ごとに異なる LoRA を作り出す仕組みです。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">3 つ目 ― 凍結インタプリタ</p>
+          <p>生成された LoRA を注入し、擬似プログラムを入力に前置して答えを生成します。</p>
+        </li>
+      </ol>
+
+      <p>学習で更新するのは PEFT コンパイラの部分だけです。擬似コンパイラとインタプリタは凍結したまま、正解出力の負の対数尤度（つまり正解を出しやすくする方向）を最小化します。勾配は凍結インタプリタを通って LoRA mapper とコンパイラへ逆伝播します。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価には、論文が新たに公開する <strong>FuzzyBench</strong> を用います。これは（仕様, 入力, 目標出力）の三つ組を 10M（1000 万）例集めたデータセットで、gpt-5.2 で生成され、800 を超えるサブカテゴリをカバーします。テストに使う仕様は学習時に完全に未見となるよう分割されています。主評価指標は出力の完全一致（exact match）です。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">73.78%</p>
+          <p class="stat__label">PAW（Qwen3 0.6B）の完全一致精度（Qwen3-32B 直接指示の 68.70% を上回る）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">約 1/50</p>
+          <p class="stat__label">推論メモリ（bf16 で約 1.2 GB 対 約 60 GB）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">10M 例</p>
+          <p class="stat__label">FuzzyBench の規模（800 超のサブカテゴリ、gpt-5.2 で生成）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">96.09%</p>
+          <p class="stat__label">データ生成モデル gpt-5.2 の到達点（経験的な上限）</p>
+        </div>
+      </div>
+
+      <h3>大きなモデルへの直接指示を上回る</h3>
+      <p>PAW（Qwen3 0.6B）は FuzzyBench で 73.78% の完全一致精度を達成し、Qwen3-32B に直接指示を出す方式（68.70%）を上回りました。しかも推論メモリは約 50 分の 1（bf16（16 ビット浮動小数点、量子化前の標準精度）で約 1.2 GB 対 約 60 GB）です。参考までに、API モデルの gpt-5.2 は 96.09%、gpt-5-mini は 91.87% でした。この 96.09% がデータ生成モデル自身の到達点であり、学習した関数が届きうる経験的な上限とされています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>方式</th>
+            <th>完全一致精度</th>
+            <th>備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>PAW（Qwen3 0.6B）</th>
+            <td class="is-best">73.78%</td>
+            <td>推論メモリ約 1.2 GB（bf16）</td>
+          </tr>
+          <tr>
+            <th>Qwen3-32B 直接指示</th>
+            <td>68.70%</td>
+            <td>推論メモリ約 60 GB（bf16）</td>
+          </tr>
+          <tr>
+            <th>gpt-5-mini（API）</th>
+            <td>91.87%</td>
+            <td>参考値</td>
+          </tr>
+          <tr>
+            <th>gpt-5.2（API・データ生成モデル）</th>
+            <td>96.09%</td>
+            <td>経験的な上限</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>性能の伸びはコンパイラ生成の LoRA に由来する</h3>
+      <p>コンパイラの有無を比べたアブレーション（同一データ・同一ベース・同一学習予算）では、性能の伸びがコンパイラ生成の LoRA に由来することが示されました。PAW は全パラメータ微調整を 15.4 ポイント、最も強い固定 LoRA を 21.7 ポイント上回っています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法（同一データ・同一ベース・同一学習予算）</th>
+            <th>スコア</th>
+            <th>PAW との差</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>固定 LoRA（r=64）</th>
+            <td>0.5210</td>
+            <td>−21.7 ポイント</td>
+          </tr>
+          <tr>
+            <th>全パラメータ微調整（full fine-tuning）</th>
+            <td>0.5840</td>
+            <td>−15.4 ポイント</td>
+          </tr>
+          <tr>
+            <th>PAW</th>
+            <td class="is-best">0.7378</td>
+            <td>―</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>量子化して実機で動かせる</h3>
+      <p>約 430 MB の共有ベース（複数の関数で使い回す）と、関数ごとに約 23 MB の LoRA アダプタを組み合わせ、MacBook M3 上で毎秒約 30 トークンで動作しました。量子化による精度低下も小さく、ある設定（Q6_K ベース＋Q4_0 LoRA）では bf16 と統計的に区別できないレベルでした。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">約 430 MB</p>
+          <p class="stat__label">共有ベース（複数の関数で使い回す）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">約 23 MB</p>
+          <p class="stat__label">関数ごとの LoRA アダプタ</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">約 30 tok/s</p>
+          <p class="stat__label">MacBook M3 上での実行速度</p>
+        </div>
+      </div>
+
+      <h3>ノイズに強く、コンパイラ差し替えで画像タスクにも広がる</h3>
+      <p>ノイズに強いという結果も示されています。仕様に誤字・文法の乱れ・曖昧さ・書式ゆれなどを加えても、精度の低下はわずかでした（清潔な仕様の 0.6692 に対し、全ノイズ複合でも約 3.7% の低下）。擬似プログラムを与える方が生の仕様を与えるよりノイズに強く、4B のコンパイラが仕様をきれいな言い換えに変換してノイズを除去するためと説明されています。</p>
+      <p>さらに、コンパイラを差し替えるだけで画像タスクにも広がります。インタプリタと LoRA mapper はそのままに、テキスト専用コンパイラを同系統の画像対応コンパイラ（Qwen3-VL-4B）に交換すると、小さなテキストインタプリタは画像を一切見ないまま、画像条件付きのタスクを解けました。一部の図表タスク（回路図・化学・楽譜）では 4B までの画像対応ベースラインを上回っています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、基盤モデルの役割を「入力ごとの問題解決器」から「関数ごとのツール構築器」へと捉え直した点にあります。重い処理はコンパイル時に一度だけ起こり、日々の実行はローカルで安価・オフラインに行える、という「小さなモデルが主役の未来（small-model future）」への具体的な一歩と位置づけられています。コンパイル済みのプログラムは名前とバージョンを持ち、パッケージマネージャで配布できる、バージョン管理された配布可能なソフトウェア成果物になります。</p>
+      <p>一方で、論文は次の限界も率直に認めています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 1</span>長い構造化テキスト生成が苦手</p>
+          <p>LaTeX 生成のような長文タスクでは、LoRA 版が前身の prefix-tuning 版より弱くなった。擬似プログラム内の長い入出力例が、小さなインタプリタの限られた文脈予算を圧迫することが原因とされる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 2</span>設計に理論的説明がない部分がある</p>
+          <p>LoRA mapper で単純な共有基底の設計が、より表現力の高い変種を上回った理由について、著者は「明快な理論的説明を持たない」と明記している。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 3</span>性能の上限がデータ生成モデルに縛られる</p>
+          <p>FuzzyBench 上の到達点は、データを作った gpt-5.2 の 96.09% で頭打ちになる。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>PAW は、あいまいなタスクを自然言語で記述し、それを小さなニューラルバイナリへコンパイルして固定インタプリタ上でローカル実行する新しいパラダイムです。0.6B の小さなモデルで大きなモデルへの直接指示を上回りつつ、約 50 分の 1 のメモリで動き、量子化すればノートパソコン上でも実用的な速度で走ります。外部 API に頼らず、再現可能で配布可能なソフトウェア部品として「あいまいさ」を扱う道を示した点が、この研究の核心です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>ファジー関数（fuzzy function）</dt>
+        <dd>記号的なコードより、自然言語・例・制約で指定する方が自然な関数。人間には直感的だが、厳密な記号ルールでは捉えきれないタスクを指す。</dd>
+
+        <dt>Program-as-Weights（PAW）</dt>
+        <dd>本論文が提案するパラダイムの名称。プログラムの挙動がソースコードではなく重み（weights）に符号化される。</dd>
+
+        <dt>擬似プログラム（pseudo-program）</dt>
+        <dd>仕様を「言い換え＋少数の入出力例」に整形した離散トークン列。インタプリタ入力の一部で、誤字や曖昧さからインタプリタを守る。</dd>
+
+        <dt>コンパイラ／インタプリタ（compiler / interpreter）</dt>
+        <dd>コンパイラ（4B モデル）が仕様をプログラムに変換し、凍結インタプリタ（0.6B など）がそのプログラムを入力に対して実行する。</dd>
+
+        <dt>PEFT（parameter-efficient fine-tuning）</dt>
+        <dd>パラメータ効率的微調整。少数のパラメータだけを追加・更新してモデルを適応させる手法群。</dd>
+
+        <dt>LoRA（Low-Rank Adaptation）</dt>
+        <dd>線形変換への低ランクな更新を加える PEFT の一手法。PAW ではコンパイラが例ごとに LoRA を生成しインタプリタに注入する。</dd>
+
+        <dt>exact match（完全一致）</dt>
+        <dd>FuzzyBench の主評価指標で、出力が目標と完全に一致した割合。</dd>
+
+        <dt>FuzzyBench</dt>
+        <dd>本論文が公開する、1000 万例のファジー関数データセット。</dd>
+
+        <dt>量子化 / GGUF</dt>
+        <dd>モデルの重みを低ビットで表現し、オンデバイス実行を軽くするフォーマット・手法（Q4_0、Q6_K など）。</dd>
+
+        <dt>bf16（bfloat16）</dt>
+        <dd>16 ビットの浮動小数点形式。量子化する前の標準的な精度で、量子化（Q4_0 等）と比較する際の基準として使われる。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Program-as-Weights: A Programming Paradigm for Fuzzy Functions</p>
+      <a href="https://arxiv.org/abs/2607.02512" target="_blank" rel="noopener noreferrer">arXiv:2607.02512 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
