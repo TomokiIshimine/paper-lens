@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-06-2607.05396-camvla-calibration-free-view-robust-vla.html">
+            <img src="assets/2026-07-06-2607.05396-camvla-calibration-free-view-robust-vla-cover.png"
+                 alt="単眼 RGB 画像 1 枚だけから「どう動くか（カメラ座標系の行動）」と「どこから見ているか（6 自由度のハンドアイ行列）」を並列に予測し、決定論的な幾何変換で両者を合成してロボットベース座標系の行動を作る CamVLA のインフォグラフィック。事前のカメラ校正も深度センサも複数視点も不要で、未知の視点に対して既存ベースラインを大きく上回る頑健性を示す">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-06</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-06-2607.05396-camvla-calibration-free-view-robust-vla.html">カメラの位置を教えなくても、視点のずれに強いロボット操作AI ― CamVLA</a>
+          </h2>
+          <p class="article-card__summary">ロボットに「見て、指示を理解して、動く」を任せる VLA（Vision-Language-Action、視覚・言語・行動）モデルは、学習時と違うカメラ視点になると成功率が急落するという弱点を抱えています。論文の報告では、単一視点で学習した既存モデル π0 が学習時の視点で約 65.3% の成功率を出す一方、カメラを 15° 回転させただけで 6.3% まで崩壊します。手持ち・ドリフト・再装着のように、視点への頑健性が本当に必要な場面ほど正確なカメラ姿勢は測り直せず、従来手法が前提にする「デプロイ時に正確な外部パラメータが既知」という条件が崩れてしまいます。この論文は、カメラの位置をモデルに教えるのではなく、単眼 RGB 画像 1 枚からモデル自身に推定させる CamVLA を提案しました。方策を「(i) どう動くか＝カメラ座標系のままエンドエフェクタの動きを予測する Action Head」と「(ii) どこから見ているか＝6 自由度のハンドアイ行列を回帰する Geometric Head」の 2 つの部分問題に分け、両者を学習ではなく決定論的な幾何変換で合成してベース座標系の行動を作ります。合成に使うのは推定した回転だけで、相対（デルタ）行動として実行する限り並進のずれは結果に影響しません。デプロイ時に必要なのは RGB 1 枚とタスク指示だけで、校正・深度・複数視点はいずれも不要です。RLBench の未知視点評価では π0 ベースで 33.2%→51.4%（+18.2 ポイント）、GR00T N1.7 ベースで 28.4%→38.4%（+10.0 ポイント）へ改善し、実機の 15° オフセットでもベースラインが 16.0%・14.7% まで崩れるところ CamVLA は 29.3%・33.0% を保ちました。追加コストは Geometric Head の +0.19% パラメータ・推論 +1ms のみです。「与えられた幾何」を「学習された幾何」で置き換え、非構造化な環境での校正不要な操作を可能にした研究です。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-02-2607.02512-program-as-weights-fuzzy-functions.html">
             <img src="assets/2026-07-02-2607.02512-program-as-weights-fuzzy-functions-cover.png"
                  alt="自然言語で書いた「あいまいな関数（ファジー関数）」を、ニューラルコンパイラが小さなAIバイナリ（重みの塊）へと変換し、凍結された軽量なニューラルインタプリタが実行する Program-as-Weights（PAW）のインフォグラフィック。0.6B の小さなモデルが FuzzyBench で 73.78% の完全一致精度を達成し、直接指示した Qwen3-32B の 68.70% を約 50 分の 1 の推論メモリで上回ることを示す">

@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>カメラの位置を教えなくても、視点のずれに強いロボット操作AI ― CamVLA — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-06-2607.05396-camvla-calibration-free-view-robust-vla-cover.png"
+           alt="単眼 RGB 画像 1 枚から「どう動くか（カメラ座標系の行動）」と「どこから見ているか（6 自由度のハンドアイ行列）」を並列に予測し、決定論的な幾何変換で合成することで、事前のカメラ校正・深度センサ・複数視点なしに未知のカメラ視点への頑健性を得る CamVLA のインフォグラフィック。既存モデル π0 がカメラを 15° 回転させると成功率 65.3% から 6.3% へ崩壊するのに対し、CamVLA が頑健性を保つことを示す">
+    </figure>
+
+    <h1 class="article__title">カメラの位置を教えなくても、視点のずれに強いロボット操作AI ― CamVLA</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-06</span>
+      <span>arXiv：2607.05396</span>
+      <span>カテゴリ：cs.CV / cs.AI / cs.LG / cs.RO</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ロボットに「見て、指示を理解して、動く」を任せる VLA（Vision-Language-Action、視覚・言語・行動）モデルは、学習時と違うカメラ視点になると成功率が急落するという弱点を抱えています。この論文は、単眼 RGB 画像 1 枚だけから「どう動くか」と「カメラがどこから見ているか」を並列に予測し、決められた幾何変換で両者を合成する <strong>CamVLA</strong> を提案しました。事前のカメラ校正も深度センサも複数視点も不要で、未知のカメラ視点に対して既存の強力なベースラインを大きく上回る頑健性を、シミュレーションと実機の両方で示しています。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>本論文の核心。</strong>従来手法は「カメラがどこにあるかをモデルに教える」ために、<strong>デプロイ時に正確な外部パラメータが既知</strong>であることを前提にしていた。CamVLA はこの前提を外し、カメラの位置を<strong>モデル自身に単眼 RGB 画像から推定させる</strong>ことで、手持ち・ドリフト・再装着といった校正不要の場面でも視点に頑健な操作を可能にした。</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>ロボットを実世界で使おうとすると、カメラの位置は必ずしも固定されません。人が手に持つカメラ、少しずつずれていくカメラ、いったん外して付け直したカメラ ― こうした状況では、カメラの正確な姿勢を毎回測り直すのは現実的ではありません。</p>
+      <p>ところが今の VLA モデルは、カメラ視点が少し変わっただけで大きく崩れます。論文の報告では、単一視点で学習した既存モデル π0 が学習時の視点で約 65.3% の成功率を出す一方、カメラを 15° 回転させただけで 6.3% まで崩壊します（Figure 1）。シーンは変わらず、やるべきことも同じなのに失敗するのです。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">65.3%</p>
+          <p class="stat__label">既存モデル π0 の成功率（学習時の視点、Figure 1）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">6.3%</p>
+          <p class="stat__label">同じ π0 をカメラ 15° 回転させたときの成功率（同じシーン・同じタスクなのに崩壊）</p>
+        </div>
+      </div>
+
+      <p>CamVLA が目指すのは、この「視点が変わると壊れる」問題を、カメラの位置情報を一切外から与えずに解くことです。これができれば、校正の手間なしに、より自由なカメラ配置でロボットを動かせるようになります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>VLA モデルの視点への脆さには構造的な理由があります。標準的な VLA は、カメラから見た映像をもとに「ロボットの土台（ベース）座標系」で行動を予測します。つまりモデルは、カメラ座標系からロボットベース座標系への空間変換（ハンドアイ変換）を、内部で暗黙のうちに解かなければなりません。操作の制御とカメラの幾何がひとつのネットワークの中で結びついてしまい、視点がずれると両方まとめて崩れてしまうわけです。</p>
+      <p>この問題に取り組んだ先行研究（OC-VLA、4D-VLA、AnyCamVLA など）はいくつかありますが、いずれも「カメラがどこにあるかをモデルに教える」という方針に落ち着いています。そしてそのために、動かす時点（デプロイ時）で正確なカメラの外部パラメータ（extrinsics、カメラのロボット/世界に対する姿勢）が既知であることを前提にしています。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>前提こそが弱点。</strong>手持ち・ドリフト・再装着といった、視点への頑健性が本当に必要な場面では、正確な外部パラメータが得られない。<strong>頑健性を欲しがる状況ほど、前提が成り立たない</strong>のである。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>CamVLA の中核となる発想は、「カメラの位置をモデルに教える」のではなく「モデル自身に単眼 RGB 画像から推定させる」ことです。そのために方策を、1 枚の画像から解ける 2 つの部分問題に分けます。この分け方は、人間の視覚に誘導された操作が「自分中心（egocentric、自己中心）」と「他者中心（allocentric）」の 2 つの系を併せ持つ、という生物学的な着想に基づいています。自分中心の系は、見えている映像にそろえて手を動かす働きで、後述の (i) どう動くかに対応します。他者中心の系は、頭の姿勢を胴体に対して暗黙に把握する働きで、後述の (ii) どこから見ているかに対応します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 320" role="img" aria-label="CamVLA の 2 分岐と決定論的合成の図。単眼 RGB 画像 1 枚とタスク指示を入力に、Action Head がカメラ座標系のままエンドエフェクタの行動を予測し（どう動くか）、Geometric Head が 6 自由度のハンドアイ行列を回帰する（どこから見ているか）。この 2 つを学習ではなく決められた幾何変換で合成し、実機が必要とするベース座標系の相対行動を出力する。合成には回転だけが使われ、並進のずれは相対行動として実行する限り結果に影響しない。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="20" y="28">デプロイ時の入力は単眼 RGB 画像 1 枚 ＋ タスク指示だけ（標準的な VLA と同じ）。校正・深度・複数視点は不要。</text>
+
+          <rect class="node" x="20" y="130" width="180" height="70" rx="10"></rect>
+          <text x="110" y="160" text-anchor="middle" font-size="12" font-weight="700">単眼 RGB 画像 1 枚</text>
+          <text x="110" y="180" text-anchor="middle" font-size="11">＋ タスク指示</text>
+
+          <rect class="node" x="280" y="55" width="220" height="90" rx="10"></rect>
+          <text x="390" y="82" text-anchor="middle" font-size="12" font-weight="700">(i) Action Head</text>
+          <text x="390" y="103" text-anchor="middle" font-size="11">どう動くか</text>
+          <text x="390" y="124" text-anchor="middle" font-size="10" fill="var(--color-accent)">カメラ座標系の行動を直接予測</text>
+
+          <rect class="node" x="280" y="185" width="220" height="90" rx="10"></rect>
+          <text x="390" y="212" text-anchor="middle" font-size="12" font-weight="700">(ii) Geometric Head</text>
+          <text x="390" y="233" text-anchor="middle" font-size="11">どこから見ているか</text>
+          <text x="390" y="254" text-anchor="middle" font-size="10" fill="var(--color-accent)">6-DoF ハンドアイ行列を回帰</text>
+
+          <rect class="node" x="570" y="130" width="170" height="70" rx="10" stroke-width="2.5"></rect>
+          <text x="655" y="157" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">決定論的な幾何変換</text>
+          <text x="655" y="178" text-anchor="middle" font-size="10" fill="var(--color-heading)">ベース座標系の相対行動</text>
+
+          <path class="edge" d="M200,155 L280,105" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M200,175 L280,225" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M500,100 L570,150" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M500,230 L570,180" marker-end="url(#arrow)"></path>
+
+          <text class="node-label" x="510" y="248">合成に使うのは回転だけ。並進のずれは相対（デルタ）行動として実行する限り結果に影響しない。</text>
+        </svg>
+        <figcaption class="diagram__caption">CamVLA は方策を 2 つの部分問題（どう動くか／どこから見ているか）に分け、学習ではなく決められた計算で合成する。視点誤差の影響を回転のぶんだけに封じ込める仕組み。</figcaption>
+      </figure>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">(i)</span>どう動くか（Camera-Centric Action Generation）</p>
+          <p>行動を担う Action Head が、エンドエフェクタ（アームの先端）の動きを、カメラ座標系のままで直接予測します。映像も行動も同じ自分中心の視点を共有するため、画像上の見た目の動きと物理的な動きが自然にそろい、外部のカメラ姿勢に依存しないマッピングになります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">(ii)</span>どこから見ているか（Camera-Perspective Geometric Grounding）</p>
+          <p>補助的な Geometric Head が視覚特徴から 6 自由度（6-DoF）のハンドアイ行列を回帰し、いま観測しているカメラがロボットベースに対してどんな姿勢にあるかを明示的に推定します。この行列は並進（位置のずれ）と軸角回転（向きのずれ）で表されます。</p>
+        </div>
+      </div>
+
+      <p><strong>決定論的な幾何変換で合成</strong> ― この 2 つの予測を、学習ではなく決められた計算で合成し、実機が必要とするベース座標系の行動を作ります。合成には推定した回転だけが使われ、相対的な（デルタ）行動として実行する限り並進のずれは結果に影響しません。つまり視点誤差の影響を回転のぶんだけに封じ込められる、という仕組みです。</p>
+      <p>デプロイ時に必要なのは単眼 RGB 画像 1 枚とタスク指示だけで、これは標準的な VLA が受け取る入力とまったく同じです。カメラ校正も、深度センサも、複数視点も要りません。真値のハンドアイ行列は学習時に教師信号として使うだけで、動かす時には外部情報を一切受け取りません。</p>
+
+      <h3>実装の要点</h3>
+      <p>実装は既存の VLA である π0 と GR00T N1.7 を土台にしています。入力は三人称の単眼 RGB を 224×224 にリサイズしたもので、手首カメラは使いません。Geometric Head は隠れ次元 1024 の 3 層 MLP という小さな追加部品で、画像エンコーダの視覚トークンを平均プーリングした特徴に作用します。学習は 8 台の NVIDIA H100 80GB で行われました。</p>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>シミュレーションでの未知視点への汎化（Table 1）</h3>
+      <p>RLBench の 6 タスクで、学習時に見ていないカメラ視点での平均成功率を比べています。学習は 15° 間隔の離散視点、評価はその間を埋める 5° グリッド上の未知視点で行われました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">+18.2 pt</p>
+          <p class="stat__label">π0 ベースの平均成功率が 33.2% → 51.4% へ向上（未知視点）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">+10.0 pt</p>
+          <p class="stat__label">GR00T N1.7 ベースが 28.4% → 38.4% へ向上（未知視点）</p>
+        </div>
+      </div>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>設定（未知視点の平均成功率）</th>
+            <th>ベースライン</th>
+            <th>CamVLA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>π0 ベース（全 6 タスク平均）</th>
+            <td>33.2%</td>
+            <td class="is-best">51.4%</td>
+          </tr>
+          <tr>
+            <th>GR00T N1.7 ベース（全 6 タスク平均）</th>
+            <td>28.4%</td>
+            <td class="is-best">38.4%</td>
+          </tr>
+          <tr>
+            <th>Slide Block（タスク別の例）</th>
+            <td>18.3%</td>
+            <td class="is-best">44.5%</td>
+          </tr>
+          <tr>
+            <th>Lamp Off（タスク別の例）</th>
+            <td>29.8%</td>
+            <td class="is-best">58.0%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>実機での再配置カメラへの汎化（Table 2）</h3>
+      <p>Franka Research 3 アームと平行グリッパを使い、カメラを動かして試しています。正準視点（0°）では CamVLA がベースラインを上回り、極端な 15° オフセットではベースラインが崩壊するのに対し CamVLA は成功率を保ちました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>実機の設定</th>
+            <th>ベースライン</th>
+            <th>CamVLA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>正準視点 0°（π0 比）</th>
+            <td>63.3%</td>
+            <td class="is-best">79.0%</td>
+          </tr>
+          <tr>
+            <th>正準視点 0°（GR00T 比）</th>
+            <td>64.7%</td>
+            <td class="is-best">80.7%</td>
+          </tr>
+          <tr>
+            <th>15° オフセット（π0 比）</th>
+            <td>16.0%</td>
+            <td class="is-best">29.3%</td>
+          </tr>
+          <tr>
+            <th>15° オフセット（GR00T 比）</th>
+            <td>14.7%</td>
+            <td class="is-best">33.0%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>ハンドアイ推定の誤差（Table 3）</h3>
+      <p>実機での並進誤差は 0° で 1.35cm、15° で 27.16cm と大きくなりますが、回転誤差は 0° で 2.49°、15° でも 9.39° に留まります。相対行動の定式化が並進誤差を物理的に切り離すため、15° で並進誤差が大きくなっても CamVLA はベースラインを上回りました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ハンドアイ推定誤差（実機）</th>
+            <th>0°（正準視点）</th>
+            <th>15° オフセット</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>並進誤差（相対行動により影響が切り離される）</th>
+            <td>1.35 cm</td>
+            <td>27.16 cm</td>
+          </tr>
+          <tr>
+            <th>回転誤差（合成に使われる成分）</th>
+            <td>2.49°</td>
+            <td>9.39°</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>計算コスト（Table 4）</h3>
+      <p>単一の RTX 4090 上で、Geometric Head の追加はパラメータ・FLOPs・推論遅延のいずれもほぼ無視できる負荷でした。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">+6.30M</p>
+          <p class="stat__label">追加パラメータ（+0.19%）。π0 の 3238.1M に対し CamVLA は 3244.4M</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">+1.0G</p>
+          <p class="stat__label">追加 FLOPs（+0.15%）。660.9G → 661.9G</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">+1 ms</p>
+          <p class="stat__label">推論遅延の増加のみ（61ms → 62ms）</p>
+        </div>
+      </div>
+
+      <h3>設計選択の切り分け（Table 5・Table 7）</h3>
+      <p>行動の出力をベース座標系からカメラ座標系に移すだけで、成功率が 33.2%（π0 ベース）から 51.4%（CamVLA）に上がりました。また、真値の外部パラメータを使う版（CamVLA†、52.3%）と自己予測版（51.4%）の差はわずか 0.9 ポイントで、モデル自身の推定が高精度であることを示します。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>切り分け条件（未知視点の平均成功率）</th>
+            <th>成功率</th>
+            <th>備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>π0 ベース（ベース座標系で行動を出力）</th>
+            <td>33.2%</td>
+            <td>行動の座標系だけが違う</td>
+          </tr>
+          <tr>
+            <th>CamVLA（自己予測、カメラ座標系）</th>
+            <td class="is-best">51.4%</td>
+            <td>外部情報は一切使わない</td>
+          </tr>
+          <tr>
+            <th>CamVLA†（真値の外部パラメータを使用）</th>
+            <td>52.3%</td>
+            <td>自己予測版との差はわずか 0.9 ポイント</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>学習視点が疎になったときの性能低下は、真値版でも同様に起きるため、主因はハンドアイ回帰の誤差ではなく未知視点での視覚表現のずれだと結論づけています。</p>
+
+      <h2>意義と限界</h2>
+      <p>CamVLA の意義は、「与えられた幾何」を「学習された幾何」で置き換えた点にあります。従来の視点頑健 VLA が抱えていた「デプロイ時に正確な外部パラメータが必要」という脆い前提を外し、手持ち・ドリフト・再装着といった非構造化な環境での校正不要な操作を可能にしました。オンラインのハンドアイ校正系と組み合わせて予測を置き換えれば、さらなる性能向上も見込めると述べています。</p>
+      <p>一方で、著者は次の限界を認めています（Sec.5）。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 1</span>三人称・単一カメラに限定</p>
+          <p>扱っているのは三人称視点の頑健性のみで、単一の三人称カメラを用いる。複数カメラ系での手首装着カメラの視点ずれは対象外。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 2</span>極端な視点・高精度タスクで低下</p>
+          <p>典型的なずれには強いものの、極端な視点変化や高精度が要るタスクでは、分布外の視覚特徴とハンドアイ回帰の誤差により性能が下がる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">今後</span>幾何回帰の頑健化と手首カメラ調査</p>
+          <p>今後は大きな視点シフト下での幾何回帰の頑健化と、手首装着カメラのずれの調査を計画。失敗事例の主因は、カメラ視野の境界にある対象物、作業空間を超える行動、視覚的な自己遮蔽だった。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>CamVLA は、カメラの位置を外から教えずに、単眼 RGB 画像 1 枚から「どう動くか」と「どこから見ているか」を分けて予測し、決定論的な変換で合成することで視点への頑健性を得る VLA です。校正・深度・複数視点のいずれも不要でありながら、シミュレーションと実機の両方で既存の強力なベースラインを大きく上回りました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>VLA（Vision-Language-Action model）</dt>
+        <dd>視覚と言語の入力から、実行可能なロボット行動を予測する汎用の方策モデル。本論文のベースは π0 と GR00T N1.7。</dd>
+
+        <dt>視点頑健性（view robustness）</dt>
+        <dd>学習時と異なるカメラ視点でも成功率を保てる能力。本論文の中心課題。</dd>
+
+        <dt>ハンドアイ行列（hand-eye matrix）</dt>
+        <dd>カメラ座標系とロボットベース座標系を結ぶ剛体変換。並進と軸角回転で表される。従来は事前計測（ハンドアイ校正）するが、CamVLA はこれを自己予測して不要化する。</dd>
+
+        <dt>外部パラメータ（extrinsics）</dt>
+        <dd>カメラのロボット/世界に対する姿勢。既存手法はデプロイ時にこれを既知と仮定する。</dd>
+
+        <dt>校正不要・深度不要・単一視点（calibration-free / depth-free / single-view）</dt>
+        <dd>それぞれ事前校正が不要、深度センサが不要、単眼 RGB 画像 1 枚で動く、という CamVLA のデプロイ時特性。</dd>
+
+        <dt>カメラ中心行動（camera-centric action）</dt>
+        <dd>カメラ座標系でそのまま表したエンドエフェクタのデルタ行動。視覚観測と同じ座標系でそろう。</dd>
+
+        <dt>デルタ（相対）行動</dt>
+        <dd>いまの状態からの相対的な姿勢変化。相対表現ゆえハンドアイの並進に依存せず実行できる。</dd>
+
+        <dt>自己中心／他者中心（egocentric / allocentric）</dt>
+        <dd>生物学的な着想元。視覚にそろった行動生成（egocentric）と、頭部姿勢の相対理解（allocentric）に対応づけて 2 つの部分問題に分けた。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">From Fixed to Free Cameras: Calibration-Free View-Robust Vision-Language-Action Model</p>
+      <a href="https://arxiv.org/abs/2607.05396" target="_blank" rel="noopener noreferrer">arXiv:2607.05396 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
