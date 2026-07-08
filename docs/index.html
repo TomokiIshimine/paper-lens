@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-07-2607.06565-elsa3d-elastic-semantic-anchoring-unified-3d.html">
+            <img src="assets/2026-07-07-2607.06565-elsa3d-elastic-semantic-anchoring-unified-3d-cover.png"
+                 alt="3D の生成と理解を 1 つのモデルにまとめた ELSA3D のインフォグラフィック。言葉の手掛かりを「弾性的意味アンカリング」でマルチスケールの八分木（octree）表現のちょうどよい細かさのレベルへ振り分け、必要な場所だけをアンカートークンで結びつける。密に融合させる版に比べて計算量を 1081 GFLOPs から 632 GFLOPs、推論時間を 29.8 秒から 17.2 秒へおよそ半分に減らしつつ、画像→3D・テキスト→3D・3D キャプション生成の各タスクで最高性能を達成することを示す">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-07</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-07-2607.06565-elsa3d-elastic-semantic-anchoring-unified-3d.html">言葉と形をちょうどよい細かさで結びつける ― 3Dの生成と理解を1つのモデルにまとめた ELSA3D</a>
+          </h2>
+          <p class="article-card__summary">3D の形を「作る（生成）」ことと、3D を「言葉で説明・推論する（理解）」ことは、これまで別々のモデルで扱うのが一般的でした。ELSA3D は、この 2 つを 1 つのバックボーンに統合し、同じ内部表現を共有させて互いに支え合わせる統合 3D モデルです。核となる「弾性的意味アンカリング（elastic semantic anchoring）」は、言葉の手掛かりを、それにふさわしい細かさの 3D 形状の部分だけと結びつけます。従来はテキストと 3D のトークンを 1 本の列につなげて自己注意に対応づけを丸投げしていたため、大まかな構造と細かい幾何が区別されずにつぶれていました。ELSA3D はまず形をマルチスケールの八分木（octree）で、言葉を Global（全体）・Structure（構造）・Appearance（外観）の 3 側面に整理した「意味トレース」で表します。そのうえで、必要な場所だけ言葉と形をつなぐ「疎なインターフェース」としてアンカートークンを導入し、選ばれた意味トークンと振り分け先スケールの幾何をクロスアテンションで融合してメイン系列に書き戻します。各 transformer ブロックのルーターは、ブロックを実行するか・MLP の幅・どのトークンをどのスケールに割り当てるかをまとめて制御し、計算量と結びつけ方を弾性的に調整します。画像→3D で CLIP +2.74、テキスト→3D で CLIP +1.35、3D キャプション生成で Sentence-BERT +3.56 と各タスクで最高性能を達成しつつ、密な融合版に比べて計算量を 1081→632 GFLOPs、推論時間を 29.8→17.2 秒へおよそ半分に減らしました。カテゴリ情報は粗い形、部品や外観の手掛かりは細かいスケール、というふうに適切な細かさを選ぶことが性能の鍵だと示した研究です。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-06-2607.05396-camvla-calibration-free-view-robust-vla.html">
             <img src="assets/2026-07-06-2607.05396-camvla-calibration-free-view-robust-vla-cover.png"
                  alt="単眼 RGB 画像 1 枚だけから「どう動くか（カメラ座標系の行動）」と「どこから見ているか（6 自由度のハンドアイ行列）」を並列に予測し、決定論的な幾何変換で両者を合成してロボットベース座標系の行動を作る CamVLA のインフォグラフィック。事前のカメラ校正も深度センサも複数視点も不要で、未知の視点に対して既存ベースラインを大きく上回る頑健性を示す">
