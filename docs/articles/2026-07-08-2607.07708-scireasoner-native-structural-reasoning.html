@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>タンパク質・分子・結晶の「構造そのもの」を推論の証拠として扱う科学基盤モデル SciReasoner — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-08-2607.07708-scireasoner-native-structural-reasoning-cover.png"
+           alt="タンパク質・小分子・無機結晶の 3 種類の科学的な「構造」を、テキストの添え物ではなく参照できる証拠単位として扱う科学基盤モデル SciReasoner のインフォグラフィック。構造を統一トークン語彙に離散化し、1 つの自己回帰モデルの中で構造と言葉を交互に織り交ぜて推論させることで、86 ベンチマーク中 67 タスクで最高性能（SOTA）を達成しつつ、なぜその答えなのかを構造の証拠に照らして示せる説明可能性を両立することを示す">
+    </figure>
+
+    <h1 class="article__title">タンパク質・分子・結晶の「構造そのもの」を推論の証拠として扱う科学基盤モデル SciReasoner</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-08</span>
+      <span>arXiv：2607.07708</span>
+      <span>カテゴリ：cs.CL / cs.AI / cs.CE / cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>この論文は、科学基盤モデル <strong>SciReasoner</strong> を提案しています。中心にあるのは、タンパク質・小分子・無機結晶という 3 種類の科学的な「構造」を、テキストの添え物ではなく参照できる証拠として扱うという発想です。具体的には、これらの構造を統一トークン語彙に変換し、1 つの自己回帰モデル（次の単語を順番に予測していくタイプのモデル）の中で構造と言葉を交互に織り交ぜて推論させます。予測の精度と、その予測を構造に照らして検証できる説明可能性の両立を目指した点が特徴です。研究の狙いは、答えを当てるだけでなく「なぜその答えなのか」を構造の証拠に基づいて示せるモデルを作ることにあります。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">67 / 86</p>
+          <p class="stat__label">86 ベンチマーク中 67 タスクで最高性能（SOTA）を達成</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">3 種類の構造</p>
+          <p class="stat__label">タンパク質・小分子・無機結晶を統一トークン語彙で「証拠」として扱う</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1 モデル</p>
+          <p class="stat__label">単一の自己回帰基盤モデルで構造・配列・自然言語の推論を統一</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>物質がどんな機能・反応性・物性を持つかは、その空間的・化学的・周期的な「かたち（構造）」から生まれます。これを構造と性質の関係（structure–property relationship）と呼び、生物学・化学・材料科学に共通する基盤的な考え方です。</p>
+      <p>つまり「なぜこの性質になるのか」を機械に説明させるには、立体化学・結合・対称性・エネルギー・周期秩序といった科学的原理を通して構造の証拠を読み解く必要があります。これは AI にとって、構造をどう表現するか（representation）と、その証拠にもとづいてどう推論するか（reasoning）という 2 つが絡み合った難題です。この 2 つを同時に扱えるモデルは、創薬・材料設計・タンパク質機能予測など幅広い応用の土台になり得ます。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>論文によれば、既存の科学 AI は「構造をそのまま表現すること」と「証拠にひもづいた推論」を切り離してしまっている、という共通の弱点を抱えています。大きく 3 種類に整理されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">タイプ 1</span>大規模言語モデル（LLM）</p>
+          <p>タンパク質・分子・結晶を主に文字列や記述テキストとして扱う。そのため構造の立体的な組織が文字列に押し込められ、説明が物理的な証拠ではなく言葉の連想に頼りがちになる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">タイプ 2</span>エージェント型システム</p>
+          <p>検索・ツール使用・ワークフロー連携で能力を広げるが、土台となる基盤モデルの構造理解力そのものに縛られる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">タイプ 3</span>ドメイン特化モデル</p>
+          <p>分子グラフ・タンパク質構造・結晶格子を直接エンコードして高い精度を出すが、スコアやラベルを出力する予測器であり、判断の途中でどんな証拠を使ったかを外に見せてくれない。</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>本論文の問題意識。</strong>その結果、多次元の科学的構造を「そのまま」表現しつつ、その構造に照らして後から検証できる推論の道すじ（推論トレース）を生成する、という新しいやり方が欠けている。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>論文はこの課題に対し、<strong>native structural reasoning（ネイティブ構造推論）</strong> というパラダイムを提唱し、それを SciReasoner として実装しました。中心にあるのは、構造トークンを言葉に付随する補助的な説明ではなく、推論の軌跡の中で「組み合わせ・引用・検証できる、参照可能な証拠単位（addressable evidence units）」として扱うという発想です。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 380" role="img" aria-label="SciReasoner の全体像の図。タンパク質は Foldseek（3Di トークン）、無機結晶は SLICES、3D 分子構造は ConfSeq という専用エンコーダで構造トークンに変換され、構造対応語彙（自然言語とは別の埋め込みテーブルを持つ統一トークン語彙）に離散化される。これらの構造トークンと自然言語を交互に織り交ぜ、Qwen3-14B の重みで初期化した 1 つの自己回帰モデルへ入力する。モデルは構造トークンを組み合わせ・引用・検証できる参照可能な証拠単位として使い、推論トレースを生成する。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="20" y="24">3 種類の構造を専用エンコーダで離散化し、言葉と交互に並べて 1 つの自己回帰モデルへ。</text>
+
+          <rect class="node" x="20" y="50" width="200" height="60" rx="10"></rect>
+          <text x="120" y="76" text-anchor="middle" font-size="11" font-weight="700">タンパク質（3D 構造）</text>
+          <text x="120" y="96" text-anchor="middle" font-size="10">Foldseek / 3Di トークン</text>
+
+          <rect class="node" x="20" y="130" width="200" height="60" rx="10"></rect>
+          <text x="120" y="156" text-anchor="middle" font-size="11" font-weight="700">無機結晶</text>
+          <text x="120" y="176" text-anchor="middle" font-size="10">SLICES</text>
+
+          <rect class="node" x="20" y="210" width="200" height="60" rx="10"></rect>
+          <text x="120" y="236" text-anchor="middle" font-size="11" font-weight="700">3D 分子構造</text>
+          <text x="120" y="256" text-anchor="middle" font-size="10">ConfSeq</text>
+
+          <rect class="node" x="300" y="120" width="170" height="130" rx="10"></rect>
+          <text x="385" y="150" text-anchor="middle" font-size="12" font-weight="700">構造対応語彙</text>
+          <text x="385" y="174" text-anchor="middle" font-size="10">それ以上分割しない</text>
+          <text x="385" y="192" text-anchor="middle" font-size="10">専用トークン</text>
+          <text x="385" y="216" text-anchor="middle" font-size="10">自然言語とは別の</text>
+          <text x="385" y="234" text-anchor="middle" font-size="10">埋め込みテーブル</text>
+
+          <rect class="node" x="550" y="110" width="190" height="150" rx="10" stroke-width="2.5"></rect>
+          <text x="645" y="140" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">自己回帰モデル</text>
+          <text x="645" y="162" text-anchor="middle" font-size="10" fill="var(--color-heading)">Qwen3-14B で初期化</text>
+          <text x="645" y="186" text-anchor="middle" font-size="10" fill="var(--color-heading)">構造 × 言葉を</text>
+          <text x="645" y="204" text-anchor="middle" font-size="10" fill="var(--color-heading)">交互に織り交ぜる</text>
+          <text x="645" y="228" text-anchor="middle" font-size="10" fill="var(--color-accent)">構造トークン＝</text>
+          <text x="645" y="246" text-anchor="middle" font-size="10" fill="var(--color-accent)">参照可能な証拠単位</text>
+
+          <path class="edge" d="M220,80 L300,150" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M220,160 L300,180" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M220,240 L300,210" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M470,185 L550,185" marker-end="url(#arrow)"></path>
+
+          <text class="node-label" x="20" y="300">→ 推論トレース：答えだけでなく、どの構造の証拠を</text>
+          <text class="node-label" x="20" y="320">　　使ったかを引用・検証しながら生成する。</text>
+          <text class="node-label" x="20" y="346">分子入力での平均トークン圧縮率は 10.7（Qwen のトークナイザ比）。</text>
+        </svg>
+        <figcaption class="diagram__caption">SciReasoner は 3 種類の構造を専用エンコーダで構造トークンへ離散化し、自然言語と交互に並べて 1 つの自己回帰モデルへ入力する。構造トークンは自然言語とは別の埋め込みテーブルを持ち、推論の途中で引用・検証できる「証拠単位」として機能する。</figcaption>
+      </figure>
+
+      <p>仕組みは次のような要素から成り立っています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">構造対応語彙</span></p>
+          <p>座標・トポロジー（つながり方）・周期的な結合を離散化し、局所的な形状・立体化学・タンパク質の残基レベルの構造モチーフ・結晶の格子対称性や結合パターンといったドメイン固有の情報を保った専用トークンに変換する。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">オフライン構造エンコーダ</span></p>
+          <p>入力の構造をあらかじめドメイン別のエンコーダで圧縮してから渡す。タンパク質の 3D 構造には <strong>Foldseek</strong>（3Di トークン。アミノ酸配列と 1 対 1 に対応）、結晶には <strong>SLICES</strong>、3D 分子構造には <strong>ConfSeq</strong> を用いる。構造トークンは <code>&lt;protein_structure&gt;</code> などのタグで囲まれる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">分割されないトークン設計</span></p>
+          <p>一般的なサブワード分割（BPE など）は分子グラフやモチーフを恣意的に断片化して科学的な意味を壊す。SciReasoner の構造対応語彙はそれ以上分割できない単位なのでこの問題を避けられる。分子入力での平均トークン圧縮率は 10.7（Qwen のトークナイザ比）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">バックボーン</span></p>
+          <p>土台の言語モデルは <strong>Qwen3-14B</strong>（Qwen はオープンな大規模言語モデル）の重みで初期化されている。構造トークンは自然言語の埋め込みとは別の専用埋め込みテーブルを持つ。</p>
+        </div>
+      </div>
+
+      <h3>学習は 2 段階</h3>
+      <p>学習は継続事前学習と事後学習の 2 段階に分かれます。</p>
+
+      <div class="timeline">
+        <div class="timeline__step">
+          <p class="timeline__step-title">段階 1：継続事前学習（continued pretraining）</p>
+          <p>3 ステージで行う。新しい構造トークンを基本的な形状・化学的意味に固定しつつ（もとの言語能力を壊さないように）、全パラメータのマルチモーダル学習と、QA 形式データの比率を高めた仕上げ学習を進める。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">段階 2：事後学習（post-training）</p>
+          <p>著者が self-bootstrapped native structural reasoning と呼ぶ枠組みで、強化学習（RL）によって構造語彙の意味を思考連鎖（Chain-of-Thought、答えに至る途中の考えを言葉で書き出す方式）に接続する。次の 2 ステップから成る。</p>
+        </div>
+      </div>
+
+      <p>事後学習の 2 ステップは次のとおりです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">ステップ A</span>ドメイン内構造証拠グラウンディング</p>
+          <p>intra-domain structural evidence grounding。タンパク質・分子・材料それぞれで、構造トークンを推論の証拠として使うタスク特化のエキスパートを訓練する。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">ステップ B</span>ドメイン横断推論統合</p>
+          <p>cross-domain reasoning consolidation。各エキスパートが生成した推論トレースを集めて 1 つの SciReasoner に統合する。標準的な手法で起きやすい「軌跡崩壊（trajectory collapse）」を抑えると主張されている。</p>
+        </div>
+      </div>
+
+      <p>配列・構造・テキストを同時につなぐ「お手本の推論軌跡」がほとんど存在しないという分野の壁に対しては、簡単な下書きトレースで最初のきっかけ（コールドスタート）だけを与え、以降はエキスパート自身が高品質なトレースを生成していく形で回避しています。対応するモダリティは、タンパク質・DNA・RNA・小分子・無機結晶に加え、科学 QA・物性予測・生成/設計タスクに及びます。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>論文は幅広いベンチマークで評価しており、総合では <strong>86 ベンチマーク中 67 タスクで SOTA を達成</strong>したと報告しています。専門家モデルのベースラインがある 26 ベンチマークでは、それらの専門家モデルに一致または上回ったとされています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">0.42 → 0.55</p>
+          <p class="stat__label">低ホモロジー／オーファン様設定でのタンパク質機能予測（GO Cellular Component）の Fmax</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">0.63 → 0.72</p>
+          <p class="stat__label">逆合成（単一ステップ）の精度。USPTO-50K の Exact Match は従来最良の RSGPT を 0.09 上回る</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">0.59 → 0.86</p>
+          <p class="stat__label">RNA アイソフォームの R2（決定係数。1 に近いほど当てはまりが良い）</p>
+        </div>
+      </div>
+
+      <h3>主なベンチマーク結果</h3>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>タスク</th>
+            <th>SciReasoner の結果</th>
+            <th>比較・備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>タンパク質機能予測（DeepFRI-GO）</th>
+            <td class="is-best">Fmax 0.59（3 側面平均）</td>
+            <td>専門家モデル SaProt の 0.52 を上回る。汎用 LLM は DeepSeek-V4-Pro 0.35 ／ GPT-5.5 0.31</td>
+          </tr>
+          <tr>
+            <th>細胞内局在の予測</th>
+            <td class="is-best">Accuracy 0.88</td>
+            <td>ESM2 の 0.84 を上回る</td>
+          </tr>
+          <tr>
+            <th>RNA-タンパク質相互作用</th>
+            <td class="is-best">MCC 0.74 → 0.81</td>
+            <td>MCC は −1〜1 の相関指標。1 に近いほど良い</td>
+          </tr>
+          <tr>
+            <th>逆合成（USPTO-50K）</th>
+            <td class="is-best">Exact Match 0.72</td>
+            <td>テンプレート不要手法 RSGPT（0.63）を 0.09 上回る。参考：Opus-4.7 の 5-shot は 0.48</td>
+          </tr>
+          <tr>
+            <th>バーチャルスクリーニング（DUD-E、102 ターゲット）</th>
+            <td class="is-best">上位 5.0% EF 7.12 → 7.70</td>
+            <td>ドッキングやタスク特化のファインチューニングなしで AUC は従来最良の 0.76 に並ぶ</td>
+          </tr>
+          <tr>
+            <th>材料物性（生成エネルギー ／ バンドギャップ）</th>
+            <td class="is-best">R2 0.895 ／ 0.785</td>
+            <td>CGCNN を 10 タスク全てで上回り、多くの数値物性で LLM-Prop も上回る</td>
+          </tr>
+          <tr>
+            <th>開放型の言語タスク（生物医学 QA ／ 機能記述）</th>
+            <td>BertScore 0.85 ／ ROUGE-L 0.77</td>
+            <td>それぞれ生成文と参照文の意味的近さ・語句の重なりを測る指標</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>逆合成の思考連鎖は analysis（解析）→ disconnection（結合の切断）→ verification（検証）→ feasibility（実現可能性）の 4 段構成をとります。</p>
+
+      <h3>構造入力は本当に効いているか（アブレーション）</h3>
+      <p>構造トークンを取り除く実験では、性能が一貫して低下し、特にタンパク質タスクで顕著でした。構造がないと、配列モチーフや組成に頼った推論に後退してしまうと説明されています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>極端な例（QMOF のポア径予測）。</strong>構造なしだと約 1 桁過大に見積もる（予測 <strong>11.10694</strong> に対し正解 1.27075）一方、構造トークンを使うと正解に近い <strong>1.14197</strong> を予測できた（正解 1.27075）。</p>
+        </div>
+      </div>
+
+      <h3>推論の「質」の検証</h3>
+      <p>GPT-5.5 を審判役にした評価（LLM-as-judge）では、SciReasoner の総合スコアが 8.33 で、コールドスタート版の 7.77、DeepSeek-V4-Pro の 6.96 を上回りました。さらに事後学習を進めるにつれ、まず 1 回で正解に至る割合（pass@1）が段階的に上がり、10 回試したときとの差が縮まる、つまり最初の回答の信頼性が高まる傾向が示されています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">8.33</p>
+          <p class="stat__label">LLM-as-judge 総合スコア。コールドスタート版 7.77・DeepSeek-V4-Pro 6.96 を上回る</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">0.41 → 0.49 → 0.72</p>
+          <p class="stat__label">逆合成の pass@1 の段階的な向上（事後学習を進めるにつれ）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">98%</p>
+          <p class="stat__label">二重盲検の専門家評価で DeepSeek-V4-Pro に対し同等以上（試験的評価、N=1776）</p>
+        </div>
+      </div>
+
+      <p>加えて、二重盲検の専門家評価（信頼できる N=1776 ケースの判定）では、SciReasoner が DeepSeek-V4-Pro に対し 98% のケースで同等以上（73% が強く好ましい、21% が好ましい、4% が同等）と評価され、5 軸平均で 8.7/10 対 4.3/10 だったと報告されています。ただし、この人間評価は試験的（pilot）なもので、論文の脚注に「より多くの人間判定を収集中」と明記されている点には注意が必要です。</p>
+
+      <h2>意義と限界</h2>
+      <p>論文は、構造と性質の関係は、科学的な対象を単なるテキスト文字列・低次元の記述子・ブラックボックスの入力として扱うだけでは十分に扱えない、と結論づけています。SciReasoner は構造を「推論の一次対象」として統一語彙に離散化し、言語による指示と一緒に 1 つの自己回帰モデルへ統合することで、残基・分子フラグメント・配座の手がかり・結晶記述子を、推論の途中で参照できる証拠単位として機能させました。</p>
+      <p>意義としては、単一の自己回帰基盤モデルが主要な科学モダリティをまたいで配列・構造・自然言語の推論を統一し、専門家レベルの精度と説明可能性を両立できることを示した点が挙げられます。効果は、表面的な類似だけでは足りない領域、たとえば低ホモロジーのタンパク質、多様な反応族の逆合成、結晶の安定性や電子物性の予測でこそ強い、とされています。著者らは「4 つの科学モダリティすべてで配列・構造・自然言語の推論を単一の自己回帰軌跡として可能にした初の基盤モデルである」と主張しています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>限界・留意点についての注記。</strong>人間の専門家評価は試験的な段階で、判定を追加収集中であることが脚注に記されている。タンパク質の Molecular Function は既に性能が飽和域にあり、SciReasoner の 0.66 は SaProt の 0.67 と同等で改善余地が小さい。逆合成の推論品質も事後学習の前からすでに高い分布にあり、審判評価の改善幅が他タスクより小さいのは飽和が遅いためで手法の失敗ではないと著者は説明している。なお、Discussion に独立した「限界」の節は明示されておらず、これらは本文中の該当記述からの抽出である。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>SciReasoner は、タンパク質・分子・結晶といった科学的構造を専用トークンに離散化し、言葉と交互に織り交ぜて推論する単一の自己回帰基盤モデルです。構造を「推論の証拠」として正面から扱うことで、86 ベンチマーク中 67 タスクで SOTA を達成しつつ、なぜその答えなのかを構造に照らして示せる説明可能性の両立を狙った点が要点です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>構造–性質関係（structure–property relationship）</dt>
+        <dd>物質の空間的・化学的・周期的な組織から機能・反応性・物性が生じるという、生物学・化学・材料科学に共通する基盤概念。</dd>
+
+        <dt>native structural reasoning（ネイティブ構造推論）</dt>
+        <dd>構造トークンを言葉への付随記述ではなく、推論の軌跡内で組み合わせ・引用・検証できる「参照可能な証拠単位」として扱うパラダイム。</dd>
+
+        <dt>構造対応語彙（structure-aware vocabulary）</dt>
+        <dd>座標・トポロジー・周期結合を離散化し、ドメイン固有の構造情報を保った専用トークン語彙。自然言語の埋め込みとは別の埋め込みテーブルを持つ。</dd>
+
+        <dt>Foldseek / 3Di トークン</dt>
+        <dd>タンパク質の 3D 構造を残基レベルの局所構造トークンに変換する手法。アミノ酸配列と 1 対 1 に対応する。</dd>
+
+        <dt>SLICES / ConfSeq</dt>
+        <dd>それぞれ結晶構造、3D 分子配座をトークン列に変換するエンコーダ。</dd>
+
+        <dt>Gene Ontology（GO）/ Fmax</dt>
+        <dd>タンパク質の機能アノテーション体系（MF=分子機能、BP=生物学的過程、CC=細胞内成分）と、その予測の標準指標。</dd>
+
+        <dt>逆合成（retrosynthesis）</dt>
+        <dd>目標分子を市販の前駆体へ再帰的に切り分けていく有機合成の経路設計。</dd>
+
+        <dt>DUD-E / 5.0% EF（enrichment factor）</dt>
+        <dd>バーチャルスクリーニングのベンチマークと、上位 5% における活性化合物の濃縮率指標。</dd>
+
+        <dt>pass@1 / pass@10</dt>
+        <dd>1 サンプル／10 サンプルでの正解到達率。差が縮むほど、最初の回答の信頼性が高いことを示す。</dd>
+
+        <dt>軌跡崩壊（trajectory collapse）</dt>
+        <dd>標準的なアライメントで推論の道すじが縮退してしまう現象。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Accurate, Interdisciplinary and Transparent Structure-property Understanding with Deep Native Structural Reasoning</p>
+      <a href="https://arxiv.org/abs/2607.07708" target="_blank" rel="noopener noreferrer">arXiv:2607.07708 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

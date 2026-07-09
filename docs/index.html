@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-08-2607.07708-scireasoner-native-structural-reasoning.html">
+            <img src="assets/2026-07-08-2607.07708-scireasoner-native-structural-reasoning-cover.png"
+                 alt="タンパク質・小分子・無機結晶の 3 種類の科学的な「構造」を、テキストの添え物ではなく参照できる証拠単位として扱う科学基盤モデル SciReasoner のインフォグラフィック。構造を統一トークン語彙に離散化し、1 つの自己回帰モデルの中で構造と言葉を交互に織り交ぜて推論させることで、86 ベンチマーク中 67 タスクで最高性能（SOTA）を達成しつつ、なぜその答えなのかを構造の証拠に照らして示せる説明可能性を両立することを示す">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-08</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-08-2607.07708-scireasoner-native-structural-reasoning.html">タンパク質・分子・結晶の「構造そのもの」を推論の証拠として扱う科学基盤モデル SciReasoner</a>
+          </h2>
+          <p class="article-card__summary">この論文は、科学基盤モデル SciReasoner を提案しています。中心にあるのは、タンパク質・小分子・無機結晶という 3 種類の科学的な「構造」を、テキストの添え物ではなく参照できる証拠として扱うという発想です。具体的には、これらの構造を統一トークン語彙に変換し、1 つの自己回帰モデル（次の単語を順番に予測していくタイプのモデル）の中で構造と言葉を交互に織り交ぜて推論させます。既存の科学 AI は、構造を主に文字列として扱う LLM、基盤モデルの構造理解力に縛られるエージェント型システム、証拠を外に見せない予測器であるドメイン特化モデルのいずれも、「構造をそのまま表現すること」と「証拠にひもづいた推論」を切り離してしまう弱点を抱えていました。SciReasoner は、タンパク質を Foldseek（3Di トークン）、結晶を SLICES、3D 分子構造を ConfSeq という専用エンコーダで離散化し、自然言語とは別の埋め込みテーブルを持つ「分割されない」専用トークンとして、Qwen3-14B で初期化した自己回帰モデルへ渡します。学習は、構造トークンの意味を固定する継続事前学習と、強化学習で構造語彙を思考連鎖につなぐ self-bootstrapped な事後学習の 2 段階です。結果として 86 ベンチマーク中 67 タスクで最高性能（SOTA）を達成し、専門家モデルのある 26 ベンチマークでもそれらに一致または上回りました。低ホモロジーのタンパク質機能予測（Fmax 0.42→0.55）、逆合成（0.63→0.72、USPTO-50K の Exact Match 0.72）、RNA アイソフォーム（R2 0.59→0.86）、材料物性（生成エネルギー R2 0.895）などで強く、構造トークンを取り除くと性能が一貫して低下しました。答えを当てるだけでなく「なぜその答えなのか」を構造の証拠に照らして示せる説明可能性の両立を狙った研究です。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-07-2607.06565-elsa3d-elastic-semantic-anchoring-unified-3d.html">
             <img src="assets/2026-07-07-2607.06565-elsa3d-elastic-semantic-anchoring-unified-3d-cover.png"
                  alt="3D の生成と理解を 1 つのモデルにまとめた ELSA3D のインフォグラフィック。言葉の手掛かりを「弾性的意味アンカリング」でマルチスケールの八分木（octree）表現のちょうどよい細かさのレベルへ振り分け、必要な場所だけをアンカートークンで結びつける。密に融合させる版に比べて計算量を 1081 GFLOPs から 632 GFLOPs、推論時間を 29.8 秒から 17.2 秒へおよそ半分に減らしつつ、画像→3D・テキスト→3D・3D キャプション生成の各タスクで最高性能を達成することを示す">
