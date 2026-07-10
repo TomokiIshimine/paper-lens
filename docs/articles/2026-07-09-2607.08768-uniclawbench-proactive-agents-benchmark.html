@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>実世界で自分から動くAIエージェントを「5つの能力」で診断する ― ベンチマーク UniClawBench — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-09-2607.08768-uniclawbench-proactive-agents-benchmark-cover.png"
+           alt="実世界で自分から動く能動的AIエージェントを、スキル使用・探索・長文脈推論・マルチモーダル理解・クロスプラットフォーム協調の 5 つの能力軸で診断するベンチマーク UniClawBench のインフォグラフィック。英語・中国語あわせて 400 タスクを稼働中の Docker 環境で 3 役の閉ループ評価にかけ、最先端モデルでも成功率は 50% 未満、最高でも Pass Rate 0.475 にとどまることを示す">
+    </figure>
+
+    <h1 class="article__title">実世界で自分から動くAIエージェントを「5つの能力」で診断する ― ベンチマーク UniClawBench</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-09</span>
+      <span>arXiv：2607.08768</span>
+      <span>カテゴリ：cs.CL</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ブラウザやターミナルなど、身の回りのツールを自分で操作して仕事をこなす「<strong>能動的エージェント（proactive agents）</strong>」を評価するための新しいベンチマーク <strong>UniClawBench</strong> を提案した研究です。従来の評価が「オフィス」「リサーチ」といった応用シーン別だったのに対し、この研究は「どの能力が欠けると失敗するのか」を突き止める 5 つの能力軸でタスクを分類します。稼働中の Docker 環境の中で、英語・中国語あわせて 400 のタスクを、ユーザーとの何度ものやり取りを含む「閉ループ」で採点します。最先端モデルでも成功率は 50% に届かず、現行エージェントの弱点が具体的に浮かび上がりました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">400 タスク</p>
+          <p class="stat__label">英語・中国語の 2 言語（5 能力 × 各言語 40 の計 80）で構成</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">5 つの能力軸</p>
+          <p class="stat__label">失敗のボトルネックとなる能力でタスクを分類する能力駆動型ベンチマーク</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">50% 未満</p>
+          <p class="stat__label">最先端モデルでも成功率は 50% に届かない（最高でも Pass Rate 0.475）</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>大規模言語モデル（LLM）は、質問に答えるだけのアシスタントから、ブラウザを開いてページを操作したり、ターミナルでコマンドを打ったりと、自分で道具を使う「エージェント」へと進化してきました。中でも注目されているのが、24 時間そばに居て自ら仕事を進める「デジタルな同僚」のような能動的エージェントです。</p>
+      <p>しかし、こうしたエージェントが本当に使いものになるのかを正しく測るのは簡単ではありません。従来の評価方法には、後述する構造的な弱点がいくつもあり、「なぜ失敗したのか」を切り分けられないという問題がありました。エージェントを実務に投入する前に、その強みと弱みを能力ごとに診断できる物差しが求められています。UniClawBench は、その物差しを提供しようとする試みです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>論文は、既存のエージェント評価には 3 つの構造的な限界があると指摘します。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 1</span>実世界の複雑さを捉えられない</p>
+          <p>多くのベンチマークは、自前でコピーした Web サイト（例：WebArena）や、仮想マシン内に保存したキャッシュページ（例：OSWorld）に頼っている。そのため、こうした模擬環境（サンドボックス）での性能と、本物の環境での実力との間に大きなギャップが生じる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 2</span>一発勝負の評価が主流</p>
+          <p>多くは 1 ターンで評価を終える。実際のユーザーは何度もフィードバックを返しながらエージェントと協力するのに、その閉ループ的なやり取りが無視されている。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 3</span>失敗の原因を特定できない</p>
+          <p>タスクを「オフィス」「リサーチ」のような応用シーン単位で分類しているため、失敗したときにボトルネックが視覚の認識なのか、長い文脈の推論なのか、ツールの使い方なのかを切り分けられない。</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>実世界かつ閉ループの評価に立ちはだかる 2 つの根本的な難しさ。</strong>1 つは<strong>安定した正解が存在しない</strong>こと。たとえば Amazon の商品ページの価格は今日 199 ドル、明日 179 ドルと変動するため、あらかじめ記録した正解はすぐに古くなってしまう。もう 1 つは<strong>やり取りの再現と評価の信頼性の両立</strong>。ユーザー役を演じるプログラムが正解や採点基準を知ってしまうと、評価対象のエージェントに答えや採点ルールを漏らしてしまう恐れがある。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>タスクを「能力」で分類する</h3>
+      <p>UniClawBench の中心にあるのは、タスクを「その能力が欠けると完遂できない、主要なボトルネックとなる能力」1 つに割り当てるという発想です（<strong>能力駆動型分類、capability-driven taxonomy</strong>）。能力軸は次の 5 つです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">能力 1</span>スキル使用（Skill Usage）</p>
+          <p>タスク固有のツールや API を選び、調べ、操作する能力。搭乗券のスキャンを文字認識（OCR）で読む、CSV を照合する、SQLite に問い合わせる、Git や Docker を監査する、といった作業が該当する。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">能力 2</span>探索（Exploration）</p>
+          <p>不完全でノイズが多く、ときに誤誘導的な情報のもとで、答えのないオープンな調査を行う能力。文書化されていない Web API の仕組みを解き明かす、インフラ設定を監査する、といった作業。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">能力 3</span>長文脈推論（Long-Context Reasoning）</p>
+          <p>異なるソース・長い文書・長い対話履歴をまたいで証拠を統合し、維持する能力。難しさは単一の文書が長いことではなく、制約を保ち続け、矛盾を解消し、全体として辻褄の合う統合を行う点にある。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">能力 4</span>マルチモーダル理解（Multimodal Understanding）</p>
+          <p>画像・動画・音声から情報を抽出・解釈・生成する能力。最終的な答えの正しさが、文字以外のコンテンツから得た証拠に依存する場合にのみこのカテゴリに割り当てられる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">能力 5</span>クロスプラットフォーム協調（Cross-Platform Coordination）</p>
+          <p>異なるアプリやインターフェースの間で、状態を保ち・移し・副作用を検証する能力。PDF を読んで Zotero にレコードを作り、BibTeX として書き出し、Obsidian にノートを作ってスクリーンショットを保存する、といった複数アプリを横断するワークフローが例。</p>
+        </div>
+      </div>
+
+      <h3>タスクの構成</h3>
+      <p>全部で 400 の実世界タスクがあり、英語と中国語の 2 言語で構成されます。5 つの能力カテゴリそれぞれに英語 40・中国語 40 の計 80 タスクを用意しています。すべて手作業で作られており、単なる「問いと答え」のペアではなく、ユーザー指示・タスク固有のコンテキスト・入力ファイルや Web リソース・ツールやサービス・スキル・期待される出力・隠された採点用の参照までを含む「タスクパッケージ」として設計されています。</p>
+      <p>これらはすべて、実ソフト・稼働中のブラウザ・ローカルファイルシステムを備えた Docker コンテナの中で実行されます。前述のとおり、あらかじめ記録した正解は変動に弱いため、この研究はそれを廃止し、各タスクに細かく段階的な「<strong>完了チェックポイント（completion checkpoints）</strong>」を設けて採点します。</p>
+
+      <h3>3 つの役割による閉ループ評価</h3>
+      <p>答えや採点基準を漏らさずに、ユーザーとのやり取りを忠実に再現するために、この研究は 3 つの役割による閉ループの仕組みを設計しました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">実行エージェント</span>Executor</p>
+          <p>評価される本人。公開されたタスク指示と、許可されたタスクパッケージ（ファイル・ツール・サービス・実行環境）だけを受け取る。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">監督エージェント</span>Supervisor（隠れた役割）</p>
+          <p>実行の様子や成果物を観察し、タスク固有の隠された参照と採点基準（ルーブリック）に照らして評価する。合格（pass）・不合格（fail）・継続（continue）という構造化された状態とスコアを返す。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">ユーザーシミュレータ</span>User Simulator</p>
+          <p>見える範囲の実行過程と成果物だけを見て、実際のエンドユーザーのように自然な言葉でフィードバックを返す。</p>
+        </div>
+      </div>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 400" role="img" aria-label="3 役閉ループ評価と情報ファイアウォールの図。実行エージェント（Executor）はタスク指示とタスクパッケージだけを受け取り、稼働中の Docker 環境で動く。各ターンの見える範囲の実行過程・成果物は、隠れた監督エージェント（Supervisor）へ渡され、隠された参照とルーブリックに照らしてチェックポイント方式で採点し、合格・不合格・継続の状態を返す。監督からユーザーシミュレータへは、情報ファイアウォールを通して粗い進捗シグナルだけが渡される。ユーザーシミュレータは自然言語のフィードバックを生成し、フィードバック整形処理でサニタイズされてから実行エージェントへ届く。このループは合格・回復不能な失敗・予算超過・タイムアウトまで続く。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="20" y="24">各ターンの実行過程は監督へ。監督はフィードバックを粗いシグナルに</text>
+          <text class="node-label" x="20" y="44">絞ってからユーザー役へ渡す（情報ファイアウォール）。</text>
+
+          <rect class="node" x="20" y="150" width="200" height="110" rx="10" stroke-width="2.5"></rect>
+          <text x="120" y="185" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">実行エージェント</text>
+          <text x="120" y="205" text-anchor="middle" font-size="10" fill="var(--color-heading)">Executor（評価対象）</text>
+          <text x="120" y="228" text-anchor="middle" font-size="10">稼働中の Docker 環境で</text>
+          <text x="120" y="245" text-anchor="middle" font-size="10">タスクを実行する</text>
+
+          <rect class="node" x="300" y="60" width="200" height="110" rx="10"></rect>
+          <text x="400" y="92" text-anchor="middle" font-size="12" font-weight="700">監督エージェント</text>
+          <text x="400" y="112" text-anchor="middle" font-size="10">Supervisor（隠れた評価者）</text>
+          <text x="400" y="135" text-anchor="middle" font-size="10">隠された参照＋ルーブリックで</text>
+          <text x="400" y="152" text-anchor="middle" font-size="10">合格 / 不合格 / 継続を判定</text>
+
+          <rect class="node" x="300" y="240" width="200" height="110" rx="10"></rect>
+          <text x="400" y="272" text-anchor="middle" font-size="12" font-weight="700">ユーザーシミュレータ</text>
+          <text x="400" y="292" text-anchor="middle" font-size="10">User Simulator</text>
+          <text x="400" y="315" text-anchor="middle" font-size="10">見える範囲だけを見て</text>
+          <text x="400" y="332" text-anchor="middle" font-size="10">自然言語で助言する</text>
+
+          <rect class="node" x="560" y="150" width="180" height="110" rx="10"></rect>
+          <text x="650" y="190" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-accent)">情報ファイアウォール</text>
+          <text x="650" y="213" text-anchor="middle" font-size="10">正解・採点基準は遮断</text>
+          <text x="650" y="230" text-anchor="middle" font-size="10">粗い進捗シグナルのみ</text>
+          <text x="650" y="247" text-anchor="middle" font-size="10">を通す</text>
+
+          <path class="edge" d="M220,190 L300,130" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M300,300 L220,240" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M470,170 L470,240" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M560,205 L500,150" marker-end="url(#arrow)"></path>
+
+          <text class="node-label" x="20" y="300">ループは合格・回復不能な失敗・予算超過・</text>
+          <text class="node-label" x="20" y="320">タイムアウトのいずれかまで続く。</text>
+          <text class="node-label" x="20" y="378">フィードバックは整形処理でサニタイズしてから実行エージェントへ届き、答えの漏洩を防ぐ。</text>
+        </svg>
+        <figcaption class="diagram__caption">実行エージェント・監督エージェント・ユーザーシミュレータの 3 役による閉ループ。監督だけが正確な採点基準を持ち、情報ファイアウォールがユーザーシミュレータへ粗い進捗シグナルだけを通すことで、現実的なやり取りと答えの非漏洩を両立する。</figcaption>
+      </figure>
+
+      <p>ここで鍵となるのが「<strong>情報ファイアウォール（information firewall）</strong>」という隔離の仕組みです。監督エージェントは正確な採点基準を知っていますが、ユーザーシミュレータには「合格・不合格・回復可能」といった粗い進捗シグナルだけを渡します。ユーザーシミュレータは隠された参照や監督の根拠にはアクセスできません。さらに、フィードバックを整える処理（feedback rewriter）が、実行エージェントに届く前に内容をサニタイズ（無害化）します。こうして、答えの漏洩を防ぎながら現実的なやり取りを再現します。</p>
+      <p>評価の実体は、ホスト側が監督し、コンテナ側でエージェントが動く構成です。タスクごとに新しい Docker 環境で実行エージェントを起動します。各ターンのあと、見える範囲の実行過程（対話記録・ツール使用記録・実行環境の状態・成果物）を集め、隠された監督エージェントにタスク固有の評価参照とともに渡します。監督はチェックポイント方式で採点し、合格・不合格・継続のいずれかを返します。このループは、タスクが合格になるか、回復不能な失敗に至るか、フォローアップの予算を超えるか、タイムアウトするまで続きます。</p>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>評価パイプラインは信頼できるか</h3>
+      <p>まず、この自動評価が人間の判断とどれだけ一致するかが確認されました。完了した実行記録から 50 件を無作為に取り出し、専門家 3 名が独立に合否とスコアを付けたところ、自動の合否判定は人間の多数決と 92.0% 一致しました。チェックポイント方式の平均スコアは、人間の平均スコアと強い相関を示しました（ピアソン相関 r=0.71、スピアマン相関 ρ=0.68）。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">92.0%</p>
+          <p class="stat__label">自動の合否判定が人間 3 名の多数決と一致した割合（無作為 50 件）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">r = 0.71</p>
+          <p class="stat__label">自動スコアと人間平均スコアのピアソン相関（線形の相関）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">ρ = 0.68</p>
+          <p class="stat__label">同じくスピアマン相関（順位の相関）</p>
+        </div>
+      </div>
+
+      <h3>モデル間の比較</h3>
+      <p>同じ OpenClaw というフレームワークのもとで 10 個のモデルを比較した結果（全体の Pass Rate / Average Score）は次のとおりです。<strong>Pass Rate（PR）</strong>は最終的に合格に達したタスクの割合、<strong>Average Score（AS）</strong>は監督エージェントによるチェックポイント方式の平均スコアです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル</th>
+            <th>Pass Rate</th>
+            <th>Average Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Claude Opus-4.8</th>
+            <td class="is-best">0.475</td>
+            <td>0.702</td>
+          </tr>
+          <tr>
+            <th>Claude Sonnet-4.6</th>
+            <td>0.455</td>
+            <td>0.763</td>
+          </tr>
+          <tr>
+            <th>GPT-5.4</th>
+            <td>0.407</td>
+            <td class="is-best">0.774</td>
+          </tr>
+          <tr>
+            <th>Kimi-2.6</th>
+            <td>0.362</td>
+            <td>0.709</td>
+          </tr>
+          <tr>
+            <th>Gemini-3.1-Pro</th>
+            <td>0.325</td>
+            <td>0.727</td>
+          </tr>
+          <tr>
+            <th>Qwen-3.5-Plus</th>
+            <td>0.318</td>
+            <td>0.731</td>
+          </tr>
+          <tr>
+            <th>Gemini-3.0-Flash</th>
+            <td>0.282</td>
+            <td>0.698</td>
+          </tr>
+          <tr>
+            <th>GPT-5.4-Mini</th>
+            <td>0.215</td>
+            <td>0.616</td>
+          </tr>
+          <tr>
+            <th>Gemini-3.1-Flash-Lite</th>
+            <td>0.155</td>
+            <td>0.543</td>
+          </tr>
+          <tr>
+            <th>GPT-4.1</th>
+            <td>0.152</td>
+            <td>0.488</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>論文が指摘する主なポイントは次のとおりです。</p>
+      <ul>
+        <li>先頭の閉ソースモデル（Claude Opus-4.8、GPT-5.4）が最も高い全体 Pass Rate を出しますが、絶対的な成功率はいずれも <strong>50% 未満</strong>にとどまります。模擬環境での能力と、実世界での実行との間には依然として大きなギャップがあります。</li>
+        <li>オープンソースモデルが急速に差を縮めています。Qwen-3.5-Plus や Kimi-2.6 は、Gemini-3.1-Pro などの閉ソースモデルと肩を並べる競争力を見せました。</li>
+        <li>全モデルに共通して「<strong>途中失敗（halfway failure）</strong>」という現象が見られました。中間の Average Score は高いのに、最終的な Pass Rate が低いという顕著なギャップです。部分的には前進できても、長い実行の連鎖の途中で回復不能な誤りを犯してしまうのです。</li>
+        <li>能力別に見ると、スキル使用と探索では比較的良好でした。一方、長文脈推論・マルチモーダル理解・クロスプラットフォーム協調は依然としてかなり困難です。長い実行過程の記憶を保つこと、文字以外の証拠に基づくこと、複数アプリ間で協調することが求められるためです。</li>
+      </ul>
+
+      <h3>フレームワーク間の比較</h3>
+      <p>同じモデルでも、どの「フレームワーク」（実行の流れをどう組み立てるかの設計）で動かすかによって成績が変わります。代表 3 モデルを 3 つのフレームワークで評価した結果（全体の Pass Rate / Average Score）は次のとおりです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル</th>
+            <th>OpenClaw</th>
+            <th>EDICT</th>
+            <th>Nanobot</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>GPT-5.4</th>
+            <td class="is-best">0.407 / 0.774</td>
+            <td>0.338 / 0.744</td>
+            <td>0.290 / 0.640</td>
+          </tr>
+          <tr>
+            <th>Claude Opus-4.8</th>
+            <td class="is-best">0.475 / 0.702</td>
+            <td>0.415 / 0.687</td>
+            <td>0.385 / 0.587</td>
+          </tr>
+          <tr>
+            <th>Kimi-2.6</th>
+            <td class="is-best">0.362 / 0.709</td>
+            <td>0.320 / 0.695</td>
+            <td>0.278 / 0.573</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>各セルは Pass Rate / Average Score で、強調表示は各モデルで最高の Pass Rate を表します。</p>
+
+      <ul>
+        <li><strong>OpenClaw</strong> が、テストしたすべてのモデルで一貫して最高の Pass Rate を記録しました。集中型・単一エージェントの構成で情報の損失が最小になり、元のタスク制約・途中のツール実行の証拠・閉ループのユーザーフィードバックが 1 本の実行過程の中に保たれるためだと説明されています。</li>
+        <li><strong>EDICT</strong> は「Average Score は高いのに Pass Rate が低い」というパターンが目立ちました。これはマルチエージェント編成に内在する「<strong>協調摩擦（coordination friction）</strong>」を露呈しています。中央のオーケストレータが下位のサブエージェントを実時間で監督できず、状態更新の失敗やハンドオフ時のコンテキスト欠落でパイプラインが停滞するのです。</li>
+        <li><strong>Nanobot</strong> は超軽量な構造で、トークン使用が高度に最適化されています（例：GPT-5.4 で平均入力 0.57M トークン、OpenClaw の 1.15M と対照的）。ただし効率と性能はトレードオフの関係にあり、簡素なコンテキスト管理では細かい推論や長い証拠テキストの生成が難しく、厳格な評価が求める完全な成果を出しきれずに全体の Pass Rate が低くなりました。</li>
+      </ul>
+
+      <h3>多ターンのやり取りは効くのか</h3>
+      <p>ユーザーからのフォローアップを重ねるほど成績が伸びることも確認されました。監督サイクルを 1 → 2 → 3 と進めると、Pass Rate は一貫して向上し、累積最大スコアの平均も上がりました。多ターンのユーザーフィードバックが、誤りを動的に立て直すうえで欠かせないことを示しています。</p>
+
+      <div class="timeline">
+        <div class="timeline__step">
+          <p class="timeline__step-title">監督サイクル 1 回</p>
+          <p>Pass Rate 23.8%／累積最大スコアの平均 0.565。1 ターンだけでは合格に届きにくい。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">監督サイクル 2 回</p>
+          <p>Pass Rate 29.5%／累積最大スコアの平均 0.652。フィードバックを 1 回受けて立て直す。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">監督サイクル 3 回</p>
+          <p>Pass Rate 31.7%／累積最大スコアの平均 0.679。多ターンの協力で着実に改善する。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>この研究は、静的な模擬環境を超えて、エージェント評価を 5 つの基盤能力 × 400 の 2 言語実世界タスクへと分解しました。採点基準を漏らさずに多ターンの人間とエージェントの協力を忠実に捉える、3 役の閉ループ（実行エージェント・隠れた監督エージェント・ユーザーシミュレータ）を提案した点が特徴です。主要な発見として、現行のエージェントは長期記憶（long-horizon memory）とクロスプラットフォーム協調に苦戦し、フレームワークの設計がしばしば本質的なモデル能力のボトルネックになることが明らかになりました。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>論文が認める限界。</strong>第 1 に、手作業で構築した 400 タスクという比較的小規模なセットであること。第 2 に、ライブ環境で実行するため不安定になる可能性があること。第 3 に、LLM ベースの評価が潜在的なバイアスを持ち込みうること。これらの制約はあるものの、UniClawBench はエージェントの失敗の根本原因を正確に特定し、より信頼できる能動的アシスタントへの道を拓くと位置づけられている。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>UniClawBench は、実世界のツールを操作する能動的エージェントを、失敗の原因を切り分けられる「5 つの能力軸」で診断する初の能力駆動型ベンチマークです。稼働中の Docker 環境で多ターンの閉ループ評価を行い、採点基準の漏洩を防ぐ 3 役の仕組みを備えます。最先端モデルでも成功率は 50% に届かず、長文脈・マルチモーダル・クロスプラットフォームの弱点と、フレームワーク設計の影響の大きさが浮き彫りになりました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>能動的エージェント（proactive agent）</dt>
+        <dd>反応的なエージェントと異なり、自ら行動を起こして目標を自律的に追う AI。永続的なメモリ・再利用可能なスキル・ローカルツールへのアクセスを活かす常駐アシスタント。</dd>
+
+        <dt>能力駆動型分類（capability-driven taxonomy）</dt>
+        <dd>タスクを応用シーンではなく「主要なボトルネックとなる能力」で分類する枠組み。失敗の根本原因を特定しやすくする。</dd>
+
+        <dt>3 役閉ループ評価（three-role closed-loop evaluation）</dt>
+        <dd>実行エージェント（評価対象）・監督エージェント（隠れた評価者）・ユーザーシミュレータ（ユーザー役）の 3 役による多ターン評価戦略。</dd>
+
+        <dt>情報ファイアウォール（information firewall）</dt>
+        <dd>監督からユーザーシミュレータへ粗い進捗シグナルだけを通し、隠された採点基準や正解の漏洩を防ぐ隔離の仕組み。</dd>
+
+        <dt>完了チェックポイント（completion checkpoints）</dt>
+        <dd>あらかじめ記録した正解の代わりに、各タスクを細かく段階的な達成条件へ分解した採点基準。</dd>
+
+        <dt>Pass Rate（PR）</dt>
+        <dd>最終的に合格状態へ達したタスクの割合（タスク単位の指標）。</dd>
+
+        <dt>Average Score（AS）</dt>
+        <dd>監督エージェントによるチェックポイント方式の平均スコア（ステップ単位で集約した指標）。</dd>
+
+        <dt>途中失敗（halfway failure）</dt>
+        <dd>中間の Average Score は高いのに最終の Pass Rate が低い、長い実行の途中で起きる回復不能な失敗現象。</dd>
+
+        <dt>協調摩擦（coordination friction）</dt>
+        <dd>マルチエージェント編成で、状態更新の失敗やハンドオフ時のコンテキスト欠落によりパイプラインが停滞する現象。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">UniClawBench: A Universal Benchmark for Proactive Agents on Real-World Tasks</p>
+      <a href="https://arxiv.org/abs/2607.08768" target="_blank" rel="noopener noreferrer">arXiv:2607.08768 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
