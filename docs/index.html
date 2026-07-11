@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-09-2607.08763-opencof-chain-of-frame-video-reasoning.html">
+            <img src="assets/2026-07-09-2607.08763-opencof-chain-of-frame-video-reasoning-cover.png"
+                 alt="動画生成モデルが連続するフレームのつながりを通じて推論する Chain-of-Frame（CoF）推論を鍛えるための研究 OpenCoF のインフォグラフィック。11 種類のタスク・17,312 本の推論動画からなるデータセット OpenCoF-17K で既存の動画生成モデル Wan2.2-I2V-A14B を LoRA でファインチューニングした Wan-CoF が、MME-CoF・Gen-ViRe・VIPER・RULER-Bench の 4 つの外部ベンチマークでベースラインを一貫して上回り、中間推論状態を保持する 2 種類の Reasoning Token（vt・tt）を探索したことを示す">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-09</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-09-2607.08763-opencof-chain-of-frame-video-reasoning.html">動画を「生成しながら考える」AI ― 1万7千本の推論動画で鍛えた Wan-CoF</a>
+          </h2>
+          <p class="article-card__summary">動画生成モデルが「連続するフレームのつながり」を通じて推論する能力を、Chain-of-Frame（CoF）推論と呼びます。この論文は、その CoF 推論を鍛えるために 11 種類のタスク・17,312 本の推論動画からなるデータセット OpenCoF-17K を構築しました。従来の CoT（Chain-of-Thought）が静止画のような静的な視覚観測に頼るのに対し、CoF は初期条件の画像と指示から生成される連続フレームの発展そのものを推論とみなし、物が動く・変化するといった動的な遷移を扱えます。背景には、既存研究が外部ベンチマークへの汎化を検証していないこと、推論のための動画モデル内部のアーキテクチャがほとんど調べられていないこと、という 2 つの限界がありました。OpenCoF-17K は「初期条件の画像＋指示」を「目標の推論動画」とペアにしたデータで、480p・15fps・81 フレームに統一し、インスタンスベースレンダリング・専門家ガイドレンダリング・手続き的シーン合成・外部動画の再利用という 4 つの相補的なパイプラインで作られています。このデータで汎用の I2V モデル Wan2.2-I2V-A14B を LoRA（rank=32、DiT のデノイザーのみ）でファインチューニングしたのが Wan-CoF です。さらに、中間の推論状態を明示的に保持する 2 種類の学習可能な Reasoning Token も探索しました。視覚推論トークン vt は視覚潜在列に加わり自己注意で双方向にやり取りして空間に接地した低レベルの手がかりを、テキスト推論トークン tt はクロス注意の参照される側に加わりプロンプト非依存の高レベルな事前情報を担います。評価では、Wan-CoF が外部 4 ベンチマーク（MME-CoF 1.00→1.30、Gen-ViRe 0.304→0.391、VIPER 3.3→7.5、RULER-Bench 55.8→56.8）すべてでベースラインを一貫して上回り、伸びは時間的一貫性・物理・空間・論理といった推論寄りの下位項目に集中しました。カテゴリ別の伸びが教師データの種類とよく対応し、分布外への転移も確認されています。vt・tt の両変種はさらにヘッドライン指標を押し上げ、vt は持続的なグローバルな計画、tt はプロンプト非依存の事前情報という設計どおりの役割分担を見せました（トークン数は 16 をデフォルト）。より強い動画推論には「広範な時間的教師信号」と「中間推論状態を組織化する明示的な機構」の両方が必要だと示し、vt と tt の効果的な組み合わせを今後の課題として残した研究です。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-09-2607.08768-uniclawbench-proactive-agents-benchmark.html">
             <img src="assets/2026-07-09-2607.08768-uniclawbench-proactive-agents-benchmark-cover.png"
                  alt="実世界で自分から動く能動的AIエージェントを、スキル使用・探索・長文脈推論・マルチモーダル理解・クロスプラットフォーム協調の 5 つの能力軸で診断するベンチマーク UniClawBench のインフォグラフィック。英語・中国語あわせて 400 タスクを稼働中の Docker 環境で 3 役の閉ループ評価にかけ、最先端モデルでも成功率は 50% 未満、最高でも Pass Rate 0.475 にとどまることを示す">

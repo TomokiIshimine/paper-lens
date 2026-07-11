@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>動画を「生成しながら考える」AI ― 1万7千本の推論動画で鍛えた Wan-CoF — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-09-2607.08763-opencof-chain-of-frame-video-reasoning-cover.png"
+           alt="動画生成モデルが連続するフレームのつながりを通じて推論する Chain-of-Frame（CoF）推論を鍛えるための研究 OpenCoF のインフォグラフィック。11 種類のタスク・17,312 本の推論動画からなるデータセット OpenCoF-17K で既存の動画生成モデル Wan2.2-I2V-A14B を LoRA でファインチューニングした Wan-CoF が、MME-CoF・Gen-ViRe・VIPER・RULER-Bench の 4 つの外部ベンチマークでベースラインを一貫して上回り、中間推論状態を保持する 2 種類の Reasoning Token（vt・tt）を探索したことを示す">
+    </figure>
+
+    <h1 class="article__title">動画を「生成しながら考える」AI ― 1万7千本の推論動画で鍛えた Wan-CoF</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-09</span>
+      <span>arXiv：2607.08763</span>
+      <span>カテゴリ：cs.CV, cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>動画生成モデルが「連続するフレームのつながり」を通じて推論する能力を、<strong>Chain-of-Frame（CoF）推論</strong>と呼びます。この論文は、その CoF 推論を鍛えるために 11 種類のタスク・17,312 本の推論動画からなるデータセット <strong>OpenCoF-17K</strong> を構築しました。そのデータで既存の動画生成モデル Wan2.2-I2V-A14B をファインチューニングした <strong>Wan-CoF</strong> が、外部の 4 つの動画推論ベンチマークでベースラインを一貫して上回ることを示しています。さらに、推論の中間状態を明示的に保持する 2 種類の補助トークンも探索しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">17,312 本</p>
+          <p class="stat__label">11 種類のタスクにまたがる推論動画データセット OpenCoF-17K</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">4 / 4</p>
+          <p class="stat__label">外部ベンチマーク（MME-CoF・Gen-ViRe・VIPER・RULER-Bench）すべてでベースラインを上回る</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">2 種類</p>
+          <p class="stat__label">中間推論状態を保持する Reasoning Token（視覚 vt・テキスト tt）を探索</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>近年の大規模言語モデル（LLM）やマルチモーダルモデル（LMM）では、「推論する力」の強化が中心的なテーマになっています。その主流は <strong>Chain-of-Thought（CoT、思考の連鎖）</strong>と呼ばれる、テキストの中間ステップをたどって答えに近づく方法です。視覚的な問題に応用する場合も、静止画のような「静的な視覚観測」に頼るのが一般的でした。</p>
+      <p>しかし、静止画ベースの推論では、物が動く・変化するといった「動的な遷移」や、それが何段階も積み重なる過程を根本的には扱いきれません。ここで注目されているのが、動画生成モデルによる別の道です。動画は時間的に連なるフレームを次々に生み出します。その発展の過程そのものを推論とみなすのが <strong>Chain-of-Frame（CoF）推論</strong>です。動画モデルには物理や因果関係の初歩的な理解が芽生えているとされ、「生成しながら考える」ための土台になり得ると期待されています。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 800 300" role="img" aria-label="Chain-of-Thought（CoT）と Chain-of-Frame（CoF）の対比図。上段の CoT は、テキストの中間ステップ（思考1→思考2→思考3→答え）をたどる従来の推論で、静止画のような静的な観測に頼る。下段の CoF は、初期条件の画像と指示から動画生成モデルが連続するフレーム（F1→F2→F3→…→Fn）を次々に生み出し、そのフレームの発展そのものが推論の展開になる。動的な遷移とその積み重なりを扱える点が CoF の特徴。">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="20" y="28" font-weight="700">従来：Chain-of-Thought（テキストの中間ステップ）</text>
+          <rect class="node" x="20" y="44" width="120" height="52" rx="8"></rect>
+          <text x="80" y="74" text-anchor="middle" font-size="11">思考 1</text>
+          <rect class="node" x="180" y="44" width="120" height="52" rx="8"></rect>
+          <text x="240" y="74" text-anchor="middle" font-size="11">思考 2</text>
+          <rect class="node" x="340" y="44" width="120" height="52" rx="8"></rect>
+          <text x="400" y="74" text-anchor="middle" font-size="11">思考 3</text>
+          <rect class="node" x="500" y="44" width="120" height="52" rx="8"></rect>
+          <text x="560" y="74" text-anchor="middle" font-size="11">答え</text>
+          <path class="edge" d="M140,70 L180,70" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M300,70 L340,70" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M460,70 L500,70" marker-end="url(#arrow)"></path>
+          <text class="node-label" x="640" y="74">静的な観測に依存</text>
+
+          <text class="node-label" x="20" y="168" font-weight="700">本研究：Chain-of-Frame（連続フレームの発展そのものが推論）</text>
+          <rect class="node" x="20" y="184" width="96" height="72" rx="8" stroke-width="2.5"></rect>
+          <text x="68" y="214" text-anchor="middle" font-size="11" font-weight="700" fill="var(--color-accent)">F1</text>
+          <text x="68" y="234" text-anchor="middle" font-size="9">初期条件＋指示</text>
+          <rect class="node" x="152" y="184" width="96" height="72" rx="8"></rect>
+          <text x="200" y="224" text-anchor="middle" font-size="11">F2</text>
+          <rect class="node" x="284" y="184" width="96" height="72" rx="8"></rect>
+          <text x="332" y="224" text-anchor="middle" font-size="11">F3</text>
+          <rect class="node" x="416" y="184" width="96" height="72" rx="8"></rect>
+          <text x="464" y="224" text-anchor="middle" font-size="11">…</text>
+          <rect class="node" x="548" y="184" width="96" height="72" rx="8" stroke-width="2.5"></rect>
+          <text x="596" y="220" text-anchor="middle" font-size="11" font-weight="700">Fn</text>
+          <text x="596" y="238" text-anchor="middle" font-size="9">推論後の状態</text>
+          <path class="edge" d="M116,220 L152,220" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M248,220 L284,220" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M380,220 L416,220" marker-end="url(#arrow)"></path>
+          <path class="edge" d="M512,220 L548,220" marker-end="url(#arrow)"></path>
+          <text class="node-label" x="664" y="224">動的な遷移を扱える</text>
+        </svg>
+        <figcaption class="diagram__caption">CoT はテキストの中間ステップをたどるのに対し、CoF は初期条件の画像と指示から生成される連続フレームの発展そのものを推論とみなす。動的な遷移とその積み重なりを扱える点が動画モデルならではの推論経路である。</figcaption>
+      </figure>
+
+      <p>ただし、その潜在力はまだ十分に引き出されていません。この論文は、CoF 推論を実際に強化する具体的な方法とデータを示した点に価値があります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>推論を必要とするタスクでは、いまの動画生成モデルはまだ苦戦しています。論文によれば、長期にわたる時間的な一貫性、物理的・空間的な整合性、論理のつながりのいずれにも課題が残ります。見た目がどれだけリアルでも、それが信頼できる推論を保証するわけではない、と指摘されています。</p>
+      <p>これまでの関連研究（MME-CoF、RULER-Bench、Gen-ViRe、VIPER など）は、主に「性能を測るベンチマークを整える」ことに力を注いできました。推論能力を能動的に強化しようとする研究は乏しかったのです。迷路解きなどの先行研究もありましたが、論文は次の 2 つの限界を挙げています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 1</span>汎化の未検証</p>
+          <p>訓練や評価が特定の領域に閉じていたり、独自に用意したデータと密接に結びついていたりして、まったく別の外部ベンチマークへ本当に汎化するのかが検証されていない。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 2</span>アーキテクチャ未探索</p>
+          <p>関心がデータの量を増やすことや推論の戦略に向いており、推論のために設計された動画モデル内部のアーキテクチャがほとんど調べられていない。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>この研究は <strong>OpenCoF</strong> というフレームワークを提案します。大きく「データ中心のアプローチ」と「アーキテクチャの探索」の 2 段構えです。</p>
+
+      <h3>(1) データセット OpenCoF-17K</h3>
+      <p>11 種類のタスクファミリーにまたがる 17,312 本の推論動画データセットです。各データは「初期条件の画像＋テキストによる指示」を「目標となる推論動画」とペアにした形をとります。つまり、最初の状態を与えると、正しい推論の過程を映した動画が出てくる、という対応関係を学ぶための素材です。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">480p / 15fps</p>
+          <p class="stat__label">全動画を統一した解像度とフレームレート（長さは 81 フレーム）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">53.2 語</p>
+          <p class="stat__label">プロンプト（指示文）の平均の長さ</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">4 通り</p>
+          <p class="stat__label">相補的なキュレーションパイプラインで構築</p>
+        </div>
+      </div>
+
+      <p>データは 4 つの相補的な作り方（キュレーションパイプライン）で構築されました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">作り方 1</span>インスタンスベースレンダリング</p>
+          <p>instance-based rendering。パズルや盤面など、すでに構造化されたデータからコードで決まった動画を描き出す。例：チェックメイトの一手を実行する Chess、4×4 の数独を段階的に解く Sudoku。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">作り方 2</span>専門家ガイドレンダリング</p>
+          <p>expert-guided rendering。人間の知識や LLM が生成した概念、画像生成モデル（T2I）の出力で構造を用意してから描画する。例：補助線を引く 2D geometry、点をつなぐ Dot-to-dot。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">作り方 3</span>手続き的シーン合成</p>
+          <p>procedural scene synthesis。ランダムな初期値から物理エンジンやグラフィックスの仕組みでゼロから合成する。例：タングラム、展開図から立方体を折る Cube folding、3D ブロック回転、Physics motion。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">作り方 4</span>外部動画の再利用</p>
+          <p>external video repurposing。既存データセットの良質なデモを標準化して再利用する。例：迷路（Maze）、VBVR（外部データセット由来）、ロボット操作（Embodied manipulation）。</p>
+        </div>
+      </div>
+
+      <p>従来のデータセットが主に手続き的シーン合成の 1 つのやり方に依存していたのに対し、複数の作り方を組み合わせている点が差別化になっています。タスク別の本数は次のとおりで、合計 17,312 本です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>タスク</th>
+            <th>本数</th>
+            <th>タスク</th>
+            <th>本数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Chess</th>
+            <td>1,000</td>
+            <th>3D ブロック回転</th>
+            <td>800</td>
+          </tr>
+          <tr>
+            <th>Sudoku</th>
+            <td>1,000</td>
+            <th>Physics motion</th>
+            <td>1,000</td>
+          </tr>
+          <tr>
+            <th>2D geometry</th>
+            <td>1,162</td>
+            <th>Maze</th>
+            <td>1,000</td>
+          </tr>
+          <tr>
+            <th>Dot-to-dot</th>
+            <td>1,000</td>
+            <th>Embodied manipulation</th>
+            <td>1,000</td>
+          </tr>
+          <tr>
+            <th>タングラム</th>
+            <td>800</td>
+            <th>VBVR（30 サブタスク）</th>
+            <td>7,750</td>
+          </tr>
+          <tr>
+            <th>Cube folding</th>
+            <td>800</td>
+            <th>合計</th>
+            <td class="is-best">17,312</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>(2) Wan-CoF ― データだけで鍛える</h3>
+      <p>Wan-CoF は、汎用の事前学習済み I2V（画像から動画を生成する）モデルである Wan2.2-I2V-A14B を、OpenCoF-17K の上で <strong>LoRA</strong> を使ってファインチューニングしたモデルです。LoRA（Low-Rank Adaptation）は、少数の追加パラメータだけで大きなモデルを効率よく調整する手法です。</p>
+      <p>ここでの狙いは、推論のための特別な技術を一切加えず、多様な時間的な教師データだけで CoF のふるまいを引き出せるかを検証することです。実装面では、LoRA を拡散トランスフォーマー（DiT）のデノイザー（ノイズ除去を担う部分）だけに適用し（テキストエンコーダと、画像を圧縮・復元する部品である VAE は凍結）、rank=32 で 2 エポック訓練しています。</p>
+
+      <h3>(3) 2 種類の Reasoning Token ― アーキテクチャの探索</h3>
+      <p>DiT ベースの動画生成器では、推論の途中経過が視覚やテキストの内部表現にぼんやりと埋もれています。そこで、中間の推論状態を明示的に置いておく「場所」を与えるため、動く層の異なる 2 種類の学習可能なトークンを探索しました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">vt</span>Visual Reasoning Tokens（視覚推論トークン）</p>
+          <p>DiT の視覚的な内部表現（潜在空間）に付け加えるトークン。自己注意（self-attention）を通じて視覚トークンと双方向にやり取りし、全体の文脈をまとめて配り直すことで、空間に接地した低レベルの手がかりを捉える。この変種を <strong>Wan-CoF<sub>vt</sub></strong> と呼ぶ。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">tt</span>Textual Reasoning Tokens（テキスト推論トークン）</p>
+          <p>テキスト条件の列に付け加えるトークン。クロス注意（cross-attention）の「参照される側」にだけ置かれ、映像のどの位置・時点から参照されても内容が変わらない。すべての空間・時間で共有される、プロンプト非依存の高レベルな意味的事前情報として働く。この変種を <strong>Wan-CoF<sub>tt</sub></strong> と呼ぶ。</p>
+        </div>
+      </div>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 360" role="img" aria-label="2 種類の Reasoning Token が DiT のどこに入るかを示す図。左側は視覚潜在列で、視覚トークンに視覚推論トークン vt を加え、自己注意（self-attention）を通じて双方向にやり取りし、空間に接地した低レベルの手がかりを捉える。右側はテキスト条件列で、映像側がクエリ、テキスト側がキー・バリューとしてクロス注意（cross-attention）で結びつく。テキスト推論トークン tt はこの参照されるキー・バリュー側にだけ加わり、プロンプト非依存の高レベルな意味的事前情報として働く。どちらも同じ Wan2.2-I2V-A14B を土台に LoRA で別々にファインチューニングされる。">
+          <defs>
+            <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="20" y="26" font-weight="700">Visual Reasoning Tokens（vt）</text>
+          <rect class="node" x="20" y="44" width="300" height="120" rx="10" stroke-width="2.5"></rect>
+          <text x="170" y="70" text-anchor="middle" font-size="11">視覚潜在列（visual latents）</text>
+          <rect class="node" x="40" y="88" width="150" height="30" rx="6"></rect>
+          <text x="115" y="108" text-anchor="middle" font-size="10">視覚トークン</text>
+          <rect class="node" x="205" y="88" width="95" height="30" rx="6" stroke-width="2.5"></rect>
+          <text x="252" y="108" text-anchor="middle" font-size="10" font-weight="700" fill="var(--color-accent)">＋ vt</text>
+          <text x="170" y="146" text-anchor="middle" font-size="10">自己注意で双方向にやり取り</text>
+
+          <text class="node-label" x="440" y="26" font-weight="700">Textual Reasoning Tokens（tt）</text>
+          <rect class="node" x="440" y="44" width="300" height="120" rx="10"></rect>
+          <text x="590" y="70" text-anchor="middle" font-size="11">テキスト条件列（key / value 側）</text>
+          <rect class="node" x="460" y="88" width="150" height="30" rx="6"></rect>
+          <text x="535" y="108" text-anchor="middle" font-size="10">テキストトークン</text>
+          <rect class="node" x="625" y="88" width="95" height="30" rx="6" stroke-width="2.5"></rect>
+          <text x="672" y="108" text-anchor="middle" font-size="10" font-weight="700" fill="var(--color-accent-2, var(--color-accent))">＋ tt</text>
+          <text x="590" y="146" text-anchor="middle" font-size="10">クロス注意で参照される側</text>
+
+          <path class="edge" d="M320,224 L320,120" marker-end="url(#arrow2)"></path>
+          <path class="edge" d="M440,224 L440,120" marker-end="url(#arrow2)"></path>
+          <text class="edge-label" x="380" y="204" text-anchor="middle">映像＝クエリ</text>
+
+          <rect class="node" x="230" y="224" width="300" height="80" rx="10"></rect>
+          <text x="380" y="256" text-anchor="middle" font-size="12" font-weight="700">Wan2.2-I2V-A14B（DiT）</text>
+          <text x="380" y="278" text-anchor="middle" font-size="10">同じ土台に LoRA で別々にファインチューニング</text>
+          <text x="380" y="294" text-anchor="middle" font-size="10">トークン数は vt・tt とも 16／5 エポック訓練</text>
+
+          <text class="node-label" x="20" y="344">vt は空間に接地した低レベルの手がかり、tt はプロンプト非依存の高レベルな意味的事前情報を担う。</text>
+        </svg>
+        <figcaption class="diagram__caption">vt は視覚潜在列に加わり自己注意で双方向にやり取りする一方、tt はクロス注意の「参照される側（key/value）」にだけ加わる。動く層が異なるため役割も分かれ、どちらも同じ Wan2.2-I2V-A14B を土台に LoRA で別々に訓練される。</figcaption>
+      </figure>
+
+      <p>どちらも同じ Wan2.2-I2V-A14B を土台に、LoRA で別々にファインチューニングされます。トークン数は vt・tt ともに 16 に設定し、これらの変種は 5 エポック訓練しています。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価には、OpenCoF-17K 自身の 11 タスクよりも広い推論カテゴリをカバーする 4 つの外部ベンチマーク（MME-CoF、Gen-ViRe、VIPER、RULER-Bench）を使いました。いずれも公式の判定モデルに従って採点します。比較対象には、クローズドソース（Kling、Seedance、Veo、Sora-2 など）とオープンソース（HunyuanVideo など）が含まれます。</p>
+      <p>主要な数値は次の通りです。いずれもベースラインは元の Wan2.2-I2V-A14B です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ベンチマーク（スケール）</th>
+            <th>ベースライン</th>
+            <th>Wan-CoF</th>
+            <th>差分</th>
+            <th>参考（最高クラス）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>MME-CoF（0〜4）</th>
+            <td>1.00</td>
+            <td class="is-best">1.30</td>
+            <td>+0.30</td>
+            <td>Sora-2 1.80 / Seedance-1.0-Pro 1.48</td>
+          </tr>
+          <tr>
+            <th>Gen-ViRe（0〜1）</th>
+            <td>0.304</td>
+            <td class="is-best">0.391</td>
+            <td>+0.087</td>
+            <td>Sora-2 0.560</td>
+          </tr>
+          <tr>
+            <th>VIPER（POC@1.0）</th>
+            <td>3.3</td>
+            <td class="is-best">7.5</td>
+            <td>+4.2</td>
+            <td>Sora-2 23.3</td>
+          </tr>
+          <tr>
+            <th>RULER-Bench（0〜100, I2V）</th>
+            <td>55.8</td>
+            <td class="is-best">56.8</td>
+            <td>+1.0</td>
+            <td>―</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>論文は、4 つのベンチマークすべてでヘッドラインの指標が押し上げられたと述べています。特に、向上が大きかったのは見た目の忠実度だけでなく、時間的一貫性・物理・空間・論理といった推論寄りの下位項目に集中していました。これは、訓練がフレーム単位の推論を実際に強化していることを示唆します。またオープンソースの競合を上回り、クローズドソースの最先端との差を縮めた、と位置づけています。</p>
+      <p>分布外（訓練とは分布が異なるデータ）への転移も確認されました。カテゴリ別の伸びが OpenCoF-17K の教師データの種類とよく対応しており（例：Physics motion の訓練 → VIPER の Physics 項目が向上）、特定の訓練領域に過学習したのではなく、転移可能な CoF 推論スキルを育てられたことを示唆します。</p>
+
+      <h3>Reasoning Token の効果</h3>
+      <p>Reasoning Token については、vt・tt の両変種が全ベンチマークのヘッドライン指標で Wan-CoF をさらに上回りました。興味深いことに、下位項目では設計に沿って役割が分かれました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">vt が強い</span>持続的なグローバルな計画</p>
+          <p>vt は「持続的なグローバルな計画」が必要な項目で強みを示した。注意の分析でも、vt は対象付近に局所的な注意のバンドを作る傾向が観察された。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">tt が強い</span>プロンプト非依存の事前情報</p>
+          <p>tt は「プロンプトに依存しないテキストの事前情報」が効く項目で強みを示した。注意の分析では、tt はより広いタスク関連領域に拡散する傾向が見られた。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>トークン数の探索。</strong>トークン数を 16 から 32 に倍増しても一様な改善は得られず、パラメータもほぼ倍増するため、<strong>16 をデフォルト</strong>に採用している。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>この研究は、より強い動画推論には 2 つの要素がともに必要だと示唆しています。1 つは「広範な時間的教師信号」（多様な推論動画データ）、もう 1 つは「中間の推論状態を組織化する明示的な機構」（Reasoning Token）です。加えて、外部ベンチマークへ転移する汎化可能な推論スキルを育てられること、そしてデータセット・モデル・コードをオープンソース化して研究を後押しすることも意義として挙げられています。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>論文が明示する限界。</strong>vt と tt を<strong>別々に</strong>調べており、両者を効果的に組み合わせる方法が今後の課題として残されている。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>この論文は、11 タスク・17,312 本の推論動画データセット OpenCoF-17K を構築し、それでファインチューニングした Wan-CoF が 4 つの外部ベンチマークで一貫してベースラインを上回ることを示しました。さらに、推論の中間状態を保持する 2 種類の Reasoning Token を探索し、それぞれが異なる役割で推論を後押しすることを分析した研究です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>Chain-of-Frame（CoF）推論</dt>
+        <dd>時間的に連なるフレームの発展を通じて推論が展開する過程。動画生成モデルに特有の推論経路で、テキストや静止画に依存する従来の Chain-of-Thought と対比される。</dd>
+
+        <dt>Chain-of-Thought（CoT）</dt>
+        <dd>LLM などで用いられる、テキストの中間推論ステップをたどる推論。視覚版は静的な視覚観測に依存する。</dd>
+
+        <dt>I2V（Image-to-Video）</dt>
+        <dd>初期画像から動画を生成するタスク・モデル。本研究の土台 Wan2.2-I2V-A14B が該当する。</dd>
+
+        <dt>DiT（Diffusion Transformer）</dt>
+        <dd>拡散モデルを Transformer で構成したアーキテクチャ。高解像度でスケーラブルな生成を可能にする。</dd>
+
+        <dt>LoRA（Low-Rank Adaptation）</dt>
+        <dd>少数の追加パラメータで大きなモデルを効率よくファインチューニングする手法。本研究では rank=32 で DiT のデノイザーのみに適用。</dd>
+
+        <dt>Visual Reasoning Tokens（vt）</dt>
+        <dd>DiT の視覚潜在列に付け加える学習可能トークン。自己注意で双方向にやり取りし、空間に接地した低レベルの手がかりを捉える。</dd>
+
+        <dt>Textual Reasoning Tokens（tt）</dt>
+        <dd>テキスト条件列に付け加える学習可能トークン。クロス注意の key/value 側にだけ入り、プロンプト非依存の高レベルな事前情報として働く。</dd>
+
+        <dt>POC@1.0</dt>
+        <dd>VIPER ベンチマークの評価指標。論文は VIPER の公式プロトコルに従うとのみ記し、指標の内部定義は明示していない。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">OpenCoF: Learning to Reason Through Video Generation</p>
+      <a href="https://arxiv.org/abs/2607.08763" target="_blank" rel="noopener noreferrer">arXiv:2607.08763 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
