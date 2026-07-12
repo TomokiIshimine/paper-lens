@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>アイデアには『血筋』がある ― AI が研究の系譜を追えるかを測る初のベンチマーク IdeaGene-Bench — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-09-2607.08758-ideagene-bench-scientific-lineage-reasoning-cover.png"
+           alt="科学のアイデアを生物のゲノムのように「継承し進化する血筋（系譜）」として扱い、AI がその系譜を正しく追えるかを測る初のベンチマーク IdeaGene-Bench（IG-Bench）のインフォグラフィック。論文を niche・mechanism・observation・limitation・delta・claim の 6 役に分解する Idea Genome、先行研究と後続研究の差分をとる GenomeDiff、6 つの進化的ダイナミクスからなる IdeaGene フレームワークを示し、最も強いシステムでも系譜推論の完全一致精度は 27.3% にとどまることを表す">
+    </figure>
+
+    <h1 class="article__title">アイデアには『血筋』がある ― AI が研究の系譜を追えるかを測る初のベンチマーク IdeaGene-Bench</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-09</span>
+      <span>arXiv：2607.08758</span>
+      <span>カテゴリ：cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>科学のアイデアは「白紙」から生まれるのではなく、生物のゲノム（遺伝情報）のように、先行研究の中核的な仕組みを受け継ぎ、欠点を修復し、組み換えながら進化していきます。この論文は、そうした「アイデアの血筋（系譜）」を AI が正しく追えるかを測る、初めてのベンチマーク <strong>IdeaGene-Bench（IG-Bench）</strong> を提案しました。評価してみると、最も強いシステムでも系譜推論の完全一致精度はわずか 27.3% にとどまりました。今の AI は「もっともらしい研究文」は書けても、「先行研究の仕組みを筋道立てて受け継ぐ」ことはまだできていない、という弱点を浮き彫りにしています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">27.3%</p>
+          <p class="stat__label">最も高いシステム（Claude Code + GPT-5.5）でも、系譜推論の完全一致精度はこの水準にとどまる</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">10 領域</p>
+          <p class="stat__label">自然言語処理・CV・マルチモーダルに加え、生物・化学・物理・材料・医学・数学にわたる評価</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1,961 本</p>
+          <p class="stat__label">系譜トレース。さらに 1,085 個の Idea Genome・920 件の GenomeDiff で構成</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>近年、論文の検索から仮説づくり、実験、論文執筆までを自動でこなす「AI 研究者（AI Scientist）」のようなシステムが登場しています。しかし、その良し悪しを測るこれまでの評価は、検索の質・事実の正しさ・文章の流暢さ・新規性といった側面に偏っていました。</p>
+      <p>一方で、本当に難しい問いは別のところにあります。「ある提案が『先行研究のこの方向を延長したものだ』と主張するとき、正しい仕組みを受け継ぎ、正しい欠点を直し、根拠とする系譜と食い違っていないか」という問いです。この観点はこれまでほとんど検証されてきませんでした。</p>
+      <p>もし AI が「それらしい文章」を書けるだけで、研究の血筋を正しく追えないのであれば、生成された提案は表面的に新しく見えても、科学の積み重ねとしては筋が通っていないことになります。この研究は、その落とし穴を測る物差しを与えるものです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>著者らは、科学の進歩は「話題が近いこと（topical proximity）」とは別物だと指摘します。同じ課題を扱っていても互いに継承関係がないこともあれば、文章の上では遠く見えても同じ中核の仕組みを引き継いでいることもあるからです。</p>
+      <p>論文では、物体検出という同じ分野の例で、この違いが説明されています。どちらも「物体検出」を扱いますが、片方は前身の駆動機構を受け継いだ継承であり、もう片方は課題を共有するだけで仕組みは継承していません。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">血筋あり</span>YOLOv2 ← YOLO</p>
+          <p>前身の <strong>YOLO</strong> が持つ「一段階で検出する仕組み」をそのまま受け継ぎ、アンカーボックスやバッチ正規化などで部分的に改良した。血筋がはっきり見える継承。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">血筋なし</span>DETR</p>
+          <p>同じく物体検出を扱うが、従来のパイプラインを「集合予測」と Transformer に置き換えている。扱う課題は共有するものの、駆動する仕組み自体は継承していない。</p>
+        </div>
+      </div>
+
+      <p>タイトルや要約、引用のつながり、埋め込みベクトルといった手がかりは、この 2 つを混同しがちです。正しい論文を検索できても、「どの親の仕組みを受け継いだか」「どの欠点を直したか」を取り違えてしまいます。そこで著者らは、論文よりも細かい粒度で、アイデアの継承を後から検証（監査）できる表現が必要だと主張します。</p>
+      <p>著者らはこの目標となる能力を <strong>科学的系譜能力（scientific lineage competence）</strong> と呼びます。噛み砕けば「アイデアの血筋を読み解く力」で、論文を継承の単位に抽象化し、どの要素が生き残り・変異し・消えるかを論文をまたいで追い、その遷移の理由を説明し、提案が本当に系譜として整合しているかを検証し、最後に既存の系譜へ妥当な子孫として差し込める提案を生み出す、という一連の能力を指します。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>論文の核となるのが <strong>IdeaGene</strong> というフレームワークです。これは生物学の理論を主張するものではなく、アイデアを比較するときの「粒度」と「証拠のルール」を固定するための、あくまで操作上の枠組みだと明言されています。おもに 3 つの部品からなります。</p>
+
+      <h3>1. Idea Genome（アイデアゲノム）</h3>
+      <p>系譜を評価するための最小の「監査可能な単位」です。論文や提案を、次の 6 種類の役割を持った小さなアイデアの集まりとして表現します。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">niche</span>ニッチ</p>
+          <p>取り組む問題の環境。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">mechanism</span>メカニズム</p>
+          <p>継承しうる手法や設計の中核。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">observation</span>観察</p>
+          <p>動機づけとなる経験的なパターン。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">limitation</span>限界</p>
+          <p>欠陥やボトルネック。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">delta</span>デルタ</p>
+          <p>先行研究に対する修復・設計変更。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">claim</span>主張</p>
+          <p>達成したと述べる成果。</p>
+        </div>
+      </div>
+
+      <p>それぞれの要素は、原論文のどの節・段落・図・式が根拠かを指し示す「証拠ポインタ」を必ず持ちます。裏付けのない背景知識や、注釈者の推測は使えません。</p>
+
+      <h3>2. Genome Extraction（ゲノム抽出）</h3>
+      <p>論文や提案を、上の Idea Genome へ変換する作業です。一般的な要約よりも狭く、「役割が明確」「原論文の具体的な証拠に裏付けられている」「単独で継承・変異できる小ささ」「系譜の判断に効く要素だけを抜き出す」という条件を満たすものだけを抽出します。</p>
+
+      <h3>3. GenomeDiff（ゲノム差分）</h3>
+      <p>先行論文と後続論文の Idea Genome を役割ごとに突き合わせ、後続がどう変化したかを記録します。先行側の各要素を <strong>継承（Inherited）／変異（Mutated）／消失（Lost）</strong> に、後続側にしかない要素を <strong>新規（Novel）／外部から輸入（External）</strong> に分類し、変化の主な原動力（transition driver）とその根拠も一緒に残します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 760 360" role="img" aria-label="GenomeDiff（ゲノム差分）の図。左に先行論文の Idea Genome、右に後続論文の Idea Genome を置き、役割ごとに突き合わせる。先行側の各要素は継承（Inherited）・変異（Mutated）・消失（Lost）のいずれかに分類され、後続側にしかない要素は新規（Novel）・外部から輸入（External）に分類される。各遷移には主な原動力（transition driver）とその根拠が付与される。">
+          <defs>
+            <marker id="ig-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="20" y="26">先行論文と後続論文の Idea Genome を役割ごとに突き合わせ、各要素の「運命」を分類する。</text>
+
+          <rect class="node" x="30" y="70" width="180" height="230" rx="10"></rect>
+          <text x="120" y="98" text-anchor="middle" font-size="13" font-weight="700" fill="var(--color-heading)">先行論文</text>
+          <text x="120" y="116" text-anchor="middle" font-size="10">Idea Genome</text>
+          <text x="120" y="150" text-anchor="middle" font-size="11">mechanism</text>
+          <text x="120" y="182" text-anchor="middle" font-size="11">niche</text>
+          <text x="120" y="214" text-anchor="middle" font-size="11">limitation</text>
+          <text x="120" y="246" text-anchor="middle" font-size="11">observation</text>
+
+          <rect class="node" x="550" y="70" width="180" height="230" rx="10"></rect>
+          <text x="640" y="98" text-anchor="middle" font-size="13" font-weight="700" fill="var(--color-heading)">後続論文</text>
+          <text x="640" y="116" text-anchor="middle" font-size="10">Idea Genome</text>
+          <text x="640" y="150" text-anchor="middle" font-size="11">mechanism*</text>
+          <text x="640" y="182" text-anchor="middle" font-size="11">niche</text>
+          <text x="640" y="246" text-anchor="middle" font-size="11">delta（新規）</text>
+
+          <path class="edge" d="M210,148 L550,148" marker-end="url(#ig-arrow)"></path>
+          <text x="380" y="140" text-anchor="middle" font-size="11" fill="var(--color-accent)">変異 Mutated</text>
+
+          <path class="edge" d="M210,182 L550,182" marker-end="url(#ig-arrow)"></path>
+          <text x="380" y="174" text-anchor="middle" font-size="11" fill="var(--color-accent-2)">継承 Inherited</text>
+
+          <path class="edge" d="M210,214 L360,214" stroke-dasharray="5 4"></path>
+          <text x="300" y="234" text-anchor="middle" font-size="11" fill="var(--color-text-muted)">消失 Lost</text>
+
+          <path class="edge" d="M550,246 L440,246" marker-end="url(#ig-arrow)"></path>
+          <text x="470" y="270" text-anchor="middle" font-size="11" fill="var(--color-accent)">新規 Novel / 外部 External</text>
+
+          <text class="node-label" x="20" y="336">各遷移には「主な原動力（transition driver）」とその根拠が添えられる。</text>
+        </svg>
+        <figcaption class="diagram__caption">GenomeDiff は先行・後続の Idea Genome を役割ごとに突き合わせ、各要素を継承・変異・消失・新規・外部輸入に分類し、変化の原動力を根拠付きで記録する。</figcaption>
+      </figure>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>「系譜」と「たまたま同じ場所にいること（co-location）」の区別。</strong>周辺の課題やベンチマーク、データセットの慣習を共有していても、それだけでは継承とは言えません。<strong>駆動する仕組みそのものを受け継いでいるか（driver inheritance）</strong> が、系譜かどうかの決め手になります。</p>
+        </div>
+      </div>
+
+      <h3>6 つの進化的ダイナミクス</h3>
+      <p>GenomeDiff のパターンは、6 つのカテゴリに分類されます。前半の 4 つ（下記のうち種分化まで）が「系譜あり」、後半 2 つが「系譜なし」です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ダイナミクス</th>
+            <th>系譜</th>
+            <th>内容と例</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Mutation（変異）</th>
+            <td class="is-best">あり</td>
+            <td>駆動機構を受け継ぎつつ局所的に変える。例：YOLO → YOLOv2</td>
+          </tr>
+          <tr>
+            <th>Adaptive Radiation（適応放散）</th>
+            <td class="is-best">あり</td>
+            <td>仕組みは保ったまま新しい課題や領域へ移る。例：Transformer → ViT</td>
+          </tr>
+          <tr>
+            <th>Hybridization（交雑）</th>
+            <td class="is-best">あり</td>
+            <td>2 つ以上の異なる系譜から仕組みを取り込む。例：CLIP 系の視覚エンコーダ＋指示学習した LLM → LLaVA</td>
+          </tr>
+          <tr>
+            <th>Speciation（種分化）</th>
+            <td class="is-best">あり</td>
+            <td>近い問題環境ながら、駆動機構が新しいものに置き換わる。例：Faster R-CNN → DETR</td>
+          </tr>
+          <tr>
+            <th>Niche Competition（ニッチ競合）</th>
+            <td>なし</td>
+            <td>同じ問題環境だが駆動機構の継承はない。例：Faster R-CNN と YOLO</td>
+          </tr>
+          <tr>
+            <th>Isolation（隔離）</th>
+            <td>なし</td>
+            <td>環境も駆動機構も共有しない。例：BERT と YOLO</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>2 種類の評価タスク</h3>
+      <p>このフレームワークの上に、IG-Bench は 2 つの評価を用意します。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">IG-Exam</span>理解を測るクローズド型</p>
+          <p>42 種類のタスク・1,029 問。採点は「exact match（完全一致）」で、必要な項目がすべて同時に正しくないと不正解になる厳しい方式。能力は 4 段階に分かれ、T1 ゲノムの抽象化、T2 継承のたどり、T3 進化的な推論、T4 系譜の検証、と後になるほど難しくなる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">IG-Arena</span>生成を測るオープン型</p>
+          <p>AI に実際に研究提案を書かせ、その提案が既存の系譜へ「妥当な子孫」として差し込めるかを評価する。主要指標が <strong>Population-Evolution Score（PES）</strong>。ダーウィンの自然選択の 3 条件になぞらえた 3 軸を各 0〜100 点で採点し、その平均をとる。採点は 3 体のモデル審査員が行う。</p>
+        </div>
+      </div>
+
+      <p>PES の 3 軸は、正しい親の仕組みを受け継いでいるか（Heredity・遺伝）、意味のある新規性があるか（Variation・変異）、集団の中で競争的に成立しうるか（Selection・選択）です。</p>
+
+      <p>IG-Arena では、提案を書かせる際に与える情報を 3 段階に変えて比べます。系譜という構造化した情報が、生成の質にどう効くかを切り分けられる仕掛けです。</p>
+
+      <div class="timeline">
+        <div class="timeline__step">
+          <p class="timeline__step-title">Question（最小の情報）</p>
+          <p>領域とフロンティアの問いだけを渡す。何を手がかりにするかは AI 任せ。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">Library（順不同の要約）</p>
+          <p>順不同の論文要約を渡す。関連文献は見えるが、継承の構造は与えない。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">Lineage（証拠付きの系譜）</p>
+          <p>Idea Genome と GenomeDiff の証拠付きで順序立てた系譜を渡す。血筋を構造として明示する。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価対象は 14 の「LLM ベースの科学者」です。素の大規模言語モデル（LLM）8 種、検索を重視する研究エージェント 2 種、そして Codex や Claude Code のワークフローで LLM を包んだ軽量な足場（CLI harness）4 種が含まれます。ベンチマーク全体は、自然言語処理・コンピュータビジョン・マルチモーダル学習に加え、生物・化学・物理・材料・医学・数学を含む <strong>10 の科学領域</strong>にわたり、<strong>1,961 本の系譜トレース、1,085 個の Idea Genome、920 件の GenomeDiff</strong> で構成されます。品質は分野横断の <strong>50 名の大学院生</strong>が検証し、ダイナミクスのラベルは裁定前で 84.7% が一致しました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">23.1%</p>
+          <p class="stat__label">最強の素の LLM である GPT-5.5 の IG-Exam 完全一致精度</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">+4.4</p>
+          <p class="stat__label">Question → Lineage で情報を増やしたときの PES 向上（中央値）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">ρ = 0.82</p>
+          <p class="stat__label">補助指標 ELO 順位と主要指標 PES 順位の順位相関（両者は部分的にずれる）</p>
+        </div>
+      </div>
+
+      <p>能力軸ごとの最良値を見ると、生成に最も近い T4（系譜検証）が最難関で、後の段階ほど難しくなる段階的な難易度が確認されました。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 320" role="img" aria-label="IG-Exam の 4 つの能力軸ごとの完全一致精度（最良値）を示す棒グラフ。T1 ゲノム抽象化 34.4%、T2 継承のたどり 37.9%、T3 進化的推論 25.3%、T4 系譜検証 17.4%。生成に最も近い T4 が最も低く、段階的に難しくなることを示す。">
+          <line x1="70" y1="40" x2="70" y2="250" class="edge"></line>
+          <line x1="70" y1="250" x2="690" y2="250" class="edge"></line>
+
+          <!-- 50% 相当をy=40, 0% を y=250。1% = 4.2px -->
+          <rect class="node" x="110" y="105.5" width="90" height="144.5" rx="4"></rect>
+          <text x="155" y="95" text-anchor="middle" font-size="14" font-weight="700" fill="var(--color-heading)">34.4%</text>
+          <text x="155" y="272" text-anchor="middle" font-size="12" font-weight="700">T1</text>
+          <text x="155" y="290" text-anchor="middle" font-size="10">ゲノム抽象化</text>
+
+          <rect class="node" x="270" y="90.8" width="90" height="159.2" rx="4"></rect>
+          <text x="315" y="80" text-anchor="middle" font-size="14" font-weight="700" fill="var(--color-heading)">37.9%</text>
+          <text x="315" y="272" text-anchor="middle" font-size="12" font-weight="700">T2</text>
+          <text x="315" y="290" text-anchor="middle" font-size="10">継承のたどり</text>
+
+          <rect class="node" x="430" y="143.7" width="90" height="106.3" rx="4"></rect>
+          <text x="475" y="133" text-anchor="middle" font-size="14" font-weight="700" fill="var(--color-heading)">25.3%</text>
+          <text x="475" y="272" text-anchor="middle" font-size="12" font-weight="700">T3</text>
+          <text x="475" y="290" text-anchor="middle" font-size="10">進化的推論</text>
+
+          <rect class="node" x="590" y="176.9" width="90" height="73.1" rx="4"></rect>
+          <text x="635" y="166" text-anchor="middle" font-size="14" font-weight="700" fill="var(--color-heading)">17.4%</text>
+          <text x="635" y="272" text-anchor="middle" font-size="12" font-weight="700">T4</text>
+          <text x="635" y="290" text-anchor="middle" font-size="10">系譜検証</text>
+
+          <text x="40" y="46" text-anchor="middle" font-size="10" fill="var(--color-text-muted)">50%</text>
+          <text x="40" y="254" text-anchor="middle" font-size="10" fill="var(--color-text-muted)">0%</text>
+        </svg>
+        <figcaption class="diagram__caption">IG-Exam の 4 能力軸ごとの完全一致精度（最良値）。生成に最も近い T4（系譜検証）が最難関で、後の段階ほど難しくなる。</figcaption>
+      </figure>
+
+      <p>主な結果は次の通りです。</p>
+      <ul>
+        <li><strong>系譜推論はやはり難しい</strong>：IG-Exam の完全一致精度は、最強の素の LLM である GPT-5.5 で <strong>23.1%</strong>、最も高かった Claude Code（GPT-5.5）の足場でも <strong>27.3%</strong> にとどまりました。誤りは単純な取りこぼしではなく、「親論文は当てられるのにダイナミクスのラベルを間違える」「中核の仕組みは推測できるのにその運命を誤分類する」といった、一貫性の失敗が目立ちました。</li>
+        <li><strong>難しさは段階的に増す</strong>：能力軸ごとの最良値を見ると、T1 ゲノム抽象化 34.4% → T2 継承のたどり 37.9% → T3 進化的推論 25.3% → T4 系譜検証 17.4% と、生成に最も近い T4 が最難関でした。</li>
+        <li><strong>ツールの足場は検索を助けるが一貫性は助けない</strong>：CLI harness は T2（継承のたどり）を大きく改善（GPT-5.5 の 25.7% から Claude Code の 37.9% へ）しましたが、T3 では差が縮まり、T4 ではほぼ消えました。検索重視の研究エージェント単体では、系譜推論の力はほとんど足されませんでした。</li>
+        <li><strong>系譜情報はシステムを「ふるい分ける」</strong>：IG-Arena で Question から Lineage へ情報を増やしたときの PES 向上は、システムによって大きく違いました。もともと強い GPT-5.5 は +2.3 だけ、弱いシステムでは +6.9 と、中央値では <strong>+4.4</strong> でした。系譜という構造を使いこなせるシステムとそうでないシステムを分ける、診断的な効果です。</li>
+        <li><strong>向上の正体は「正しい親への接地」</strong>：PES の向上は、Variation（新規性）や Selection（成立性）ではなく、ほとんど Heredity（正しい親の仕組みの継承）で説明できました。新規性が増えたからではなく、正しい親の仕組みに根を張れたことが効いていたのです。</li>
+        <li><strong>流暢さと整合性は必ずしも一致しない</strong>：補助指標として使ったペア対戦の ELO 順位は、PES 順位と部分的にずれました（順位相関 ρ=0.82）。流暢だが系譜としては筋の通らない提案が、粗いが接地の良い提案に対戦で勝つことがあるためで、著者らは PES を主要指標としています。</li>
+      </ul>
+
+      <p>これらから著者らは、今のシステムは「系譜として整合しているか」よりも先に「役に立ちそうに聞こえること」を過剰に生産してしまう、と結論づけています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、自動研究の評価軸を「もっともらしい研究文を書けるか」から「継承した仕組みを特定・検証し、提案を先行研究の整合的な子孫にできるか」へと組み替えた点にあります。IdeaGene のフレームワークは、その判断を後から検証できる、精密な「表現の層」を与えます。</p>
+      <p>著者らは、自動研究システムには「より良い検索」だけでなく、提案の系譜的な整合性をチェックする <strong>構成的検証モジュール（compositional verification module）</strong> が必要だと主張します。IG-Bench は、将来のシステムが「論文検索＋もっともらしい文生成」から「科学的系譜の検証・拡張」へ進めているかを測る基盤になります。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>著者が認める限界。</strong>6 つの進化的ダイナミクスは「網羅的な科学発展の理論」ではなく、あくまで一貫した評価のための操作的なカテゴリだと断っています。現実の系譜は、1 つの後続論文の中に複数の遷移パターンが混在することもありますが、IG-Bench は注釈と評価の一貫性のため、主要な原動力を 1 つに割り当てています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>科学のアイデアを「継承し進化するゲノム」として扱い、その血筋を AI が追えるかを測る初のベンチマーク IG-Bench が提案されました。最強のシステムでも系譜推論の完全一致精度は 27.3% にとどまり、今の AI は「それらしい文章」は書けても「筋の通った継承」はまだ苦手だという構造的な弱点が明らかになりました。今後の自動研究システムには、検索力に加えて系譜の整合性を検証する仕組みが求められます。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>科学的系譜能力（scientific lineage competence）</dt>
+        <dd>研究の背後にある仕組みレベルの継承構造を、特定・検証・拡張する能力。本記事では「アイデアの血筋を読み解く力」と噛み砕いています。</dd>
+
+        <dt>Idea Genome（アイデアゲノム）</dt>
+        <dd>系譜評価の最小単位。役割（niche／mechanism／observation／limitation／delta／claim）・内容・証拠ポインタ・制約からなる、型付きのアイデアの部品。</dd>
+
+        <dt>GenomeDiff</dt>
+        <dd>先行論文と後続論文の Idea Genome を突き合わせ、継承・変異・消失・新規・外部輸入と、その原動力を記録した差分。</dd>
+
+        <dt>駆動継承（driver inheritance）</dt>
+        <dd>駆動する仕組みそのものを受け継ぐこと。系譜かどうかを分ける決め手。設定だけを共有し駆動継承がなければ、単なる「共在（co-location）」にとどまる。</dd>
+
+        <dt>6 つの進化的ダイナミクス</dt>
+        <dd>mutation・adaptive radiation・hybridization・speciation（系譜あり）と、niche competition・isolation（系譜なし）。</dd>
+
+        <dt>IG-Exam / IG-Arena</dt>
+        <dd>前者は完全一致で採点する系譜「理解」のテスト、後者は PES で採点する系譜に接地した「生成」のテスト。</dd>
+
+        <dt>PES（Population-Evolution Score）</dt>
+        <dd>Heredity（遺伝）・Variation（変異）・Selection（選択）の平均で、提案が系譜集団に整合的な子孫として差し込めるかを測る主要指標。</dd>
+
+        <dt>完全一致（exact match）</dt>
+        <dd>必要な項目がすべて同時に正しくなければ不正解とする厳しい採点方式。一貫性の欠如をあぶり出す。</dd>
+
+        <dt>構成的検証モジュール（compositional verification module）</dt>
+        <dd>生成した提案が親の仕組みや欠点との対応を保っているかを、後から筋道立てて確かめる仕組み。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Ideas Have Genomes: Benchmarking Scientific Lineage Reasoning and Lineage-Grounded Idea Generation</p>
+      <a href="https://arxiv.org/abs/2607.08758" target="_blank" rel="noopener noreferrer">arXiv:2607.08758 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

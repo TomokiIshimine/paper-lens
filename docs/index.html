@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-09-2607.08758-ideagene-bench-scientific-lineage-reasoning.html">
+            <img src="assets/2026-07-09-2607.08758-ideagene-bench-scientific-lineage-reasoning-cover.png"
+                 alt="科学のアイデアを生物のゲノムのように「継承し進化する血筋（系譜）」として扱い、AI がその系譜を正しく追えるかを測る初のベンチマーク IdeaGene-Bench（IG-Bench）のインフォグラフィック。論文を niche・mechanism・observation・limitation・delta・claim の 6 役に分解する Idea Genome、先行研究と後続研究の差分をとる GenomeDiff、6 つの進化的ダイナミクスからなる IdeaGene フレームワークを示し、最も強いシステムでも系譜推論の完全一致精度は 27.3% にとどまることを表す">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-09</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-09-2607.08758-ideagene-bench-scientific-lineage-reasoning.html">アイデアには『血筋』がある ― AI が研究の系譜を追えるかを測る初のベンチマーク IdeaGene-Bench</a>
+          </h2>
+          <p class="article-card__summary">科学のアイデアは「白紙」から生まれるのではなく、生物のゲノムのように、先行研究の中核的な仕組みを受け継ぎ、欠点を修復し、組み換えながら進化していきます。この論文は、そうした「アイデアの血筋（系譜）」を AI が正しく追えるかを測る初のベンチマーク IdeaGene-Bench（IG-Bench）を提案しました。従来の AI 研究者の評価が検索の質・事実の正しさ・文章の流暢さ・新規性に偏っていたのに対し、この研究は「正しい仕組みを受け継ぎ、正しい欠点を直し、根拠とする系譜と食い違っていないか」という科学的系譜能力を問います。中心となるフレームワーク IdeaGene は 3 つの部品からなります。論文を niche・mechanism・observation・limitation・delta・claim の 6 役に分解し証拠ポインタを必ず添える最小単位「Idea Genome」、論文をこの表現へ変換する「Genome Extraction」、そして先行論文と後続論文の Idea Genome を役割ごとに突き合わせて継承・変異・消失・新規・外部輸入に分類する「GenomeDiff」です。ここで鍵になるのは、周辺の課題やデータセットを共有するだけの「共在（co-location）」ではなく、駆動する仕組みそのものを受け継ぐ「駆動継承」が系譜の決め手だという区別です。GenomeDiff のパターンは、mutation・adaptive radiation・hybridization・speciation（系譜あり）と niche competition・isolation（系譜なし）の 6 つの進化的ダイナミクスに整理されます。評価は 2 種類で、完全一致（exact match）で採点し T1〜T4 の 4 段階で理解を測る IG-Exam（42 タスク・1,029 問）と、Heredity・Variation・Selection の平均 PES で生成提案を採点する IG-Arena です。自然言語処理・CV・マルチモーダルに加え生物・化学・物理・材料・医学・数学の 10 領域にわたり、1,961 本の系譜トレース・1,085 個の Idea Genome・920 件の GenomeDiff で構成され、50 名の大学院生が品質を検証しました。結果、最も高いシステム（Claude Code + GPT-5.5 の足場）でも完全一致精度は 27.3% にとどまり、素の最強 LLM GPT-5.5 は 23.1% でした。難しさは T1 34.4%→T2 37.9%→T3 25.3%→T4 17.4% と生成に近い段階ほど増し、ツールの足場は検索（T2）は助けても一貫性（T4）は助けませんでした。系譜情報を増やすと PES は中央値で +4.4 向上し、その正体はほとんど「正しい親への接地（Heredity）」で、新規性ではありませんでした。今の AI は「それらしい文章」は書けても「筋の通った継承」はまだ苦手だという構造的な弱点を浮き彫りにし、今後の自動研究システムには検索力に加えて系譜の整合性を検証する構成的検証モジュールが求められると論じた研究です。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-09-2607.08763-opencof-chain-of-frame-video-reasoning.html">
             <img src="assets/2026-07-09-2607.08763-opencof-chain-of-frame-video-reasoning-cover.png"
                  alt="動画生成モデルが連続するフレームのつながりを通じて推論する Chain-of-Frame（CoF）推論を鍛えるための研究 OpenCoF のインフォグラフィック。11 種類のタスク・17,312 本の推論動画からなるデータセット OpenCoF-17K で既存の動画生成モデル Wan2.2-I2V-A14B を LoRA でファインチューニングした Wan-CoF が、MME-CoF・Gen-ViRe・VIPER・RULER-Bench の 4 つの外部ベンチマークでベースラインを一貫して上回り、中間推論状態を保持する 2 種類の Reasoning Token（vt・tt）を探索したことを示す">
