@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-10-2607.09662-phinn-eeg-topological-dream-classification.html">
+            <img src="assets/2026-07-10-2607.09662-phinn-eeg-topological-dream-classification-cover.png"
+                 alt="脳波（EEG）から「夢を見ていたか否か」を検出するために、信号の周波数パワー（エネルギー）ではなく時系列の点群の位相的な「かたち（トポロジー）」を持続的ホモロジーで捉える初のフレームワーク PHINN-EEG のインフォグラフィック。Takens 遅延埋め込みで多チャンネル脳波を点群に変換し、Vietoris–Rips フィルトレーションで連結成分 β0・ループ β1・空洞 β2 の Dynamic Betti Curves を計算して約 340 次元の特徴を作り XGBoost で夢を分類する流れと、示された性能値（REM の AUC 0.82〜0.90 など）がすべて実測ではなく既存研究に基づく未実証の「投影＝目標値」であることを示す">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-10</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-10-2607.09662-phinn-eeg-topological-dream-classification.html">脳波の「かたち」で夢を見分ける ― トポロジーで夢検出に挑む PHINN-EEG（性能値はすべて未実証の「投影」）</a>
+          </h2>
+          <p class="article-card__summary">脳波（EEG）から「その人が夢を見ていたか否か」を検出する既存手法は、周波数帯ごとのパワー（スペクトル）に頼っていて、識別性能が AUC ≈ 0.70 で頭打ちになっています。この論文は、脳波を時系列の点群に変換し、その「かたち（トポロジー）」を持続的ホモロジー（persistent homology）という数学の道具で捉える初のフレームワーク PHINN-EEG を提案します。もっとも注意すべき点は、示されている性能値（AUC = 0.82〜0.90 など）が実験で測定した結果ではなく、既存研究に基づく事前の「投影（projection）＝目標値」であり、実データでの検証はこれからだと著者自身が繰り返し明記していることです。従来の夢検出は PSD（パワースペクトル密度）や catch22 で「脳活動がどれだけあるか（エネルギー）」を測り、REM で AUC ≈ 0.700、NREM で 0.586 が壁でした。著者らはこの壁の根本原因を、スペクトル手法が活動量は測れても「どんな幾何的なかたちをしているか」を測れない点にあると考え、測る対象を「エネルギー」から「かたち」へ切り替えます。中核は、目覚める直前の多チャンネル脳波を Takens 遅延埋め込み（埋め込み次元 d = 7 が代表値）で点群に変換し、Vietoris–Rips フィルトレーションで持続的ホモロジーを計算して、連結成分 β0・ループ β1・空洞 β2 を時間の関数として捉えた Dynamic Betti Curves を特徴にすることです。オイラー標数 χ(t) = β0 − β1 + β2 を用いた「夢状態は持続的ループを示す」という Geometric Dream Hypothesis を立てますが、これは前提ではなく検証すべき対象だと慎重に位置づけます。前処理→遅延埋め込み（5 秒窓・80% オーバーラップ）→Vietoris–Rips→特徴ベクトル化の流れで約 340 次元の特徴を作り、XGBoost で分類、rectified flow によるトポロジー条件づき脳波生成も用意します。投影値は REM で AUC 0.82〜0.90（弱い事前分布）／控えめには 0.58〜0.69、NREM で 0.72〜0.78、生成の被覆率 SCR は 60〜70%（Abstract では &gt;30%）。評価は LODO と被験者単位分割でリークを防ぎ、DREAM データベースの公開サブセットの 1,462 覚醒エポックを使います。多チャンネル連結埋め込みの数学的保証のなさ、ボリューム伝導、リファレンスの異種性など 7 つの限界を著者自ら率直に開示しており、夢検出を「エネルギー」から「かたち」へ移すパラダイムシフトを構想として提示した、実証はこれからの論文です。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-09-2607.08758-ideagene-bench-scientific-lineage-reasoning.html">
             <img src="assets/2026-07-09-2607.08758-ideagene-bench-scientific-lineage-reasoning-cover.png"
                  alt="科学のアイデアを生物のゲノムのように「継承し進化する血筋（系譜）」として扱い、AI がその系譜を正しく追えるかを測る初のベンチマーク IdeaGene-Bench（IG-Bench）のインフォグラフィック。論文を niche・mechanism・observation・limitation・delta・claim の 6 役に分解する Idea Genome、先行研究と後続研究の差分をとる GenomeDiff、6 つの進化的ダイナミクスからなる IdeaGene フレームワークを示し、最も強いシステムでも系譜推論の完全一致精度は 27.3% にとどまることを表す">

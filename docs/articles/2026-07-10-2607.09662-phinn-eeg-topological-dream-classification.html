@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>脳波の「かたち」で夢を見分ける — トポロジーで夢検出に挑む PHINN-EEG（性能値はすべて未実証の「投影」） — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-10-2607.09662-phinn-eeg-topological-dream-classification-cover.png"
+           alt="脳波（EEG）から「夢を見ていたか否か」を検出するために、信号の周波数パワー（エネルギー）ではなく時系列の点群の位相的な「かたち（トポロジー）」を持続的ホモロジーで捉える初のフレームワーク PHINN-EEG のインフォグラフィック。Takens 遅延埋め込みで多チャンネル脳波を点群に変換し、Vietoris–Rips フィルトレーションで連結成分 β0・ループ β1・空洞 β2 の Dynamic Betti Curves を計算して約 340 次元の特徴を作り XGBoost で夢を分類する流れと、示された性能値（REM の AUC 0.82〜0.90 など）がすべて実測ではなく既存研究に基づく未実証の「投影＝目標値」であることを示す">
+    </figure>
+
+    <h1 class="article__title">脳波の「かたち」で夢を見分ける — トポロジーで夢検出に挑む PHINN-EEG（性能値はすべて未実証の「投影」）</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-10</span>
+      <span>arXiv：2607.09662</span>
+      <span>カテゴリ：q-bio.NC</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>脳波（EEG）から「その人が夢を見ていたか否か」を検出する既存手法は、周波数帯ごとのパワー（スペクトル）に頼っていて、識別性能が AUC ≈ 0.70 で頭打ちになっています。この論文は、脳波を時系列の点群に変換し、その「かたち（トポロジー）」を持続的ホモロジー（persistent homology）という数学の道具で捉える初のフレームワーク <strong>PHINN-EEG</strong> を提案します。ただし本論文でもっとも注意すべき点は、示されている性能値（AUC = 0.82〜0.90 など）が<strong>実験で測定した結果ではなく、既存研究に基づく事前の「投影（projection）」＝目標値である</strong>ことです。実データでの検証はこれからの「すぐ次の一手」だと、著者自身が繰り返し明記しています。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>この記事を読むうえで最重要の注意点。</strong>本論文に出てくる性能数値（AUC = 0.82〜0.90 など）は、<strong>実験で測定した結果ではありません</strong>。公表済みの TDA-EEG ベンチマークに基づく<strong>前向きの「投影（projection）＝目標値」</strong>であり、DREAM データベース上での実証は「すぐ次の一手」として残されています。この点は Abstract・第 5.4 節・結論で繰り返し強調されています。</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>夢は、脳の電気記録の中では「稀にしか現れない構造的なイベント」です。DREAM データベース（Wong et al., 2025, Nature Communications）によると、目覚めた直後に夢を報告する割合は、睡眠段階と有意に関連しています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">84.3%</p>
+          <p class="stat__label">REM 睡眠からの覚醒で、直後に夢を報告する割合（DREAM データベース）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">62.6%</p>
+          <p class="stat__label">NREM 睡眠からの覚醒で、直後に夢を報告する割合（同上）</p>
+        </div>
+      </div>
+
+      <p>こうした「夢を見ていたかどうか」を脳波だけから当てられれば、睡眠研究やウェアラブルな脳インターフェース（BCI）への応用が開けます。しかし現在の計算的手法は、脳波の「エネルギーがどれだけあるか」を測ることに終始しており、それが性能の壁になっている、というのが著者らの問題意識です。この論文は、測る対象そのものを「エネルギー」から「幾何的なかたち」へ切り替えることを提案します。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>既存の夢検出は、夢の検出を「スペクトルのエネルギー問題」として扱ってきました。具体的には、6 つの周波数帯のパワースペクトル密度（PSD, power spectral density）と、時系列の統計的特徴量セット（catch22）を抽出し、機械学習で分類します。この方式（Wong ベンチマーク）は、REM 睡眠の夢検出で AUC ≈ 0.700、NREM 睡眠で AUC = 0.586 に到達しています。</p>
+      <p>ここで AUC（AUROC）は二値分類（夢あり／なし）の識別性能を表す指標で、0.5 が当てずっぽう、1.0 が完璧を意味します。つまり REM でも 0.70 程度というのは、実用にはまだ物足りない水準です。</p>
+      <p>著者らは、この 0.70 という上限（ceiling）には根本的な理由があると主張します。スペクトル手法は脳活動が「どれだけあるか」は測れますが、「どんな幾何的なかたちをしているか」は測れません。この「測る対象の違い」こそが、本研究の出発点です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">従来</span>エネルギー（energy）を測る</p>
+          <p>PSD や catch22 で「脳活動がどれだけあるか」を数値化する。REM で AUC ≈ 0.700 が壁。統合情報理論（IIT）やグローバルワークスペース理論（GWT）が予測する「夢状態の質的に異なるネットワーク統合構造」は、活動量だけでは捉えきれない。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">提案</span>かたち（shape）を測る</p>
+          <p>脳波を点群に変換し、その位相的な「かたち」を測る。もし夢状態が質的に異なる幾何構造を持つなら、活動量ではなく「かたち」を測る道具が必要になる、という発想。</p>
+        </div>
+      </div>
+
+      <p>なお、トポロジーを脳波に応用する研究（TDA-EEG）自体は既にあり、睡眠段階の分類や「瞑想 vs 安静」の分類でトポロジー特徴の優位が示されています。しかし、<strong>睡眠段階の中でさらに夢内容を見分ける</strong>という課題にトポロジーを適用した例はこれまで一度もなく、DREAM データベースにトポロジー手法が使われたこともありません。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>中核のアイデアは、目覚める直前の多チャンネル脳波を「点群」に変換し、その点群の位相的なかたちの時間変化を特徴量にする、というものです。まず、鍵となる 3 つの概念を押さえます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">Takens 遅延埋め込み</p>
+          <p>1 本の時系列信号を、時間をずらした座標 (x_t, x_{t+τ}, …) の点群に展開し、背後の力学系の「アトラクタ」のかたちを再構成する古典的手法。埋め込み次元は候補 d ∈ {5, 7, 10, 15} を事前登録し、既定の代表値を <strong>d = 7</strong> とする（訓練データのみの入れ子交差検証で選択）。多チャンネルは各チャンネルの遅延ベクトルを連結するが、これは数学的保証のない「新しいヒューリスティック（経験的な工夫）」だと明記される。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">持続的ホモロジーと Betti 曲線</p>
+          <p>点群にスケール ε を少しずつ大きくしながら、連結成分（β0）・ループ（β1）・空洞（β2）の数がどう生まれ消えるかを追う。これを時間 t の関数として捉えたものが <strong>Dynamic Betti Curves</strong> β0(t)・β1(t)・β2(t)。構成には Vietoris–Rips フィルトレーションという標準的な方法を使う。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">Geometric Dream Hypothesis</p>
+          <p>オイラー標数 χ(t) = β0(t) − β1(t) + β2(t) を定義し、「夢を見ている状態は持続的なループ（β1 &gt; 0）を示し、夢のない状態は単純なかたちへ崩れる」と仮説を立てる。ただし NREM の同期的脳波もループを生みうるため、著者はこれを前提ではなく「検証すべき対象」と慎重に位置づける。</p>
+        </div>
+      </div>
+
+      <p>この 3 つを、実際のパイプラインでは次の順に流していきます。5 秒窓・80% オーバーラップで切り出した多チャンネル脳波を、最終的に約 340 次元の特徴ベクトルへと変換します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 780 300" role="img" aria-label="PHINN-EEG の処理の流れを示す図。左から、多チャンネル脳波の波形（エネルギーを測る対象）を Takens 遅延埋め込みで点群（アトラクタのかたち）に変換し、Vietoris–Rips フィルトレーションでスケール ε を広げながら持続的ホモロジーを計算して連結成分 β0・ループ β1・空洞 β2 の Dynamic Betti Curves を得る。そこから約 340 次元の特徴ベクトルを作り、XGBoost で夢あり／なしを分類する。全体として、測る対象が『エネルギー』から『かたち』へ切り替わることを表す。">
+          <defs>
+            <marker id="ph-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="20" y="26">多チャンネル脳波（5 秒窓・80% オーバーラップ）を、位相的な「かたち」の特徴へ変換する。</text>
+
+          <rect class="node" x="20" y="70" width="140" height="120" rx="10"></rect>
+          <text x="90" y="96" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">脳波の波形</text>
+          <polyline points="34,150 46,132 58,162 70,128 82,158 94,138 106,166 118,134 130,152 146,140" fill="none" class="edge"></polyline>
+          <text x="90" y="182" text-anchor="middle" font-size="10">時系列信号</text>
+
+          <path class="edge" d="M160,130 L200,130" marker-end="url(#ph-arrow)"></path>
+          <text x="180" y="120" text-anchor="middle" font-size="9" fill="var(--color-text-muted)">遅延埋め込み</text>
+
+          <rect class="node" x="200" y="70" width="140" height="120" rx="10"></rect>
+          <text x="270" y="96" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">点群</text>
+          <circle cx="250" cy="132" r="3" class="node"></circle>
+          <circle cx="268" cy="122" r="3" class="node"></circle>
+          <circle cx="288" cy="132" r="3" class="node"></circle>
+          <circle cx="294" cy="150" r="3" class="node"></circle>
+          <circle cx="280" cy="164" r="3" class="node"></circle>
+          <circle cx="260" cy="164" r="3" class="node"></circle>
+          <circle cx="246" cy="150" r="3" class="node"></circle>
+          <text x="270" y="182" text-anchor="middle" font-size="10">アトラクタのかたち</text>
+
+          <path class="edge" d="M340,130 L380,130" marker-end="url(#ph-arrow)"></path>
+          <text x="360" y="120" text-anchor="middle" font-size="9" fill="var(--color-text-muted)">ε を拡大</text>
+
+          <rect class="node" x="380" y="70" width="150" height="120" rx="10"></rect>
+          <text x="455" y="96" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">Dynamic Betti</text>
+          <text x="455" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="var(--color-heading)">Curves</text>
+          <text x="455" y="138" text-anchor="middle" font-size="11">β0 連結成分</text>
+          <text x="455" y="156" text-anchor="middle" font-size="11" fill="var(--color-accent)">β1 ループ</text>
+          <text x="455" y="174" text-anchor="middle" font-size="11">β2 空洞</text>
+
+          <path class="edge" d="M530,130 L570,130" marker-end="url(#ph-arrow)"></path>
+
+          <rect class="node" x="570" y="70" width="130" height="120" rx="10"></rect>
+          <text x="635" y="96" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">特徴ベクトル</text>
+          <text x="635" y="120" text-anchor="middle" font-size="16" font-weight="700" fill="var(--color-accent)">≈ 340 次元</text>
+          <text x="635" y="150" text-anchor="middle" font-size="11">→ XGBoost</text>
+          <text x="635" y="172" text-anchor="middle" font-size="11">夢あり／なし</text>
+
+          <text class="node-label" x="20" y="230">前処理（バンドパス・ノッチ・正規化）→ 遅延埋め込み → Vietoris–Rips（H0/H1/H2）→ 特徴ベクトル化。</text>
+          <text class="node-label" x="20" y="252">測る対象が「エネルギー」から「かたち（トポロジー）」へ切り替わるのが、この手法の要点。</text>
+        </svg>
+        <figcaption class="diagram__caption">PHINN-EEG の処理の流れ。脳波の波形を Takens 遅延埋め込みで点群に変換し、持続的ホモロジーで Dynamic Betti Curves（β0・β1・β2）を計算、約 340 次元の特徴を XGBoost で分類する。</figcaption>
+      </figure>
+
+      <h3>パイプラインの各段階</h3>
+      <div class="timeline">
+        <div class="timeline__step">
+          <p class="timeline__step-title">1. 前処理</p>
+          <p>バンドパスフィルタ・ノッチフィルタ・正規化で脳波を整える。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">2. 遅延埋め込み</p>
+          <p>5 秒窓・80% オーバーラップで、多チャンネル脳波を点群へ展開する。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">3. Vietoris–Rips フィルトレーション</p>
+          <p>H0/H1/H2 まで持続的ホモロジーを計算し、Dynamic Betti Curves を得る。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">4. 特徴ベクトル化</p>
+          <p>1 エポックあたり約 340 次元の特徴を作り、分類モデルへ渡す。</p>
+        </div>
+      </div>
+
+      <p><strong>分類モデル</strong>は、トポロジー特徴（約 340 次元）に勾配ブースティング（XGBoost）を組み合わせたモデルが主役です。比較用に、従来のスペクトル特徴を使うモデルや、CNN と双方向 LSTM を融合した時系列モデルも用意します。</p>
+
+      <p>さらに <strong>生成モデル</strong>もあります。トポロジーを条件として脳波信号を合成する部分で、rectified flow（ノイズからデータへ「まっすぐな経路」で写像を学習する生成モデル）を多チャンネル脳波に適応させ、約 340 次元のトポロジー条件ベクトルで生成を条件づけます。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>微分できないトポロジーをどう学習に組み込むか。</strong>持続的ホモロジーの計算は微分できないため、トポロジー特徴は事前計算しておき、学習の損失そのものには使いません。代わりに「生成が条件をどれだけ忠実に守れたか」を測る指標として利用しています。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>ここが本論文でもっとも重要な注意点です。</strong>以下に挙げる性能数値は、すべて「実験で測定した結果」ではなく、公表済みの TDA-EEG ベンチマークに基づく<strong>「前向きの投影（prospective projections）＝目標値」</strong>です。DREAM データベース上での実証は「すぐ次の一手（immediate next step）」であり、本論文には実データで測った結果は含まれていません。</p>
+        </div>
+      </div>
+
+      <p>その前提のもとで、著者が掲げる投影値と、比較の土台となる既存ベンチマーク（こちらは他研究による実測値）を並べると次の通りです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>タスク</th>
+            <th>従来ベースライン（他研究の実測値）</th>
+            <th>PHINN-EEG の投影値<span class="badge badge--accent-2">未実証</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>REM 睡眠の夢分類</th>
+            <td>catch22 で AUC = 0.700</td>
+            <td>AUC = 0.82〜0.90（「弱くしか根拠づけられていない事前分布」と明言）</td>
+          </tr>
+          <tr>
+            <th>REM（控えめな範囲）</th>
+            <td>—</td>
+            <td>AUC = 0.58〜0.69（Cohen's d ≈ 0.3〜0.5 を仮定。上の値と「緊張関係にある」）</td>
+          </tr>
+          <tr>
+            <th>NREM 睡眠の夢分類</th>
+            <td>PSD で AUC = 0.586</td>
+            <td>AUC = 0.72〜0.78</td>
+          </tr>
+          <tr>
+            <th>生成モデル（被覆率 SCR）</th>
+            <td>ランダムなベースラインで 3〜5%</td>
+            <td>60〜70%（Abstract では SCR &gt; 30% と記載）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>REM の投影値に幅があるのは、著者が「弱く根拠づけられた高めの投影（0.82〜0.90）」と「段階内分散に基づく控えめな妥当範囲（0.58〜0.69）」を、どちらか一方を選んで解消するのではなく、両方を拘束力のない参考値として併記しているためです。前者の根拠が、睡眠段階分類や「瞑想 vs 安静」分類という「段階内の稀イベント検出とは別のタスク」からの転用であることを、著者自身が認めています。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">6〜12pt</p>
+          <p class="stat__label">アブレーションの見込み。従来のスペクトル特徴モデルは、次元を揃えたトポロジー特徴モデルに対し AUC でこれだけ低下する見通し</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">98.16%</p>
+          <p class="stat__label">実測の参照点。トポロジー特徴による睡眠段階分類（Baronetzky）の精度（統計特徴の 91.77% に対して）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1,462</p>
+          <p class="stat__label">評価に使う覚醒エポック数（DREAM データベースの公開サブセットから）</p>
+        </div>
+      </div>
+
+      <p>評価の設計面では、データセット単位で 1 つを取り除いて汎化を測る交差検証（LODO, leave-one-dataset-out）と、被験者単位でのグループ分割（同じ人のデータが学習と評価に混ざる「リーク」を防ぐため）を採用しています。</p>
+      <p>なお、リアルタイム性についても訂正が入っています。1 サブウィンドウの遅延は 300 ミリ秒未満を見込みますが、1 エポック（約 26 サブウィンドウ）全体では数秒かかるため「エポック内リアルタイムは成立しない」とし、ストリーミング処理でのみリアルタイム性を主張しています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、夢検出を「脳活動がどれだけあるか」から「脳活動がどんなかたちをしているか」へと視点を移す、パラダイムシフトを提案した点にあります。検証されれば、スペクトルエネルギーから位相空間の幾何へという転換となり、ウェアラブル BCI での夢モニタリングにもつながりうる、と位置づけられています。ただし著者は、<strong>これらの意義はすべて上述の実証を前提としており、まだ確立されていない（not yet established）</strong>と明記しています。</p>
+
+      <p>論文が自ら認める主な限界は次の通りです。</p>
+      <ol>
+        <li><strong>性能値がすべて投影である点そのもの</strong>：実測ではなく目標値であり、実証はまだ行われていません。これが最大の留保点です。</li>
+        <li><strong>多チャンネル連結埋め込みの正当性</strong>：各チャンネルの遅延ベクトルを連結する構成は数学的保証がなく、先行例のない新しいヒューリスティックです。見かけ上のループ（アーティファクト）と本物の統合構造を区別するには、追加の対照実験が必要とされています。</li>
+        <li><strong>ボリューム伝導（volume conduction）</strong>：頭皮上の少数の電極（約 6〜18 チャンネル）では、脳内の電気が広がって混ざる影響を十分に補正できず、全サブセットで未解決の構造的な限界だとしています。</li>
+        <li><strong>リファレンスの異種性</strong>：電極の基準の取り方（単極 vs 双極）がデータセット間で混在しており、位相空間のかたちを直接比較できません。そのため主要な評価は基準を揃えた範囲に限定されています。</li>
+        <li><strong>窓長・自己相関のアーティファクト</strong>：5 秒窓は低い周波数帯（デルタ波）に対して短く、80% のオーバーラップが疑似的なトポロジーを生みうるため、感度分析で経験的に緩和しています。</li>
+        <li><strong>Betti 遷移パターンは探索的仮説</strong>：夢状態のかたちの分類として提示されるパターンは、意識の理論に動機づけられた事前仮説であり、検証済みの「地図」ではありません。</li>
+        <li><strong>参考文献の誤引用と再検証</strong>：旧稿では複数の重要文献が誤ったタイトル・著者・掲載先で引用されており、正しい書誌情報で再検証したと明記されています。投影は主に検証済みの Baronetzky に接地させています。</li>
+      </ol>
+
+      <p>倫理面では、夢のモニタリングが「認知的プライバシー」に関わる問題だとして、撤回可能なインフォームドコンセントや、機微な健康情報としての扱いを推奨しています。コード・学習済み重み・特徴抽出ユーティリティは公開予定とされています。</p>
+
+      <h2>まとめ</h2>
+      <p>PHINN-EEG は、夢検出を「エネルギー」ではなく脳波の「かたち（トポロジー）」で捉える初のフレームワークとして構想されました。提案は理論的に興味深いものの、示された性能値はすべて既存研究からの「投影＝目標値」であり、実データでの検証はこれからです。設計の丁寧さと同じくらい、著者が自らの限界を率直に開示している点が印象的な論文です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>持続的ホモロジー（persistent homology）</dt>
+        <dd>点群にスケールを徐々に大きくしながら、連結成分・ループ・空洞といった位相的特徴の「誕生と消滅」を追い、データの「かたち」を多スケールで定量化する手法。</dd>
+
+        <dt>Betti 数 / Dynamic Betti Curves</dt>
+        <dd>β0 = 連結成分の数、β1 = 独立なループの数、β2 = 空洞の数。これらを時間 t の関数として捉えたものが Dynamic Betti Curves。</dd>
+
+        <dt>Takens 遅延埋め込み（Takens delay embedding）</dt>
+        <dd>1 本の時系列を時間遅れ座標の点群に展開し、背後の力学系アトラクタのかたちを再構成する古典的手法。</dd>
+
+        <dt>Vietoris–Rips フィルトレーション</dt>
+        <dd>点群から距離 ε 以下の点集合を単体とみなして複体を構成し、ε を増やしながら位相を追う、持続的ホモロジーの標準的な構成法。</dd>
+
+        <dt>AUC（AUROC）</dt>
+        <dd>ROC 曲線下の面積。二値分類の識別性能指標で、0.5 が偶然、1.0 が完全。</dd>
+
+        <dt>PSD / catch22</dt>
+        <dd>PSD はパワースペクトル密度（周波数帯ごとのパワー）、catch22 は時系列の 22 個の正準特徴量セット。従来の夢検出のスペクトル系ベースライン。</dd>
+
+        <dt>rectified flow / flow matching</dt>
+        <dd>ノイズからデータへ「まっすぐな最適輸送経路」で写像を学習する生成モデルの枠組み。推論が速い。</dd>
+
+        <dt>LODO（leave-one-dataset-out）</dt>
+        <dd>データセット単位で 1 つを取り除いて交差検証し、研究室間・電極構成間の汎化を測る評価法。</dd>
+
+        <dt>SCR（Scenario Coverage Rate）/ FED（Fréchet EEG Distance）</dt>
+        <dd>生成した脳波の評価指標。SCR は多様なシナリオをどれだけ被覆できたか、FED は生成分布と実分布の距離（画像の FID の脳波版）。</dd>
+
+        <dt>DREAM データベース</dt>
+        <dd>Wong et al.（2025, Nature Communications）による大規模オープンアクセスの EEG 夢研究資源。20 研究・263 参加者・3,191 覚醒を含む。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">PHINN-EEG: Topological Time-Series Analysis of Dream-State EEG -- Dynamic Betti Curves for Dream Content Classification and Topology-Conditioned Neural Signal Synthesis</p>
+      <a href="https://arxiv.org/abs/2607.09662" target="_blank" rel="noopener noreferrer">arXiv:2607.09662 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
