@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-13-2607.11883-requential-coding-model-compression.html">
+            <img src="assets/2026-07-13-2607.11883-requential-coding-model-compression-cover.png"
+                 alt="生徒モデルが自分で生成したデータで学習し、教師モデルが「どのサンプルを使うか」を選んだ情報だけを相対エントロピー符号化（REC）で記録する新しいモデル圧縮手法 requential coding（レクエンシャル符号化）のインフォグラフィック。符号の長さがパラメータ数にもデータの複雑さにも依存せず、累積 teacher-student KL だけに帰着することで、既存の prequential coding より 1〜2 桁短い符号を実現し、10 億パラメータ級の大規模言語モデルに最先端の汎化保証を与える流れを示す。">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-13</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-13-2607.11883-requential-coding-model-compression.html">自分で作ったデータで自分を圧縮する：モデル圧縮の限界に挑む「requential coding」</a>
+          </h2>
+          <p class="article-card__summary">ニューラルネットワークをどこまで小さく表現できるかは、そのモデルがどれだけ「本質」を学んだかの指標になります。この論文は、生徒モデルが自分で生成したデータを使って学習し、教師モデルが「どのサンプルを使うか」を選んだ情報だけを記録する、requential coding（レクエンシャル符号化）という新しい圧縮手法を提案しました。既存の圧縮手法には 2 つの弱点がありました。量子化・枝刈り・訓練後量子化（PTQ）などパラメータを直接圧縮する手法は、符号長がモデルサイズに比例して増え、パラメータが実際にどれだけの情報を蓄えているかに鈍感です。もう一方の prequential coding は訓練の過程そのものを圧縮してパラメータ数への依存は避けますが、「厳密なデータ系列」を符号化するため、データが複雑（高エントロピー）だと符号長がデータセットサイズに比例して肥大化します。中核アイデアはたった一点、prequential coding を「生徒モデルを自己生成データで訓練し、教師の選択情報だけを符号化する」よう変更することです。各ステップで、生徒が既知シードの疑似乱数生成器（PRNG）で自分の分布から候補サンプルを複数生成し、教師が受理ルールで 1 つを選び、その「どれを選んだか」というインデックスを相対エントロピー符号化（REC）で符号化して、選ばれたサンプルで生徒を訓練します。教師モデル自体は送信不要で、生徒は記録された選択情報だけからすべてを復元できます。この工夫により、符号長は対数項・定数項を除けば実質的に「累積 teacher-student KL」に帰着し、データエントロピーの項が消えて、符号の長さがパラメータ数にもデータの複雑さにも依存しなくなります。教師の選び方には Teacher smoothing（EMA からの合成データ生成）と Iso-loss projection（同じ性能でより低い KL の教師を得る）という 2 つの改良を提案します。GPT-2 系 Transformer を OpenWebText・CIFAR-5M・FineWeb で実験したところ、requential coding は「損失 対 圧縮後モデルサイズ」のパレートフロンティアを支配し、1 トークンあたりのコストは prequential coding より 1〜2 桁小さくなりました。しかも直感に反して、大きいモデルほど圧縮しやすく、量子化の下限である「1 パラメータあたり 1 ビット」をも大きく下回りました。認証された圧縮サイズを PAC-Bayes 汎化限界に差し込むと、計算最適（Chinchilla）領域で従来最先端のロスレス 4 ビット PTQ を上回り、モデルを大きくするほど保証がタイトになります。1 点の工夫で、10 億パラメータ級の LLM にも最先端の汎化保証を与えられることを示した研究です。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-10-2607.09662-phinn-eeg-topological-dream-classification.html">
             <img src="assets/2026-07-10-2607.09662-phinn-eeg-topological-dream-classification-cover.png"
                  alt="脳波（EEG）から「夢を見ていたか否か」を検出するために、信号の周波数パワー（エネルギー）ではなく時系列の点群の位相的な「かたち（トポロジー）」を持続的ホモロジーで捉える初のフレームワーク PHINN-EEG のインフォグラフィック。Takens 遅延埋め込みで多チャンネル脳波を点群に変換し、Vietoris–Rips フィルトレーションで連結成分 β0・ループ β1・空洞 β2 の Dynamic Betti Curves を計算して約 340 次元の特徴を作り XGBoost で夢を分類する流れと、示された性能値（REM の AUC 0.82〜0.90 など）がすべて実測ではなく既存研究に基づく未実証の「投影＝目標値」であることを示す">

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>自分で作ったデータで自分を圧縮する：モデル圧縮の限界に挑む「requential coding」 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-13-2607.11883-requential-coding-model-compression-cover.png"
+           alt="生徒モデルが自分で生成したデータで学習し、教師モデルが「どのサンプルを使うか」を選んだ情報だけを相対エントロピー符号化（REC）で記録する新しいモデル圧縮手法 requential coding（レクエンシャル符号化）のインフォグラフィック。符号の長さがパラメータ数にもデータの複雑さにも依存せず、累積 teacher-student KL だけに帰着することで、既存の prequential coding より 1〜2 桁短い符号を実現し、10 億パラメータ級の大規模言語モデルに最先端の汎化保証を与える流れを示す。">
+    </figure>
+
+    <h1 class="article__title">自分で作ったデータで自分を圧縮する：モデル圧縮の限界に挑む「requential coding」</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-13</span>
+      <span>arXiv：2607.11883</span>
+      <span>カテゴリ：cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>ニューラルネットワークをどこまで小さく表現できるかは、そのモデルがどれだけ「本質」を学んだかの指標になります。この論文は、生徒モデルが自分で生成したデータを使って学習し、教師モデルが「どのサンプルを使うか」を選んだ情報だけを記録する、<strong>requential coding（レクエンシャル符号化）</strong>という新しい圧縮手法を提案しました。この工夫により、符号の長さがパラメータ数にもデータの複雑さにも依存しなくなり、既存手法より桁違いに短い符号を実現します。さらにこの強い圧縮を汎化の理論保証に差し込むことで、10 億パラメータ級の大規模言語モデル（LLM）に対して最先端の汎化保証を与えました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>中核アイデアはたった一点。</strong>prequential coding を「生徒モデルを自己生成データで訓練し、教師の<strong>選択情報だけ</strong>を符号化する」よう変更するだけです。これにより符号長は実質的に「累積 teacher-student KL」に帰着し、データエントロピーの項が消えます。</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>「圧縮できることは、理解していることの証」という考え方があります。あるデータを短く言い表せるということは、その背後にある規則性を見つけ出せているということだからです。ニューラルネットワークも同じで、訓練データを短い符号で表現できるモデルは、汎化を可能にする規則性を発見していると考えられます。</p>
+      <p>ところが困ったことに、深層ネットワークはパラメータ数が示すよりもずっと単純な関数を学習していることが多いのに、その単純さを実際に短い符号として取り出すのが非常に難しいのです。モデルは軽いはずなのに、その軽さを証明する方法がない、という状況でした。</p>
+      <p>この研究は、その「単純さ」を実際に測る新しいものさしを提案します。そして単に測れるだけでなく、モデルが大きくなるほど圧縮しやすくなるという現象を明らかにし、現代の大規模化路線がなぜうまくいくのかに理論的な裏づけを与えます。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>これまでのモデル圧縮手法には、大きく 2 つの流れがありました。どちらにも弱点があります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">流れ 1</span>パラメータを直接圧縮する</p>
+          <p>量子化（quantization）や枝刈り（pruning）など、学習し終わったパラメータの値そのものを短く表現する。特に訓練後量子化（post-training quantization、PTQ）は LLM で最先端の圧縮性能を持ち、Hessian にもとづく適応戦略で 1 パラメータあたり 4 ビット以下に到達する。<strong>弱点</strong>：符号の長さがモデルサイズに比例して増え、パラメータが実際にどれだけの情報を蓄えているかには鈍感。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">流れ 2</span>prequential coding</p>
+          <p>パラメータではなく「訓練の過程そのもの」を圧縮する。データを少しずつ提示しながらモデルを逐次学習させ、訓練の履歴を符号化するので、パラメータ数への依存を回避できる。<strong>弱点</strong>：モデルがどれだけ学習したかに関わらず「厳密なデータ系列」をそのまま符号化するため、データが複雑（高エントロピー）だと符号が肥大化し、符号長がデータセットサイズに比例して増え続ける。</p>
+        </div>
+      </div>
+
+      <p>この点を式で見ると分かりやすくなります。prequential 符号長の期待値は、次の 2 つの項に分解できます（論文の式 (1)）。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">データエントロピーの項</p>
+          <p>データ源そのものが持つ、減らしようのない複雑さ。モデルが学習を止めた後も<strong>線形に累積し続ける</strong>。データが本質的に持つランダムさの分まで、律儀に支払い続けてしまう。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">近似誤差の項</p>
+          <p>モデルの予測が真の分布からどれだけずれているか。学習が進むほど小さくなる項。</p>
+        </div>
+      </div>
+
+      <p>理想的な符号は、このどちらの項も全額払うべきではありません。ここに改善の余地がありました。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>この論文の中核アイデアは驚くほどシンプルです。prequential coding をたった一点だけ変更します。<strong>生徒モデルを、既存のデータセットではなく「自分自身が生成したデータ」で訓練する</strong>のです。そして符号に記録するのは、より強い教師モデルが「自己生成サンプルのうちどれを訓練に使うか」を決めた分の情報だけにします。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 780 340" role="img" aria-label="requential coding の処理の流れを示す図。各ステップで、符号化される生徒モデルが既知シードの疑似乱数生成器（PRNG）を使って自分自身の分布から候補サンプルを複数生成する。次に教師モデルが受理ルールに従って候補の中から 1 つを選ぶ。この『どのサンプルを選んだか』というインデックスを相対エントロピー符号化（REC）で符号化する。REC のコストはおおよそ teacher-student KL に相当するビット数になる。選択情報を符号に追記し、選ばれたサンプルで生徒を訓練して次のステップへ進む。教師モデル自体は送信不要で、生徒は記録された選択情報だけからすべてを復元できる。全体として、符号長は累積 teacher-student KL に帰着し、データエントロピーの項が消える。">
+          <defs>
+            <marker id="rq-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <text class="node-label" x="20" y="24">1 ステップの流れ。教師モデルは送信不要で、生徒は記録された「選択情報」だけからすべて復元できる。</text>
+
+          <rect class="node" x="20" y="56" width="160" height="104" rx="10"></rect>
+          <text x="100" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">生徒が候補生成</text>
+          <text x="100" y="112" text-anchor="middle" font-size="11">自分の分布から</text>
+          <text x="100" y="130" text-anchor="middle" font-size="11">複数サンプルを生成</text>
+          <text x="100" y="150" text-anchor="middle" font-size="10" fill="var(--color-text-muted)">既知シードの PRNG</text>
+
+          <path class="edge" d="M180,108 L212,108" marker-end="url(#rq-arrow)"></path>
+
+          <rect class="node" x="212" y="56" width="160" height="104" rx="10"></rect>
+          <text x="292" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">教師が選択</text>
+          <text x="292" y="112" text-anchor="middle" font-size="11">受理ルールで</text>
+          <text x="292" y="130" text-anchor="middle" font-size="11">候補から 1 つを選ぶ</text>
+          <text x="292" y="150" text-anchor="middle" font-size="10" fill="var(--color-text-muted)">実データで自由に成長</text>
+
+          <path class="edge" d="M372,108 L404,108" marker-end="url(#rq-arrow)"></path>
+
+          <rect class="node" x="404" y="56" width="168" height="104" rx="10"></rect>
+          <text x="488" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">REC で符号化</text>
+          <text x="488" y="112" text-anchor="middle" font-size="11">「どれを選んだか」</text>
+          <text x="488" y="130" text-anchor="middle" font-size="11">のインデックスを符号化</text>
+          <text x="488" y="150" text-anchor="middle" font-size="10" fill="var(--color-accent)">≈ teacher-student KL</text>
+
+          <path class="edge" d="M572,108 L604,108" marker-end="url(#rq-arrow)"></path>
+
+          <rect class="node" x="604" y="56" width="156" height="104" rx="10"></rect>
+          <text x="682" y="88" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">追記 → 訓練</text>
+          <text x="682" y="112" text-anchor="middle" font-size="11">選択情報を符号に追記</text>
+          <text x="682" y="130" text-anchor="middle" font-size="11">選ばれたサンプルで</text>
+          <text x="682" y="148" text-anchor="middle" font-size="11">生徒を訓練</text>
+
+          <path class="edge" d="M682,160 L682,214 L100,214 L100,160" marker-end="url(#rq-arrow)"></path>
+          <text x="391" y="234" text-anchor="middle" font-size="10" fill="var(--color-text-muted)">次のステップへ（ループ）</text>
+
+          <text class="node-label" x="20" y="284">結果として符号長は、対数項・定数項を除けば実質的に「累積 teacher-student KL」に帰着する。</text>
+          <text class="node-label" x="20" y="306">データエントロピーの項が消え、生徒が教師にどれだけ近づいたかだけがコストになる。</text>
+        </svg>
+        <figcaption class="diagram__caption">requential coding の 1 ステップ。生徒が自己生成した候補を教師が選び、その「選択」だけを REC で符号化して生徒を訓練する。教師モデル自体は送信しない。</figcaption>
+      </figure>
+
+      <h3>仕組みを順を追って見る</h3>
+      <div class="timeline">
+        <div class="timeline__step">
+          <p class="timeline__step-title">1. 生徒が候補を生成</p>
+          <p>符号化される生徒モデルが、自分自身の分布から候補サンプルを複数生成する。既知のシードを持つ疑似乱数生成器（PRNG）を使うので、後から同じサンプルを再現できる。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">2. 教師が受理</p>
+          <p>教師モデルが、決められた受理ルールに従って候補の中から 1 つを選ぶ。受理されたサンプルが、あたかも教師の分布から直接引いてきたように振る舞う。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">3. REC で符号化</p>
+          <p>「どのサンプルを選んだか」というインデックスを、相対エントロピー符号化（relative entropy coding、REC）で符号化する。これはおおよそ teacher-student KL に相当するビット数で表せる。</p>
+        </div>
+        <div class="timeline__step">
+          <p class="timeline__step-title">4. 追記して訓練</p>
+          <p>符号に選択情報を追記し、選ばれたサンプルで生徒を訓練して次のステップに進む。教師は送信不要で、生徒は選択情報（メッセージ）だけからすべてを復元できる。</p>
+        </div>
+      </div>
+
+      <p>別の見方をすると、この手法は「教師のサンプルを効率よく伝える蒸留（distillation）」だと理解できます。ふつうの蒸留では教師の予測（ロジット）を生徒に教え込みますが、ここでは教師のサンプルだけを使う <strong>hard distillation（ハード蒸留）</strong>にあたります。</p>
+
+      <h3>なぜこれで符号が短くなるのか</h3>
+      <p>鍵は相対エントロピー符号化（REC）です。REC は「特定のサンプルそのものを送る」という重い作業を、「周辺分布が教師と一致するような、何らかのランダムなサンプルを送る」という軽い作業に置き換えます。この置き換えによって、必要なビット数を大幅に節約できます。もし教師と生徒の分布が一致していれば、わずか定数ビットで済みます。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p>こうして requential coding の符号長は、対数項や定数項を除けば、実質的に「<strong>累積した teacher-student KL</strong>」に帰着します。データエントロピーの項が消え、生徒が教師にどれだけ近づいたかだけがコストになります。バッチが大きい（言語モデルではおおむね 100 万トークン以上）場合、対数項や定数項は無視できるほど小さくなります。</p>
+        </div>
+      </div>
+
+      <h3>教師をどう選ぶか</h3>
+      <p>教師の選び方には、ちょうどよいバランスが必要です。生徒に近すぎると教師である意味が薄れますが、離れすぎると符号コストがかさみます。逆に生徒より先行しすぎると、生徒を無理に引っ張ることになります。基本方針は、教師を実データで訓練し、生徒と同じアーキテクチャ・ハイパーパラメータを共有させることです。加えて、論文は 2 つの改良を提案しています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">Teacher smoothing（教師の平滑化）</p>
+          <p>教師のチェックポイントの指数移動平均（EMA）から合成データを生成し、教師の軌跡に含まれるノイズを減らす。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">Iso-loss projection（等損失射影）</p>
+          <p>定期的に教師を現在の生徒にリセットし、生徒を止めたまま教師だけを実データで少し訓練して、リセット前の損失まで回復させる。教師を「生徒と同じ性能を保ちながら、より小さい KL を持つ地点」へ近づける操作で、以降の符号を短くする。</p>
+        </div>
+      </div>
+
+      <h3>計算コストはどのくらいか</h3>
+      <p>科学的な用途では、実際にデータを伝送する必要はなく、符号の長さを評価できれば十分です。そのため論文は、REC を「教師から直接サンプリングする等価な確率過程」に置き換えて評価します。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">約 2 倍</p>
+          <p class="stat__label">教師が生徒と同じアーキテクチャで実データ訓練する場合の、符号長評価に必要なメモリ（通常訓練比）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">約 2.33 倍</p>
+          <p class="stat__label">同じ設定での計算量（通常訓練比）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">約 0.33 倍</p>
+          <p class="stat__label">教師のチェックポイントがすでに手元にある場合の追加計算量</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>論文は GPT-2 系の Transformer を使い、OpenWebText（テキスト）、CIFAR-5M（画像）、FineWeb（テキスト）という 3 つのデータセットで実験しました。まず、3 つの圧縮の考え方が「符号長が何に依存するか」を並べると、requential coding の位置づけがはっきりします。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法</th>
+            <th>何を圧縮するか</th>
+            <th>符号長が依存するもの</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>パラメータ圧縮（量子化・枝刈り・PTQ）</th>
+            <td>学習後のパラメータ値</td>
+            <td>モデルサイズ（パラメータ数）に比例</td>
+          </tr>
+          <tr>
+            <th>prequential coding</th>
+            <td>訓練の過程（厳密なデータ系列）</td>
+            <td>データの複雑さ・データセットサイズに比例</td>
+          </tr>
+          <tr>
+            <th>requential coding<span class="badge badge--accent-2">提案</span></th>
+            <td>自己生成データの訓練過程（教師の選択）</td>
+            <td>累積 teacher-student KL のみ（パラメータ数・データエントロピーに非依存）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>この違いは、実験でそのまま性能差として現れました。主な発見は次のとおりです。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">1〜2 桁</p>
+          <p class="stat__label">1 トークンあたりのコストが、prequential coding と比べて小さくなった幅。各データセットで 1 億パラメータ・20 億トークン訓練の設定</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">&lt; 1 ビット</p>
+          <p class="stat__label">大きいモデルほど圧縮しやすく、量子化で到達可能な「1 パラメータあたり 1 ビット」という下限をも大きく下回った</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1.51 → 1.38 nats</p>
+          <p class="stat__label">OpenWebText の固定データ設定で、モデルが 170 万から 2 億 4700 万パラメータへ増える間に requential 限界が低下</p>
+        </div>
+      </div>
+
+      <p><strong>圧縮性能が既存手法を大きく上回る</strong>：各データセットで 1 億パラメータのモデルを 20 億トークン訓練したところ、requential coding は「損失 対 圧縮後モデルサイズ」のパレートフロンティア（性能とサイズのバランスの最前線）を支配し、他手法を引き離しました。requential 符号は「1 パラメータあたり 4 ビット」の基準よりずっと左（＝より小さい）で止まる一方、prequential 符号は FP32（32 ビット浮動小数点）のパラメータサイズさえ超えてしまい、圧縮器としては意味をなしませんでした。</p>
+
+      <p><strong>大きいモデルほど圧縮しやすい</strong>：これは直感に反する重要な発見です。損失を一定に固定したとき、モデルが大きいほど「より少ないビット」に圧縮できました。モデルサイズが 2 桁増えても、同じ損失に達するのに必要な requential 符号長はむしろ縮んでいきます。</p>
+
+      <p><strong>アンサンブルも圧縮しやすい</strong>：FineWeb で 1・2・4・8 個のメンバーからなるアンサンブルを試したところ、メンバーが多いほど分散が減って教師を忠実に追え、同じ符号予算でより低い損失に到達しました。単一モデルの最終損失に達するのに必要な圧縮サイズは、総パラメータ数が増えても縮んでいきました。</p>
+
+      <p><strong>スケールとともに汎化保証がタイトになる</strong>：認証された圧縮モデルサイズを PAC-Bayes 汎化限界（圧縮の長さから汎化性能の上界を導く理論）に差し込むと、requential にもとづく限界はモデルを大きくするほど改善しました。計算最適（compute-optimal、Chinchilla スケーリングとも呼ばれ、トークン数とパラメータ数を一定比で増やす領域）では、従来の最先端であるロスレス 4 ビット PTQ の限界を上回りました。さらに、1 パラメータあたりの符号長はモデルサイズに対してべき乗則で減衰しました。このべき乗則が続くなら、認証される汎化ギャップはスケールとともに消えていくことになります。</p>
+
+      <p><strong>過学習も予測できる</strong>：同じ限界を多エポック（同じデータを何周もする）領域に当てはめると、訓練損失とテスト損失が徐々に乖離していく様子を予測できました。最良の限界はおよそ 1 エポックで得られる、という結果です。</p>
+
+      <p><strong>データに含まれる「学べる情報量」を測れる</strong>：requential の圧縮モデルサイズは、データセットを「モデルが学習可能な構造の量」でランクづけできました。一様ランダム列や単純な反復列はほとんど構造を持たず、画像はそれなりに、テキストが最も多くの構造を持つ、という順に並びました。prequential 符号がデータのエントロピーで水増しされ、ランダム列・画像・テキストで似たような無意味な推定になってしまうのとは対照的です。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、単に圧縮率を上げたことにとどまりません。自己生成データから作った訓練プロセスを符号化することで、符号長がパラメータ数にもデータエントロピーにも依存しなくなり、しかもその優位性がモデルスケールとともに拡大します。これは、既存の圧縮手法では見えなかった学習現象を理解するための強力な道具になります。特に、計算最適なスケーリングは訓練損失を下げるだけでなく、パラメータ数に対して符号長が緩やかにしか増えない「ますます圧縮しやすいモデル」を生み出すことが分かりました。もしこれが成り立たなければ、現代のスケーリング路線は減らしようのない汎化ギャップに突き当たっていたかもしれません。</p>
+
+      <p>一方で、論文は次の限界も率直に認めています。</p>
+      <ol>
+        <li>requential coding は生徒に対してはロスレスな符号を与えますが、教師に対してはそうではありません。</li>
+        <li>符号長を評価するには、教師と生徒の訓練を実際に走らせる必要があります。量子化のように、訓練済みパラメータへ直接適用することはできません。</li>
+        <li>現段階では、あくまで「圧縮後モデルサイズを評価する」道具であり、「モデルを実際に伝送する」道具ではありません。REC のエンコーダは KL ダイバージェンスに対して指数的に計算量が増えるためです。</li>
+        <li>訓練の途中で失われる情報（早い段階で学習して後で忘れる情報）を符号から除ける可能性はありますが、現状の符号長は訓練ステップとともに増える一方で、減ることはありません。忘却された情報を活かして符号を短くできるかは、重要な未解決問題として残されています。</li>
+      </ol>
+
+      <h2>まとめ</h2>
+      <p>requential coding は、「生徒が自分で作ったデータで学び、教師の選択だけを記録する」という一点の工夫で、モデル圧縮の限界を大きく押し広げました。符号長がパラメータ数にもデータの複雑さにも依存しなくなり、しかもモデルが大きいほど効きが強くなります。これにより、10 億パラメータ級の LLM にも最先端の汎化保証を与えられることが示されました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>requential coding（レクエンシャル符号化）</dt>
+        <dd>本論文の造語。prequential coding の変種で、生徒が自己生成データで訓練し、教師の「選択」だけを REC で符号化する圧縮法。</dd>
+
+        <dt>prequential coding（プリクエンシャル符号化）</dt>
+        <dd>データを逐次提示しながら逐次学習するモデルを使ってデータを符号化する既存手法。総符号長は訓練損失曲線の下の面積に相当する。</dd>
+
+        <dt>relative entropy coding（REC、相対エントロピー符号化）</dt>
+        <dd>目標分布からのサンプルを、参照分布からの候補描画と選択的な受理によって、エントロピーより少ないビットで伝える圧縮の基本部品。</dd>
+
+        <dt>teacher-student KL</dt>
+        <dd>教師分布と生徒分布のあいだの隔たり（カルバック・ライブラー・ダイバージェンス）。requential 符号長の主要項。</dd>
+
+        <dt>iso-loss projection（等損失射影）</dt>
+        <dd>教師を生徒にリセットして損失を回復させ、同じ性能でより低い KL の教師を得て符号を短くする改良。</dd>
+
+        <dt>PAC-Bayes 限界</dt>
+        <dd>圧縮された符号長と訓練事例数から、期待リスクの上界を与える汎化保証。</dd>
+
+        <dt>post-training quantization（PTQ、訓練後量子化）</dt>
+        <dd>訓練済みパラメータの精度を落とす量子化。LLM で最先端の圧縮性能を持ち、本論文の比較基準（4 ビット PTQ）。</dd>
+
+        <dt>compute-optimal / Chinchilla 予算</dt>
+        <dd>トークン数とパラメータ数を一定比（D = 20N）で増やす学習領域。</dd>
+
+        <dt>hard distillation（ハード蒸留）</dt>
+        <dd>教師のロジットではなく、教師のサンプルだけを使う蒸留。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Requential Coding: Pushing the Limits of Model Compression with Self-Generated Training Data</p>
+      <a href="https://arxiv.org/abs/2607.11883" target="_blank" rel="noopener noreferrer">arXiv:2607.11883 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
