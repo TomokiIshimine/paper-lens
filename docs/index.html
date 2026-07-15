@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-14-2607.13034-e3-complexity-aware-agent-execution.html">
+            <img src="assets/2026-07-14-2607.13034-e3-complexity-aware-agent-execution-cover.png"
+                 alt="LLM エージェントが作業に着手する前にタスクの難易度・作業範囲・リスク・確信度を見積もり（Estimate）、最小限の経路で実行し（Execute）、検証に失敗したときだけ範囲を 1 段階広げる（Expand）E3 フレームワークのインフォグラフィック。最大コンテキスト優先（maximum-context-first）が簡単な作業でもコードベース全体を読み漁って無駄を出すのに対し、E3 は決定論的ベンチマーク MSE-Bench 上で 100% の成功率を保ったまま、コストを約 85%、消費トークンを約 91%、参照ファイル数を約 92% 削減したことを示す。">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-14</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-14-2607.13034-e3-complexity-aware-agent-execution.html">AI エージェントは『簡単な作業』を簡単だと気づいているか — 見積もってから最小経路で動く E3 フレームワーク</a>
+          </h2>
+          <p class="article-card__summary">大規模言語モデル（LLM）を使ったエージェントは、コード修正などの多段階作業を自動でこなせるようになりました。しかし多くのエージェントは、不確実な状況で「とりあえず情報を最大限に集めてから動く」保守的な方針（maximum-context-first、最大コンテキスト優先）を取り、たった 1 行の書き換えでもコードベース全体を読み漁ってしまいます。すでに読んだファイルを何度も読み直し、「1 行の編集」を「小規模なコードベース監査」に変えてしまうのです。作業は成功してもコストが必要以上に膨らみます。著者らは、足りないのは知識でも検索能力でもなく「この作業はどれだけ難しいか」「本当に必要な情報は何か」を素早く見極める能力（task-aware execution-scope estimation）だと主張します。そこで提案するのが E3（Estimate, Execute, Expand）です。まず着手前に難易度・作業範囲・リスク・確信度を見積もり（Estimate）、見積もった範囲に応じて最小経路で実行し（Execute）、検証に失敗したときだけ範囲を 1 段階だけ広げる（Expand）3 段階からなります。見積もりはあえて完璧を目指さず、取りこぼしは拡張段で取り返します。評価には、実際の LLM を呼ばず全方針が同じ編集能力を持つ決定論的ベンチマーク MSE-Bench（121 タスク、局所編集・複数箇所・リポジトリ規模の 3 段階）を新設し、手法間の差が「どれだけコンテキストを集めるか」だけに現れるようにしました。結果、E3 は 100% の成功率を保ったまま、最大コンテキスト優先と比べてコストを約 85%、トークンを約 91%、参照ファイル数を約 92% 削減しました。興味深いことに、最大コンテキスト優先の無駄（ACRR、エージェント認知冗長比）は最も簡単な Level 1 で最大となり、簡単な作業ほど相対的な無駄が大きいことも示されます。アブレーションでは、拡張が成功率を守るセーフティネット、見積もりがコスト削減に効くという相補的な役割が確認され、実 LLM（gpt-4o）で pytest 採点する補完環境 LLM-Case でも E3 は最少トークン・最速レイテンシを示しました。ただし著者らは、主実験がシミュレータ上の方針評価であることを最大の限界として率直に認めています。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-13-2607.11883-requential-coding-model-compression.html">
             <img src="assets/2026-07-13-2607.11883-requential-coding-model-compression-cover.png"
                  alt="生徒モデルが自分で生成したデータで学習し、教師モデルが「どのサンプルを使うか」を選んだ情報だけを相対エントロピー符号化（REC）で記録する新しいモデル圧縮手法 requential coding（レクエンシャル符号化）のインフォグラフィック。符号の長さがパラメータ数にもデータの複雑さにも依存せず、累積 teacher-student KL だけに帰着することで、既存の prequential coding より 1〜2 桁短い符号を実現し、10 億パラメータ級の大規模言語モデルに最先端の汎化保証を与える流れを示す。">
