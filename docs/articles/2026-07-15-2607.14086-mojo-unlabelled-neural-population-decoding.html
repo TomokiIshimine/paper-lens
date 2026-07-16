@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ラベルのない神経データを味方につける ― 脳活動デコーダを底上げする自己教師あり学習「MOJO」 — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-15-2607.14086-mojo-unlabelled-neural-population-decoding-cover.png"
+           alt="スパイクを 1 個ずつトークンとして扱う神経デコーダに、ラベルなしデータから学ぶ自己教師あり学習を組み合わせた枠組み MOJO を紹介するインフォグラフィック。">
+    </figure>
+
+    <h1 class="article__title">ラベルのない神経データを味方につける ― 脳活動デコーダを底上げする自己教師あり学習「MOJO」</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-15</span>
+      <span>arXiv：2607.14086</span>
+      <span>カテゴリ：cs.LG / q-bio.NC</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>脳の神経活動から手の動きなどの行動を読み取る「神経デコーダ」は、これまで行動ラベル付きのデータでしか学習できませんでした。この論文は、スパイク（神経細胞の発火）を 1 個ずつ扱うデコーダに、ラベルのないデータからも学べる自己教師あり学習（self-supervised learning）を組み合わせた枠組み <strong>MOJO</strong> を提案します。教師あり学習と自己教師あり学習を同時に最適化することで、特にラベルが少ない状況でのデコーディング性能を、従来の教師ありのみのモデルより一貫して向上させました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>中核のアイデアは一つ。</strong>世界中の研究室に眠る「行動ラベルの付いていない大量の神経データ」を、デコーダの性能向上へ活かすこと。GPT や BERT がラベルなしテキストで力を付けたのと同じ発想を、スパイクを 1 個ずつ扱う神経デコーダに持ち込みます。しかも追加するパラメータはごくわずかです。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">約 231K</p>
+          <p class="stat__label">9.88M（約 988 万）パラメータの POYO に対する追加パラメータ。骨格・入力部を共有するため POYO 骨格で約 2% に収まる</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">最大 90%</p>
+          <p class="stat__label">事前学習データがラベルなしでも、明確な下流性能の改善が見られた割合の上限</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">47%</p>
+          <p class="stat__label">ヒトの発話 ECoG タスクにおける音節分類の改善幅（教師ありのみの POYO 比）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">94.12%</p>
+          <p class="stat__label">マウス視覚タスクの natural scene（自然画像）分類での MOJO-POYO（FT）の精度</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>脳とコンピュータをつなぐ BCI（brain-computer interface、ブレイン・コンピュータ・インターフェース）などの神経技術は、神経活動を「手を動かす」「文字を選ぶ」といった行動の情報へ変換する神経デコーダに支えられています。このデコーダの精度が上がるほど、より自然で使いやすい応用が可能になります。</p>
+      <p>ところが、現在の高性能なデコーダには大きな制約があります。学習には「神経活動」と「そのときの行動」がペアになったデータ、つまり行動ラベル付きのデータが必要なのです。ラベルを付ける作業には手間がかかり、集められるデータ量が限られてしまいます。</p>
+      <p>一方で、世界中の神経科学の研究室には、行動ラベルの付いていない神経データが大量に眠っています。この「使われていないデータ」を学習に活かせれば、デコーダをもっと賢くできるはずです。この論文は、まさにその活用方法を示した点に価値があります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>近年、神経デコーディングの分野では <strong>POYO</strong> と呼ばれるモデルファミリ（族）が高い性能を上げています。POYO は、スパイクを 1 個ずつ「トークン」として扱う点が特徴です。ここでいうトークンとは、言語モデルが単語を処理単位として扱うのと同じように、モデルが受け取る最小の情報のかたまりを指します。</p>
+      <p>従来の手法は、一定の時間区間（bin、ビン）ごとにスパイクの回数を数えてまとめていました。これに対し POYO は、スパイク 1 個ずつを「どの神経細胞から」「いつ」発火したかというかたちで細かく捉えます。この設計により、記録セッションごとにデータ形式を揃える特別な仕組み（stitching 層）が不要になり、複数セッションをまたいだ大規模な事前学習ができるようになりました。両者の違いを整理すると次のようになります。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>観点</th>
+            <th>従来のビン（bin）方式</th>
+            <th>POYO（スパイク単位）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>処理単位</th>
+            <td>時間区間ごとのスパイク回数</td>
+            <td>スパイク 1 個（どの神経細胞・いつ）</td>
+          </tr>
+          <tr>
+            <th>セッション間の整合</th>
+            <td>データ形式を揃える stitching 層が必要</td>
+            <td>stitching 層が不要</td>
+          </tr>
+          <tr>
+            <th>大規模事前学習</th>
+            <td>セッションをまたぎにくい</td>
+            <td>複数セッションをまたいで学習できる</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>しかし、POYO 系のモデルは<strong>教師あり学習（supervised learning、SL）だけ</strong>に頼っています。つまり、行動ラベルが付いたデータでしか事前学習できません。これは、大量のラベルなしテキストを自己教師あり学習で活用して力を付けた GPT や BERT といった言語モデルとは対照的です。</p>
+      <p>ラベルなしデータを活かす自己教師あり学習（self-supervised learning、SSL）の手法自体は存在します。しかし既存のものは、連続的に変化するカルシウム信号（神経活動を反映する別の計測値）向けに設計されており、スパイクを 1 個ずつ扱うトークン列に対してどう設計すればよいかは、まだ分かっていませんでした。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>この論文が提案する <strong>MOJO</strong>（Masked autOencoder-based JOint training）は、教師あり学習（SL）と自己教師あり学習（SSL）を<strong>同時に</strong>最適化する事前学習の枠組みです。</p>
+      <p>中核となるアイデアは、マスク付きオートエンコーダ（masked autoencoder）と呼ばれる仕組みを、モデル内部の潜在表現（latent、入力を変換した中間的な表現）に対して適用することです。マスク付きオートエンコーダとは、情報の一部を隠して（マスクして）、隠された部分を復元させることで表現を学ばせる手法です。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>なぜ入力そのものではなく潜在表現をマスクするのか。</strong>スパイクはまばら（疎）で不規則に発生するため、入力の段階で「もともとスパイクが無かった場所」と「わざとマスクした場所」を区別するのが難しくなります。潜在表現の段階でマスクすることで、この区別の問題を避けられ、既存の教師あり POYO の骨格（backbone）にそのまま組み込めます。</p>
+        </div>
+      </div>
+
+      <p>MOJO は、共有した骨格の潜在表現を 2 つの学習経路へ分岐させ、1 つの損失で同時に学びます。全体像を図で押さえます。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 780 360" role="img" aria-label="MOJO の処理の流れを示す図。各スパイクを「どの神経細胞（unit）由来か」と「発生時刻」の組としてトークン化し、入力部と共有の骨格（backbone、POYO 系の注意ベースまたは SSM ベース）へ入れて潜在表現を得る。この潜在表現を時間方向に確率 0.5 でマスクし、隠した部分を学習可能なマスクトークンに置き換える。そこから 2 つの学習経路へ分岐する。教師あり経路は複数の行動タスクを同時に解き、自己教師あり経路は隠された部分のスパイク発火率を予測する。全体の学習目標は、自己教師ありの損失と教師ありの損失の重み付き和（両方の重みを 1 に設定すると全実験で強い性能）で、1 つの損失として同時に最適化する。">
+          <defs>
+            <marker id="mojo-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" class="edge-arrow"></path>
+            </marker>
+          </defs>
+
+          <rect class="node" x="16" y="130" width="140" height="96" rx="10"></rect>
+          <text x="86" y="164" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">スパイクの</text>
+          <text x="86" y="182" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">トークン化</text>
+          <text x="86" y="204" text-anchor="middle" font-size="10.5">神経細胞 ID ＋ 時刻</text>
+
+          <path class="edge" d="M156,178 L196,178" marker-end="url(#mojo-arrow)"></path>
+
+          <rect class="node" x="196" y="130" width="150" height="96" rx="10"></rect>
+          <text x="271" y="160" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">共有の骨格</text>
+          <text x="271" y="180" text-anchor="middle" font-size="10.5">注意ベース / SSM ベース</text>
+          <text x="271" y="198" text-anchor="middle" font-size="10.5">POGRU・POMAMBA</text>
+          <text x="271" y="214" text-anchor="middle" font-size="10.5">→ 潜在表現</text>
+
+          <path class="edge" d="M346,178 L386,178" marker-end="url(#mojo-arrow)"></path>
+
+          <rect class="node" x="386" y="130" width="150" height="96" rx="10"></rect>
+          <text x="461" y="164" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-heading)">時間マスキング</text>
+          <text x="461" y="186" text-anchor="middle" font-size="10.5">各時点を確率 0.5 で隠す</text>
+          <text x="461" y="204" text-anchor="middle" font-size="10.5">マスクトークンに置換</text>
+
+          <path class="edge" d="M536,158 L576,110 L606,110" marker-end="url(#mojo-arrow)"></path>
+          <path class="edge" d="M536,198 L576,246 L606,246" marker-end="url(#mojo-arrow)"></path>
+
+          <rect class="node" x="606" y="66" width="158" height="88" rx="10"></rect>
+          <text x="685" y="96" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-accent)">教師あり経路</text>
+          <text x="685" y="118" text-anchor="middle" font-size="10.5">複数の行動タスクを</text>
+          <text x="685" y="136" text-anchor="middle" font-size="10.5">同時に解く</text>
+
+          <rect class="node" x="606" y="202" width="158" height="88" rx="10"></rect>
+          <text x="685" y="232" text-anchor="middle" font-size="12" font-weight="700" fill="var(--color-accent-2)">自己教師あり経路</text>
+          <text x="685" y="254" text-anchor="middle" font-size="10.5">隠された部分の</text>
+          <text x="685" y="272" text-anchor="middle" font-size="10.5">発火率を予測</text>
+
+          <text x="390" y="330" text-anchor="middle" font-size="11" fill="var(--color-text-muted)">学習目標 ＝ 自己教師ありの損失 ＋ 教師ありの損失</text>
+          <text x="390" y="348" text-anchor="middle" font-size="11" fill="var(--color-text-muted)">（重み付き和・両方の重み 1）を 1 つの損失で同時最適化</text>
+        </svg>
+        <figcaption class="diagram__caption">MOJO の全体像。トークン化されたスパイクを共有の骨格へ通し、潜在表現を時間方向にマスクしてから、教師あり経路（行動タスク）と自己教師あり経路（発火率予測）へ分岐する。両者は 1 つの重み付き損失として同時に最適化される。</figcaption>
+      </figure>
+
+      <p>仕組みをもう少し具体的に見ていきます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">1</span>スパイクのトークン化</p>
+          <p>各スパイクを「どの神経細胞（unit）由来か」と「発生時刻」の組として表します。神経細胞には整数の ID を割り当てるだけで、余分な情報は与えません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">2</span>2 種類の骨格</p>
+          <p>情報を関連付ける注意機構（attention）ベースのものと、時系列を逐次処理する再帰（recurrence）ベース（SSM）のものの 2 系統を用意。後者は GRU を使う POGRU、Mamba を使う POMAMBA として実装されます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">3</span>潜在表現のマスキング</p>
+          <p>時間方向に潜在表現を隠します。各時点を確率 0.5 で隠すかどうか決め、隠した部分は学習可能な「マスクトークン」に置き換えます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">4</span>2 つの学習経路</p>
+          <p>教師あり経路は複数のタスクを同時に解く設定。自己教師あり経路は、隠された部分のスパイク発火率を予測します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">5</span>1 つの損失で同時学習</p>
+          <p>全体の学習目標は、自己教師ありの損失と教師ありの損失の重み付き和です。論文では両方の重みを 1 に設定すると、すべての実験で強い性能が得られたと報告しています。</p>
+        </div>
+      </div>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p>注目すべきは、自己教師あり経路を加えても<strong>増えるパラメータがごくわずか</strong>である点です。入力部分と骨格を 2 つの経路で共有するため、追加パラメータは POYO 骨格でおよそ <strong>2%</strong>、POSSM 骨格でおよそ <strong>10%</strong> に収まります。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価には、サルの運動野（reaching タスク）、マウスの多領域記録（視覚・意思決定タスク）、そしてヒトの皮質脳波（ECoG）による発話タスクという、複数の神経データセットが使われました。ファインチューニング（追加学習）の戦略は、神経細胞・セッションの埋め込みだけを更新する UI と、全体を更新する FT の 2 通りです。数値はいずれも原論文の報告に基づきます。</p>
+
+      <h3>サルの reaching タスクでの性能</h3>
+      <p>2 次元の手の速度をデコードするタスク（指標は決定係数 R²）では、MOJO が POGRU・POMAMBA・POYO それぞれの教師ありのみのベースライン、およびビンベースの自己教師ありデコーダ（NDT-2、NDT-3、NEDS）を全データセットで上回りました。新しい個体の設定での代表的な数値は次のとおりです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル（新しい個体・FT）</th>
+            <th>手の速度デコード R²</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>MOJO-POYO<span class="badge badge--accent-2">提案</span></th>
+            <td>0.9131</td>
+          </tr>
+          <tr>
+            <th>MOJO-POGRU<span class="badge badge--accent-2">提案</span></th>
+            <td>0.9103</td>
+          </tr>
+          <tr>
+            <th>POGRU（教師ありのみ）</th>
+            <td>0.8936</td>
+          </tr>
+          <tr>
+            <th>POYO（教師ありのみ）</th>
+            <td>0.8817</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>少ないデータ・わずかな較正での威力</h3>
+      <p>MOJO の真価は、ラベルが少ない状況で際立ちます。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">1.8 万未満</p>
+          <p class="stat__label">難しい未知のサル（unseen monkey）で、教師ありのみモデルの完全 FT（760 万超パラメータ）と同等に達した MOJO-UI の更新パラメータ数</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">60% 超 / 75% 超</p>
+          <p class="stat__label">32 試行のラベルなしデータを取り込むと、ラベル付き較正データが 2 個・4 個だけでも達した完全教師あり性能の割合</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">10〜50%</p>
+          <p class="stat__label">事前学習でラベル付きデータをこの割合まで減らしても、ラベルなしを全活用して優れた性能を保つ</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">最大 90%</p>
+          <p class="stat__label">データがラベルなしでも、明確な下流性能の改善が見られた上限</p>
+        </div>
+      </div>
+
+      <h3>マウス視覚タスク・種をまたいだ学習</h3>
+      <p>マウスの視覚タスク（Allen visual coding データセット）でも、MOJO が教師ありのみを上回りました。drifting grating（動く縞模様）の分類ではほぼ完璧な精度を示し、natural scene（自然画像）の分類でも MOJO-POYO（FT）が 94.12% を達成しています。さらに、サルとマウスのデータを合わせて事前学習すると、マウスの視覚タスクで収束が速くなる（正の転移、positive transfer）一方、サルの reaching 性能も維持されました。</p>
+
+      <h3>ヒトの発話 ECoG タスク</h3>
+      <p>スパイク以外の信号でも効果が確認されました。ヒトの発話 ECoG タスクでは、MOJO が教師ありのみの POYO を全タスクで一貫して改善し、特に音節分類で <strong>47% の改善</strong>を示しました。連続信号向けに設計された既存の脳波基盤モデル Du-IN とも同等の水準に達しています。</p>
+
+      <h3>学習された表現の豊かさ</h3>
+      <p>事前学習で得られた神経細胞の埋め込み表現は、脳領域や個体を線形の分類器で高い精度で識別できました。MOJO は学習中にこれらのメタ情報へアクセスしていないにもかかわらず、です。さらに、同じ電極上で近くにある神経細胞ほど埋め込みが似るという、解剖学的な構造も自然に反映していました。こうした改善を、9.88M（約 988 万）パラメータの POYO に対して約 231K（約 23 万）パラメータの追加だけで実現しています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、これまで教師ありデータに縛られていた高性能な神経デコーダに、ラベルなしデータを活かす道を開いた点にあります。デコーディング性能の向上、より少ないデータでの効率的な追加学習、そして解析に使える神経表現の獲得を、わずかなパラメータ増加で同時に実現しました。事前学習データの最大 90% がラベルなしでも効果があり、種をまたいだ学習やスパイク以外の信号（ECoG）にも適用できることから、著者らは統一的でスケーラブルな神経基盤モデル（neuro-foundation model、NFM）への道筋を示すものと位置づけています。</p>
+      <p>一方で、論文は次の限界も認めています。</p>
+
+      <ul>
+        <li><strong>データを多く必要とする（data-hungry）性質があります。</strong>データが不足すると、弱く学習された自己教師あり目標がかえって教師あり性能を損なう恐れがあります。</li>
+        <li><strong>潜在表現のマスキングは時間方向に限られています。</strong>空間方向（未観測の神経細胞や脳領域）を推論する目標を加えれば、さらに性能を高められる可能性があります。</li>
+        <li><strong>解釈可能な神経細胞の埋め込みが使い回せません。</strong>事前学習で得た埋め込みも、新しいセッションへの追加学習ではゼロから学び直す必要があり、無駄が残ります。</li>
+        <li><strong>ECoG への適用には専用の追加層が必要です。</strong>この信号固有の設計が、まとめて事前学習できるデータの多様性を制約します。</li>
+      </ul>
+
+      <p>今後は、複数の信号形式をまたいだ学習や、新しい埋め込みの再利用を促す手法などが課題として挙げられています。</p>
+
+      <h2>まとめ</h2>
+      <p>MOJO は、スパイクを 1 個ずつ扱う神経デコーダに自己教師あり学習を組み込み、ラベルなしデータを活用できるようにした枠組みです。教師あり学習と同時に最適化することで、特にラベルが少ない状況で性能を底上げし、種や信号形式をまたいだ応用の可能性も示しました。神経科学の現場に眠る大量のラベルなしデータを、デコーダの性能向上へつなげる現実的な一歩といえます。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>神経デコーダ</dt>
+        <dd>神経活動から手の動きなどの行動変数を推定するモデル。BCI などの基盤となる。</dd>
+
+        <dt>スパイク</dt>
+        <dd>神経細胞が発火したときの電気的な信号。神経活動の基本単位。</dd>
+
+        <dt>POYO / POYO 系モデル</dt>
+        <dd>各スパイクを 1 トークンとして単一スパイク解像度で処理するモデルファミリ。従来のビン（時間区間ごとの回数集計）方式と対比される。</dd>
+
+        <dt>POSSM / POGRU / POMAMBA</dt>
+        <dd>POYO 系の再帰（SSM）ベース変種。GRU を使うものが POGRU、Mamba を使うものが POMAMBA。</dd>
+
+        <dt>教師あり学習（SL）/ 自己教師あり学習（SSL）</dt>
+        <dd>前者は行動ラベルとペアの神経データが必要。後者はラベルなしデータから表現を学ぶ。</dd>
+
+        <dt>マスク付きオートエンコーダ（MAE）</dt>
+        <dd>情報の一部を隠して復元させることで表現を学ぶ自己教師あり手法。MOJO では潜在表現の時間マスキングとして実装される。</dd>
+
+        <dt>UI / FT</dt>
+        <dd>追加学習（ファインチューニング）の戦略。UI は神経細胞・セッションの埋め込みだけを更新、FT は全体を更新する。</dd>
+
+        <dt>ECoG（皮質脳波、electrocorticography）</dt>
+        <dd>大脳皮質の表面から記録する脳波。ヒトの発話タスクに使用。</dd>
+
+        <dt>R²（決定係数）/ balanced accuracy</dt>
+        <dd>連続的な行動デコーディングの評価指標／クラスの偏りを考慮した分類精度。</dd>
+
+        <dt>神経基盤モデル（NFM、neuro-foundation model）</dt>
+        <dd>神経信号向けの基盤モデル。MOJO はスパイク設計ながら ECoG で既存 NFM に匹敵する性能を示した。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Leveraging unlabelled data for generalizable neural population decoding</p>
+      <a href="https://arxiv.org/abs/2607.14086" target="_blank" rel="noopener noreferrer">arXiv:2607.14086 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
