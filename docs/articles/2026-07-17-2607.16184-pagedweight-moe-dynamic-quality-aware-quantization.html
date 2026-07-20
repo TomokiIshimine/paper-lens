@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>重みの精度を「使いながら」変える：MoE LLM のメモリを賢く配り直す PagedWeight — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-17-2607.16184-pagedweight-moe-dynamic-quality-aware-quantization-cover.png"
+           alt="MoE LLM のメモリを賢く配り直す PagedWeight のインフォグラフィック。左の「課題」ではモデルの重みと KV キャッシュが GPU メモリを奪い合う様子を、右の「手法」では影響の小さい重みの精度を実行中に下げてメモリを空ける様子を示す。下部に最大 72.0% の GPU メモリ削減、1.94 倍のスループット向上、FP16 相当の精度維持という 3 つの数値を配置している。">
+    </figure>
+
+    <h1 class="article__title">重みの精度を「使いながら」変える：MoE LLM のメモリを賢く配り直す PagedWeight</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-17</span>
+      <span>arXiv：2607.16184</span>
+      <span>カテゴリ：cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>大規模言語モデル（LLM）を実際に動かすとき、GPU のメモリは「モデルの重み」と「会話の文脈を覚えておくキャッシュ」で奪い合いになります。この論文が提案する「PagedWeight」は、文脈が長くなってキャッシュが膨らんできたら、影響の小さいところから重みの精度（ビット幅）を実行中に下げてメモリを空ける、という管理手法です。とくにメモリを食いやすい MoE（Mixture-of-Experts）型の LLM を対象に、著者らは FP16 相当の精度を保ったまま最大 72.0% の GPU メモリ削減と 1.94 倍のスループット向上を報告しています。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>発想の核心は「重みも KV キャッシュと同じようにページとして扱う」こと。</strong>KV キャッシュを小さなページで管理する PagedAttention の考え方を、今度は重み側に持ち込み、実行中にビット幅を下げたり戻したりしてメモリを配り直します。名前の由来もそこにあります。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">72.0%</p>
+          <p class="stat__label">FP16 相当の精度を保ったまま達成した最大の GPU メモリ削減</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1.94倍</p>
+          <p class="stat__label">同条件で達成した最大のスループット向上</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">39.3%</p>
+          <p class="stat__label">同じメモリ予算で比べたときの、他の量子化手法に対する最大の品質改善</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">4.1%</p>
+          <p class="stat__label">その品質改善時のスループット低下（最大でもこの範囲に収まる）</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>いま話題の LLM を自分たちのサービスで動かそうとすると、真っ先にぶつかるのが GPU メモリの壁です。メモリに載せなければならないものは大きく 2 つあります。1 つはモデルの重みそのもの、もう 1 つは「KV キャッシュ（KV cache）」と呼ばれる、文章を生成しながら溜めていく途中経過のキャッシュです。</p>
+      <p>この 2 つは同じ GPU メモリを取り合う関係にあります。会話やドキュメントが長くなるほど KV キャッシュは増え続け、重みのために使える余地を圧迫します。しかも MoE 型のモデルは、賢さを保ちながら計算を減らせる代わりに総パラメータ数が非常に大きく、重みだけで GPU メモリの 6 割超を占めることもあると論文は指摘します。この「重みと KV キャッシュの綱引き」をうまくさばけるかどうかが、LLM を安く安定して動かせるかを左右します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 700 300" role="img" aria-label="GPU メモリを重みと KV キャッシュが分け合う様子を示す図。左は従来の静的量子化で、重みが大きな固定ブロックを占め、KV キャッシュはその上の限られた余地しか使えずこれ以上増やせない。右は PagedWeight で、重みの精度を実行中に下げて占有メモリを圧縮し、空いたぶんだけ KV キャッシュを広げて長い文脈に対応できる。両者の GPU メモリ総量は同じである。">
+          <text x="180" y="28" text-anchor="middle" style="font-size:14px;font-weight:700;fill:var(--color-heading)">従来（静的量子化）</text>
+          <text x="510" y="28" text-anchor="middle" style="font-size:14px;font-weight:700;fill:var(--color-accent)">PagedWeight</text>
+
+          <!-- 左：従来 -->
+          <rect x="120" y="110" width="120" height="130" rx="6" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="180" y="180" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">モデルの重み</text>
+          <rect x="120" y="44" width="120" height="66" rx="6" fill="var(--color-surface)" stroke="var(--color-accent-2)" stroke-width="1.5"></rect>
+          <text x="180" y="82" text-anchor="middle" style="font-size:13px;fill:var(--color-accent-2);font-weight:700">KV キャッシュ</text>
+          <text x="180" y="262" text-anchor="middle" style="font-size:12px;fill:var(--color-text-muted)">これ以上は増やせない</text>
+
+          <!-- 中央矢印 -->
+          <path d="M262,150 L322,150" fill="none" stroke="var(--color-text-muted)" stroke-width="2" marker-end="url(#pw-arrow)"></path>
+          <defs>
+            <marker id="pw-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+          </defs>
+
+          <!-- 右：PagedWeight -->
+          <rect x="450" y="160" width="120" height="80" rx="6" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="510" y="205" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">重み（精度↓）</text>
+          <rect x="450" y="44" width="120" height="116" rx="6" fill="var(--color-surface)" stroke="var(--color-accent-2)" stroke-width="1.5"></rect>
+          <text x="510" y="98" text-anchor="middle" style="font-size:13px;fill:var(--color-accent-2);font-weight:700">KV キャッシュ</text>
+          <text x="510" y="118" text-anchor="middle" style="font-size:12px;fill:var(--color-text-muted)">長い文脈に対応</text>
+          <text x="510" y="262" text-anchor="middle" style="font-size:12px;fill:var(--color-accent)">重みを圧縮して余地を作る</text>
+
+          <text x="350" y="290" text-anchor="middle" style="font-size:12px;fill:var(--color-text-muted)">GPU メモリの総量は同じ（点線＝上限）</text>
+        </svg>
+        <figcaption class="diagram__caption">GPU メモリ上での重みと KV キャッシュの綱引き。PagedWeight は重みの精度を実行中に下げて占有メモリを圧縮し、増え続ける KV キャッシュのための余地を作る。</figcaption>
+      </figure>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>これまでも、綱引きの片側である KV キャッシュを軽くする工夫はありました。vLLM の PagedAttention（KV キャッシュを「ページ」という小さなブロックに分けて無駄なく管理する手法）や、KV キャッシュそのものを圧縮する手法です。しかし論文によれば、もう一方の当事者である MoE の重みには、ほとんど手が打たれてきませんでした。</p>
+      <p>重みを軽くする代表的な方法は「量子化（quantization）」、つまり数値を粗い精度で表してデータ量を減らす技術です。ところが従来の量子化はほとんどが<strong>静的（static）</strong>、すなわち実行前に一度だけ精度を決めてしまい、その後は変えられません。実行中に精度を変えられる先行研究もありますが、それを「メモリを配り直す」目的には使っていませんでした。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>観点</th>
+            <th>静的な量子化</th>
+            <th>PagedWeight（本論文）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>精度を決めるタイミング</th>
+            <td>実行前に一度だけ</td>
+            <td>実行中に上げ下げできる</td>
+          </tr>
+          <tr>
+            <th>KV キャッシュ圧力への追従</th>
+            <td>追従しない（固定）</td>
+            <td>圧力に応じて重みを解放</td>
+          </tr>
+          <tr>
+            <th>精度を制御する単位</th>
+            <td>モデル／層など粗い単位</td>
+            <td>エキスパート内部の linear-block</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>そこで本当に解きたい問題が浮かび上がります。KV キャッシュがじわじわ増えていくなかで、生成を止めず、品質もできるだけ落とさずに、重要度の低い重みからメモリを解放できないか、という点です。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>PagedWeight の中核となる発想は、「重みも KV キャッシュと同じようにページとして扱い、実行中にそのビット幅を下げたり戻したりする」ことです。KV キャッシュをページで管理する PagedAttention の考え方を、今度は重み側に持ち込んだ形で、名前もそこから来ています。</p>
+
+      <h3>3 つの設計目標</h3>
+      <p>これを実現するために、著者らは 3 つの設計目標を掲げています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">動的な KV／重みトレードオフ</p>
+          <p>dynamic KV/weight tradeoff。KV キャッシュがメモリを必要としたら、そのぶん重みが占めるメモリを解放する。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">品質認識型のエキスパート選択</p>
+          <p>quality-aware expert selection。精度を下げても出力品質への悪影響が最も小さいと予測される箇所を選んで下げる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">非同期実行</p>
+          <p>asynchronous execution。ページの入れ替え作業を通常の生成処理と重ねて行い、余計な待ち時間を生まない。</p>
+        </div>
+      </div>
+
+      <h3>重みを「ページ」にする土台：Any-Precision LLM</h3>
+      <p>技術的な土台になっているのが「Any-Precision LLM（APL）」という手法です。これは、複数のビット幅を層状に重ねた「ビットプレーン（bit-plane）」という形式で重みを持ち、実行中に量子化レベルを切り替えられるようにするものです。PagedWeight は、この APL のビットプレーンと、量子化した値を復元するための対応表（lookup table、LUT）をひとまとまりの「重みページ」とみなし、GPU 上に置いたままビット幅を上げ下げします。</p>
+      <p>量子化を切り替える単位は、エキスパート丸ごとではなく、エキスパートを構成する「linear-block」というより細かい部品です（種類は gate_up と down の 2 つ）。それぞれの linear-block について、対応できるビット幅の集合、いま推論に使っている精度（committed bitwidth）、planner が下げたい目標精度（desired bitwidth）、各ビットプレーンが GPU 上にあるか CPU 側にあるか転送中か、といった状態を「weight page table」という表で管理します。</p>
+
+      <h3>どこを下げるかを決めるプランナー</h3>
+      <p>どこの精度をどこまで下げるかを決めるのが「品質認識型ランタイムプランナー（quality-aware runtime planner）」です。プランナーは、精度を下げたときの品質への悪影響（ダメージ）を次の 3 つの情報を組み合わせて見積もります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">オフライン</span>全体感度</p>
+          <p>offline global sensitivity。モデル全体で見て、どの部分をどのビット幅まで下げるとどれだけ品質が落ちやすいか、を Hessian（誤差の曲がり具合を表す量）に基づく感度スコアであらかじめ計算しておく。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">オンライン</span>ルーティング統計</p>
+          <p>online routing statistics。MoE ではどのエキスパートが選ばれるかに大きな偏りがある。よく選ばれる（ホットな）エキスパートほど重要とみなし、生成中に選択頻度を集計して精度を守る保護をかける。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">オンライン</span>プロンプト残差</p>
+          <p>runtime prompt residual。量子化の影響は入力によっても変わるため、そのときのプロンプトの特徴から、事前見積もりとのズレを補正する。</p>
+        </div>
+      </div>
+
+      <h3>プランナーからページ移動までの流れ</h3>
+      <p>そのうえで、KV キャッシュの圧力を「あと何バイト空けたいか」という目標に置き換え、「解放できるバイトあたりのダメージが小さい」順に候補を並べ、目標を満たすまで安いものから貪欲に選んでいきます。実際のページの移動は「非同期ページ移動（asynchronous page movement）」として生成処理と重ねて行われ、安全なタイミングでのみ現在の精度（committed bitwidth）を更新します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 250" role="img" aria-label="品質認識型ランタイムプランナーの処理の流れを示す図。左側に 3 つの入力（オフライン全体感度、オンラインのルーティング統計、実行時のプロンプト残差）があり、これらがプランナーのダメージ見積もりに集まる。次に、解放できるバイトあたりのダメージが小さい順に候補を並べて目標バイト数を満たすまで貪欲に選び、最後に非同期ページ移動で安全なタイミングに現在の精度を切り替える、という順に矢印でつながっている。">
+          <defs>
+            <marker id="pw-arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+          </defs>
+
+          <rect x="14" y="24" width="150" height="44" rx="8" fill="var(--color-surface)" stroke="var(--color-accent-2)" stroke-width="1.5"></rect>
+          <text x="89" y="42" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">全体感度</text>
+          <text x="89" y="59" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">オフライン・Hessian</text>
+
+          <rect x="14" y="100" width="150" height="44" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="89" y="118" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">ルーティング統計</text>
+          <text x="89" y="135" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">オンライン・選択頻度</text>
+
+          <rect x="14" y="176" width="150" height="44" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="89" y="194" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">プロンプト残差</text>
+          <text x="89" y="211" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">オンライン・補正</text>
+
+          <path d="M164,46 L214,110" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#pw-arrow2)"></path>
+          <path d="M164,122 L214,122" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#pw-arrow2)"></path>
+          <path d="M164,198 L214,134" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#pw-arrow2)"></path>
+
+          <rect x="222" y="94" width="156" height="56" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="300" y="118" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">プランナー</text>
+          <text x="300" y="136" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">ダメージ見積もり</text>
+
+          <path d="M378,122 L410,122" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#pw-arrow2)"></path>
+
+          <rect x="418" y="94" width="150" height="56" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="493" y="114" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">貪欲に選択</text>
+          <text x="493" y="132" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">安いバイトから</text>
+
+          <path d="M568,122 L600,122" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#pw-arrow2)"></path>
+
+          <rect x="608" y="94" width="100" height="56" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="658" y="114" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">非同期</text>
+          <text x="658" y="132" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">ページ移動</text>
+        </svg>
+        <figcaption class="diagram__caption">3 つの情報からダメージを見積もり、解放バイトあたりのダメージが小さい順に貪欲に選び、非同期ページ移動で精度を切り替える。</figcaption>
+      </figure>
+
+      <p>さらに、ルーティング・エキスパートの計算・出力の集計までを 1 つにまとめた専用の CUDA カーネルにより、linear-block ごとに異なるビット幅を扱えるようにしています。</p>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>実験のセットアップ</h3>
+      <p>評価には規模の異なる 3 つの MoE モデルが使われました。比較相手（ベースライン）は、精度を落とさない FP16、均一に量子化する Any-Precision LLM、静的な混合精度の MxMoE、動的な層別混合精度の DP-LLM です。サービング基盤には vLLM を用いています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル</th>
+            <th>総パラメータ</th>
+            <th>FP16 に迫る品質に届くメモリ量</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Qwen1.5-MoE-A2.7B</th>
+            <td>14.3B</td>
+            <td>16GB</td>
+          </tr>
+          <tr>
+            <th>Mixtral-8×7B-v0.1</th>
+            <td>46.7B</td>
+            <td>35GB</td>
+          </tr>
+          <tr>
+            <th>Gemma-4-26B-A4B</th>
+            <td>25.2B</td>
+            <td>22GB</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>主要な数値</h3>
+      <p>論文が掲げる代表的な数値は次のとおりです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">メモリとスループット</p>
+          <p>FP16 と同等の精度を保ったまま、<strong>最大 72.0% の GPU メモリ削減</strong>と<strong>1.94 倍のスループット向上</strong>を達成。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">同じメモリ予算での品質</p>
+          <p>他の量子化手法に対して品質を<strong>最大 39.3% 改善</strong>し、そのときのスループットの低下は<strong>最大でも 4.1%</strong>に収まった。</p>
+        </div>
+      </div>
+
+      <p>品質とメモリのトレードオフを見た実験では、3 モデル・4 タスクのすべてで、PagedWeight が最も少ないメモリ消費で高い品質に到達したと報告されています。</p>
+
+      <h3>長い文脈を扱うタスク（LongBench）</h3>
+      <p>長い文脈を扱うタスク（LongBench）では、メモリが厳しい条件での差が目立ちます。Qwen1.5-MoE-A2.7B の場合、FP16 は 35.25GB を使って平均 17.0% のスコアでしたが、PagedWeight は 9.86GB という約 4 分の 1 のメモリで同じ平均 17.0% に到達しました。同じくらいのメモリを使う均一量子化（APL の 3bit、9.40GB）は平均 12.2% にとどまります。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法（Qwen1.5-MoE-A2.7B）</th>
+            <th>メモリ</th>
+            <th>LongBench 平均</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>FP16</th>
+            <td>35.25GB</td>
+            <td>17.0%</td>
+          </tr>
+          <tr>
+            <th>PagedWeight</th>
+            <td class="is-best">9.86GB</td>
+            <td class="is-best">17.0%</td>
+          </tr>
+          <tr>
+            <th>均一量子化（APL 3bit）</th>
+            <td>9.40GB</td>
+            <td>12.2%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>とくに厳しいメモリ下では、Passage Retrieval のスコアが 10.5% から 17.5% へ、NarrativeQA が 4.9% から 10.0% へと改善したとされています。</p>
+      <p>スループットについては、Qwen1.5-MoE-A2.7B で均一量子化のベースラインと同等以下のメモリを使いつつ、性能を維持できたと報告されています。スループットの低下は、バッチサイズ 1 のときで最大 3.3%、バッチサイズ 4 のときで最大 4.1% でした。</p>
+
+      <h3>どの工夫が効いているか（アブレーション）</h3>
+      <p>どの工夫が効いているかを調べた切り分け実験（アブレーション）では、完全な PagedWeight が最も良い perplexity（値が低いほど良い言語モデルの指標）を示しました。取り外す部品を増やすほど、次のように段階的に悪化します。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">完全な PagedWeight</p>
+          <p>最も良い perplexity。ここから部品を外して寄与を確かめる。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">ルーティング統計を外す</p>
+          <p>少し悪化。オンラインで計測する情報の寄与が確認できる。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">プロンプト残差の補正を外す</p>
+          <p>さらに少しずつ悪化。こちらもオンライン情報として品質に寄与している。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">ページ移動を外す</p>
+          <p>静的な混合精度に退化する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">全体感度を外す</p>
+          <p>均一量子化に退化し、最も悪くなる。</p>
+        </li>
+      </ol>
+
+      <p>オンラインで計測する 2 つの情報（ルーティング統計とプロンプト残差）が、いずれも品質に寄与していることが確認できたとしています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の位置づけは、KV キャッシュ側を軽くする既存手法（PagedAttention など）と<strong>補い合う</strong>関係にある点です。PagedWeight は重み側に働きかけて、増えていく KV キャッシュのための空きを作ります。また、エキスパートを丸ごと切り替える先行研究に比べ、エキスパートの内部部品（linear-block）というより細かい単位で精度を制御でき、しかもその制御を KV キャッシュからのリアルタイムなメモリ圧力によって導く点が新しいとしています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>限界も述べられています。</strong>本研究は、特定の量子化フォーマットと感度指標のもとでの結果を示したものです。今後の課題として、互換性のある別の量子化フォーマットへの拡張や、プロンプト単位でのエキスパート感度の推定を補う手法の探求を挙げています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>PagedWeight は、MoE 型 LLM を動かす際の「重みと KV キャッシュのメモリ争い」を、重みの精度を実行中に賢く上げ下げすることでさばく管理手法です。品質への影響が小さい箇所を見極めてメモリを解放するため、著者らの評価では FP16 相当の品質を保ちながら大幅なメモリ削減とスループット維持を両立できたと報告されています。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>MoE（Mixture-of-Experts）</dt>
+        <dd>複数の「エキスパート」ネットワークとルータからなる層。ルータが各トークンに上位 K 個のエキスパートを選び、一部だけを使うことで計算量を抑えつつ精度を保つ。</dd>
+
+        <dt>KV キャッシュ（KV cache）</dt>
+        <dd>文章を生成しながら溜めていくキー・バリューのキャッシュ。文脈が長くなるほど増え、GPU メモリ圧迫の主因になる。</dd>
+
+        <dt>量子化（quantization）</dt>
+        <dd>数値を粗い精度で表してデータ量を減らす技術。多くは実行前に一度だけ行う「静的」なもの。</dd>
+
+        <dt>Any-Precision LLM（APL）</dt>
+        <dd>複数のビット幅を重ねた「ビットプレーン」形式で重みを持ち、実行中に量子化レベルを切り替えられる手法。</dd>
+
+        <dt>linear-block</dt>
+        <dd>MoE のエキスパートを構成する重みの部品。本手法での量子化の最小単位で、種類は gate_up と down の 2 つ。</dd>
+
+        <dt>committed / desired bitwidth</dt>
+        <dd>committed はいま推論に使っている精度、desired はプランナーが狙う目標精度。</dd>
+
+        <dt>ルーティング統計 / routing mass</dt>
+        <dd>各エキスパートがどれだけ選ばれているかの偏りを表す量。エキスパートの重要度の目安になる。</dd>
+
+        <dt>感度（sensitivity）</dt>
+        <dd>ある精度まで量子化したときに品質がどれだけ落ちやすいかの推定量。Hessian に基づいて定義される。</dd>
+
+        <dt>PagedAttention</dt>
+        <dd>vLLM が KV キャッシュを小さなページで管理してメモリの無駄を減らす手法。PagedWeight の発想の対比元。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">PagedWeight: Efficient MoE LLM Serving with Dynamic Quality-Aware Weight Quantization</p>
+      <a href="https://arxiv.org/abs/2607.16184" target="_blank" rel="noopener noreferrer">arXiv:2607.16184 を読む（arxiv.org）</a>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

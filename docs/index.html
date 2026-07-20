@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-17-2607.16184-pagedweight-moe-dynamic-quality-aware-quantization.html">
+            <img src="assets/2026-07-17-2607.16184-pagedweight-moe-dynamic-quality-aware-quantization-cover.png"
+                 alt="MoE LLM のメモリを賢く配り直す PagedWeight のインフォグラフィック。左の「課題」ではモデルの重みと KV キャッシュが GPU メモリを奪い合う様子を、右の「手法」では影響の小さい重みの精度を実行中に下げてメモリを空ける様子を示す。下部に最大 72.0% の GPU メモリ削減、1.94 倍のスループット向上、FP16 相当の精度維持という 3 つの数値を配置している。">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-17</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-17-2607.16184-pagedweight-moe-dynamic-quality-aware-quantization.html">重みの精度を「使いながら」変える：MoE LLM のメモリを賢く配り直す PagedWeight</a>
+          </h2>
+          <p class="article-card__summary">大規模言語モデル（LLM）を実際に動かすとき、GPU のメモリは「モデルの重み」と「会話の文脈を覚えておく KV キャッシュ（KV cache）」で奪い合いになります。会話やドキュメントが長くなるほど KV キャッシュは増え続け、重みのために使える余地を圧迫します。しかも MoE（Mixture-of-Experts）型のモデルは総パラメータ数が非常に大きく、重みだけで GPU メモリの 6 割超を占めることもあります。この論文が提案する PagedWeight は、KV キャッシュを小さなページで管理する PagedAttention の発想を重み側に持ち込み、影響の小さいところから重みの精度（ビット幅）を実行中に下げてメモリを空ける管理手法です。核心は「重みも KV キャッシュと同じようにページとして扱い、実行中にビット幅を上げ下げする」こと。土台には、複数のビット幅を層状に重ねた「ビットプレーン」形式で重みを持つ Any-Precision LLM（APL）を用い、ビットプレーンと復元用の対応表（LUT）をひとまとまりの「重みページ」とみなします。量子化の単位はエキスパート丸ごとではなく、内部部品である linear-block（gate_up と down の 2 種類）という細かい単位です。どこの精度をどこまで下げるかは品質認識型ランタイムプランナーが決め、精度を下げたときのダメージを 3 つの情報——Hessian に基づくオフラインの全体感度、よく選ばれるホットなエキスパートを守るオンラインのルーティング統計、入力ごとのズレを補正する実行時のプロンプト残差——から見積もります。そのうえで KV キャッシュ圧力を「あと何バイト空けたいか」に置き換え、解放バイトあたりのダメージが小さい順に貪欲に選び、生成処理と重ねた非同期ページ移動で精度を切り替えます。評価には規模の異なる 3 つの MoE モデル（Qwen1.5-MoE-A2.7B、Mixtral-8×7B-v0.1、Gemma-4-26B-A4B）を用い、FP16・Any-Precision LLM・MxMoE・DP-LLM と比較しました（サービング基盤は vLLM）。著者らは FP16 相当の精度を保ったまま最大 72.0% の GPU メモリ削減と 1.94 倍のスループット向上を報告しています。同じメモリ予算では他の量子化手法に対して品質を最大 39.3% 改善し、そのときのスループット低下は最大でも 4.1% に収まりました。長い文脈を扱う LongBench では、Qwen1.5-MoE-A2.7B で FP16 が 35.25GB で平均 17.0% のところ、PagedWeight は約 4 分の 1 の 9.86GB で同じ 17.0% に到達し、同程度のメモリの均一量子化（APL 3bit、9.40GB）の 12.2% を上回りました。アブレーションでは完全な PagedWeight が最良の perplexity を示し、ページ移動を外すと静的な混合精度に、全体感度を外すと均一量子化に退化して最も悪化しました。著者らは既存の KV キャッシュ圧縮手法と補い合う関係にあると位置づけつつ、特定の量子化フォーマットと感度指標のもとでの結果である点など限界も認めています。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-16-2607.15277-partition-prompt-aggregate-self-consistency.html">
             <img src="assets/2026-07-16-2607.15277-partition-prompt-aggregate-self-consistency-cover.png"
                  alt="LLM に集団の確率を直接聞くより、二分条件付け木（BCT）で部分集団に分けて聞き事前確率で重み付けして足したほうが誤差が小さくなる macro fallacy を示すインフォグラフィック。左に BCT の木構造と「部分集団ごとに確率を聞き、事前確率で重み付けして足す」手法を、右に「直接聞く」の誤差が大きく「分けて足す」の誤差が小さいことを示す棒グラフを配置し、全確率の法則が広く破れていること、ACS 収入 4 ビン・許容誤差 0.02 での分割整合性が GPT-5.4 で 0.33（満点 1.00）にとどまることを示す。">
