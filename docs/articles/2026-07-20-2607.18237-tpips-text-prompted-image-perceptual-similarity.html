@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>「似ている」は一つじゃない：比べる観点をテキストで指定できる画像類似度指標 TPIPS — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-20-2607.18237-tpips-text-prompted-image-perceptual-similarity-cover.png"
+           alt="テキストで比較の観点を指定できる画像類似度指標 TPIPS のインフォグラフィック。同じ 2 枚の画像でも「色」「ポーズ」「背景」という観点を変えると「似ている度合い」が変わることを示し、観点つきの人間の類似度判断で Vision-Language Model を微調整するという構図を描く。約 100 万件の観点つき判断、仲間はずれタスクで人間コンセンサス 67.5% に対し提案手法 64.7%、2AFC タスクで提案手法 79.3% という数値を配置している。">
+    </figure>
+
+    <h1 class="article__title">「似ている」は一つじゃない：比べる観点をテキストで指定できる画像類似度指標 TPIPS</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-20</span>
+      <span>arXiv：2607.18237</span>
+      <span>カテゴリ：cs.CV / cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>2 枚の画像が「似ている」かどうかは、色を見るのか、ポーズを見るのか、背景を見るのかといった<strong>どの側面（aspect）を比べるか</strong>で変わります。ところが従来の画像類似度指標は、似ている度合いを 1 つの数値に押し込めてしまい、この観点の違いを扱えませんでした。この論文は、人間が「観点ごとに」付けた約 100 万件の類似度判断からなる大規模データセットを作り、それで Vision-Language Model（VLM）を微調整することで、<strong>テキストで比較の観点を指定できる知覚類似度指標 TPIPS（Text-Prompted Image Perceptual Similarity）</strong>を提案しました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>発想の核心は「似ている」を観点で条件づけること。</strong>牛の像を参照に「全体として最も似た 1 枚」を選ぶと答えは一意に決まりませんが、「色」「ポーズ」「背景」と観点を指定すると答えが明確になります。TPIPS はこの観点をテキストで受け取り、類似度を出し分けます（名称は先行指標 LPIPS へのオマージュ）。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">約100万件</p>
+          <p class="stat__label">観点つきで集めた人間の類似度判断（学習・検証用データセット）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">64.7%</p>
+          <p class="stat__label">仲間はずれタスクでの提案手法の一致率（人間コンセンサス 67.5% に肉薄）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">79.3%</p>
+          <p class="stat__label">検証用の 2AFC タスクへ転移したときの一致率（コンセンサス 89.3%）</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>画像同士の「見た目の近さ」を測る指標は、画像編集や画像生成の良し悪しを判定したり、似た画像を検索したりと、さまざまな場面で使われる基盤的な道具です。しかし現実の「似ている」はそれほど単純ではありません。</p>
+      <p>心理学の研究では、人間の類似度の判断は文脈に依存することが古くから知られています（Tversky 1977、Medin ら）。同じ 2 枚の画像でも、「色が似ているか」を問うか「ポーズが似ているか」を問うかで、答えが変わるのです。従来の指標はこの文脈を切り捨てていました。もし観点を指定できる指標が手に入れば、「この編集は主題を保ったまま画風だけ変えられたか」といった、より人間の意図に沿った評価が可能になります。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 250" role="img" aria-label="観点によって「似ている」の答えが変わることを示す図。中央に参照画像（牛の像）を置き、左の「観点なし（全体）」では 4 枚の候補から最も似た 1 枚が一意に決まらないことを示す。右では「色」「ポーズ」「背景」という 3 つの観点を指定すると、それぞれ別々の 1 枚が明確な答えとして選ばれることを示す。">
+          <defs>
+            <marker id="tp-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+          </defs>
+
+          <rect x="290" y="95" width="140" height="60" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="360" y="120" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">参照画像</text>
+          <text x="360" y="140" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">2 枚を比べたい</text>
+
+          <!-- 左：観点なし -->
+          <rect x="20" y="60" width="150" height="44" rx="8" fill="var(--color-surface)" stroke="var(--color-text-muted)" stroke-width="1.5"></rect>
+          <text x="95" y="80" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">観点なし（全体）</text>
+          <text x="95" y="97" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">答えが一意に決まらない</text>
+          <path d="M170,100 L288,118" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#tp-arrow)"></path>
+
+          <!-- 右：観点あり -->
+          <rect x="550" y="24" width="150" height="40" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="625" y="42" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">観点「色」</text>
+          <text x="625" y="57" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">→ 候補 A</text>
+
+          <rect x="550" y="105" width="150" height="40" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="625" y="123" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">観点「ポーズ」</text>
+          <text x="625" y="138" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">→ 候補 B</text>
+
+          <rect x="550" y="186" width="150" height="40" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="625" y="204" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">観点「背景」</text>
+          <text x="625" y="219" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">→ 候補 C</text>
+
+          <path d="M432,115 L548,50" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#tp-arrow)"></path>
+          <path d="M432,125 L548,125" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#tp-arrow)"></path>
+          <path d="M432,135 L548,200" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#tp-arrow)"></path>
+        </svg>
+        <figcaption class="diagram__caption">観点を指定しないと「最も似た 1 枚」は一意に決まらないが、色・ポーズ・背景といった観点を与えると、それぞれ別の答えが明確に選ばれる。</figcaption>
+      </figure>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>この論文が指摘する既存手法の限界は、大きく 2 つあります。</p>
+      <p>1 つ目は、<strong>類似度が単一のスカラー値に潰れている</strong>ことです。SSIM のような手作りの距離指標も、LPIPS や DreamSim といった学習型の指標も、2 枚の画像に対して「どれくらい似ているか」を 1 つの数値でしか返しません。そのため「どの観点で比べるか」を後から条件づける仕組みを持たないのです。論文の図 1 が分かりやすい例を挙げています。牛の像を参照画像として、4 枚の候補から「全体として最も似ている 1 枚」を選ぼうとすると答えは一意に決まりません。ところが「牛の色」「ポーズ」「背景」のように観点を指定すると、途端に答えが明確になります。</p>
+      <p>2 つ目は、<strong>検証用データが存在しない</strong>ことです。VLM を使って条件づけの概念を類似度に持ち込もうとする先行研究はありました。しかし著者らの知る限り、人間の知覚類似度の判断を観点つきで集めた検証用データセットは存在しませんでした。この空白を埋めることが、本研究の出発点です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 1</span>単一スカラーへの圧縮</p>
+          <p>SSIM・LPIPS・DreamSim はいずれも 2 枚の画像に 1 つの数値しか返さず、比較の観点を後から条件づけられない。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 2</span>検証データの不在</p>
+          <p>人間の知覚類似度の判断を「観点つき」で集めた検証用データセットが存在しなかった。本研究はこの空白を埋める。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>アプローチは「データを集める」パートと「モデルを学習する」パートに分かれます。</p>
+
+      <h3>観点つきのデータをどう集めたか</h3>
+      <p>著者らは 2 種類のデータセットを収集しました（論文の図 2）。役割が異なり、片方は学習用の大規模データ、もう片方は汎化を測る検証専用データです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">学習用・大規模</span>仲間はずれ（odd-one-out）</p>
+          <p>3 枚組（triplet）を見せ、ある観点のもとで「最も違って見える 1 枚」を選ばせる相対比較。直接 0〜10 点を付けさせるより人間が判断しやすい形にしている。各（トリプレット, 観点）を 5 人が注釈し、「判断できない（can't tell）」も選べる。「全体（overall）」も 1 観点として含む。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">検証用・汎化</span>分布外（OOD）2AFC</p>
+          <p>実在の画像アルゴリズムの出力から作った検証専用データ。参照と 2 つの候補を見せ、ある観点のもとでどちらが参照に近いかを選ばせる二者択一。画像編集・画像合成・新規視点合成（NVS）・1 枚画像からの 3D 復元の 4 分野をカバーする。</p>
+        </div>
+      </div>
+
+      <p>学習用の画像は text-to-image モデルで生成しています。データ作成の流れは次のとおりです。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">プロンプトの変種を作る</p>
+          <p>既存プロンプト集を起点に、大規模言語モデル（LLM）が色・照明・構図など複数の軸に沿って変種を生成する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">同じシードで画像化する</p>
+          <p>同じ乱数シードで画像を生成し、あえて複数の側面が同時に変化するようにして「差が大きすぎず・小さすぎず」の中庸の難易度を狙う。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">観点の候補を絞る</p>
+          <p>LLM や VLM に観点候補を大量に出させ、実際には変化していない観点を取り除いたうえで、最終的に人間が剪定する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">5 人が注釈する</p>
+          <p>各（トリプレット, 観点）の組を 5 人が注釈し、「判断できない」も選べるようにする。</p>
+        </li>
+      </ol>
+
+      <h3>モデルをどう学習したか</h3>
+      <p>学習の目標は、テキスト条件つきのペア類似度 f<sub>θ</sub>(x<sub>1</sub>, x<sub>2</sub> | c) を、注釈者の「仲間はずれ選び」と一致させることです。仲間はずれが選ばれた 1 枚なら、残り 2 枚の類似度が最も高くなるべき、という制約を損失関数に落とし込みます。</p>
+      <p>著者らは、<strong>2 枚の画像がネットワークの中でどれだけ早く相互作用するか</strong>という観点で 3 種類の構成を比較しました（論文の図 3）。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title">Late fusion（埋め込み型）</p>
+          <p>画像を別々にベクトル化し、最後にそのコサイン類似度で比べる。画像の埋め込みを事前計算してキャッシュできるので、検索など推論効率が求められる用途に向く。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">Mid-fusion（活性差型）</p>
+          <p>LPIPS に倣い VLM の中間層の活性を比較する。ただし比較に使うチャネルの重みをテキスト条件つきにし、VLM 本体も LoRA（少数パラメータでの効率的な微調整）で適応させる。</p>
+        </div>
+        <div class="card">
+          <p class="card__title">Early fusion（早期融合型）</p>
+          <p>2 枚の画像とプロンプトを 1 つの入力列にまとめ、全層で相互に注意（attention）を向け合わせる。注意マスクと位置符号の設計により、対称性（入れ替え不変）と恒等性（同じ画像なら類似度 1）を追加損失なしに構造的に満たす。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>まず評価の物差しを押さえておきます。中心となるのは、<strong>モデルの選択に人間の投票がどれだけ一致するか</strong>を測る一致率（model-human agreement）です。加えて、人間どうしの一致率である<strong>人間コンセンサス（human consensus）</strong>を、達成しうる上限の目安として併記しています。この上限は、仲間はずれタスクで 67.5%（偶然なら 33.3%）、2AFC タスクで 89.3%（偶然なら 50.0%）でした。人間ですら意見が完全には一致しない、難しい判断であることが分かります。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">67.5%</p>
+          <p class="stat__label">仲間はずれタスクの人間コンセンサス（上限の目安／偶然は 33.3%）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">89.3%</p>
+          <p class="stat__label">2AFC タスクの人間コンセンサス（上限の目安／偶然は 50.0%）</p>
+        </div>
+      </div>
+
+      <p>そのうえで、仲間はずれタスクでの各手法の一致率を並べると、観点を指定できない従来指標と、観点を活かせる提案手法の差がはっきりします。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法（仲間はずれタスク）</th>
+            <th>種別</th>
+            <th>一致率</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>LPIPS</th>
+            <td>観点非依存の従来指標</td>
+            <td>46.2%</td>
+          </tr>
+          <tr>
+            <th>DreamSim</th>
+            <td>観点非依存の従来指標</td>
+            <td>50.5%</td>
+          </tr>
+          <tr>
+            <th>Gemini-3.1-Pro</th>
+            <td>既製ベースライン（最良）</td>
+            <td>58.4%</td>
+          </tr>
+          <tr>
+            <th>Ours（TPIPS, early fusion）</th>
+            <td>提案手法（微調整後）</td>
+            <td class="is-best">64.7%</td>
+          </tr>
+          <tr>
+            <th>人間コンセンサス</th>
+            <td>上限の目安</td>
+            <td>67.5%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>主な結果は次のとおりです。</p>
+      <ul>
+        <li><strong>従来の side-agnostic な指標は観点指定を活かせない</strong>。観点によらず同じスコアを返す LPIPS は 46.2%、DreamSim は 50.5% にとどまりました。</li>
+        <li><strong>既製ベースラインで最良</strong>だったのは、2 枚を早期融合で扱う Gemini-3.1-Pro の 58.4%（仲間はずれ）。オープン重みでは埋め込みベースの Qwen3-VL-Embedding が両タスクで最良だったため、これを提案手法のバックボーンに採用しています。</li>
+        <li><strong>提案手法で微調整すると</strong>、仲間はずれタスクの人間コンセンサスとの差が 9.1% から 2.8% へ縮まりました（およそ 58.4% から 64.7% への向上に相当）。</li>
+        <li><strong>この改善は 2AFC タスクにも転移</strong>し、コンセンサスとの誤差が 15.8% から 10.0% へ下がりました（およそ 73.5% から 79.3% への向上に相当）。</li>
+        <li><strong>3 枚すべてを見せる有利な設定でも</strong>、既製モデル（Gemini-3.1-Pro は 62.0%、GPT-5.4 は 2AFC で 77.9%）を、そうした構造的優位を持たない Ours（early fusion）が上回りました。</li>
+        <li><strong>データ・モデルサイズの効果</strong>：性能は早い段階で頭打ちになる傾向があり、学習データの 60% で仲間はずれタスクは 64.0% に到達。Ours は 2B 版でも 8B 版とほぼ同等でした。</li>
+        <li><strong>別ベンチマークへの汎化</strong>：このデータセットだけで学習し「overall」条件で推論しても、既存の類似度ベンチマーク BAPPS・NIGHTS でベースの VLM を一貫して上回りました（例：NIGHTS で 87.9% から 94.0%）。</li>
+      </ul>
+
+      <h3>3 つの融合方式の比べ合い</h3>
+      <p>3 つの融合方式を同じベースモデルで揃えて学習すると、early fusion が mid/late をわずかに一貫して上回りました。一方 late fusion は性能がほぼ同等で、かつ埋め込みを事前計算できるという効率の利点を持ちます。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>融合方式</th>
+            <th>仲間はずれ</th>
+            <th>2AFC</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Early（早期融合）</th>
+            <td class="is-best">64.7%</td>
+            <td class="is-best">79.3%</td>
+          </tr>
+          <tr>
+            <th>Late（埋め込み型）</th>
+            <td>64.1%</td>
+            <td>77.9%</td>
+          </tr>
+          <tr>
+            <th>Mid（活性差型）</th>
+            <td>63.8%</td>
+            <td>75.9%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>さらに応用として、同じクエリでも<strong>指定した観点ごとに違う近傍画像を返す検索</strong>や、「2 人が座る絵（主題）」＋「モネの絵（筆致）」のように<strong>複数の観点を組み合わせた検索</strong>、生成モデルの細かな属性ごとの評価などが示されています。</p>
+
+      <h2>意義と限界</h2>
+      <p>TPIPS は、人間に近い水準で「観点を指定した審判」として機能します。画像編集や画像生成モデルを学習する際のフィードバック信号として、あるいはニューラルネットワークの内部特徴を自動的に発見・解釈する道具としても役立つ可能性がある、と著者らは位置づけています。VLM 自体が今後改善すれば、このパイプラインもそのまま恩恵を受けられる点も強みとして挙げられています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>論文は限界も率直に述べています。</strong>VLM ベースの指標は LPIPS・DreamSim に比べて計算コストが大幅に高い／埋め込みベースの検索では観点ごとに特徴を符号化しインデックスを作り直す必要がある／注釈者の集団が全ての見る人を代表するわけではなくバイアスを引き継ぐ／プロンプト集や観点提案が VLM 由来のため VLM が捉えられない観点を系統的に見落とす恐れがある／3 枚組が意味内容を共有しがちで学習指標が元の内容から完全には切り離せていない（例：晴れたビーチ画像どうしは「天気」の類似度が高く出やすい）。著者らは、より多様な画像ソースと人手による観点の追加でこれらに対処していけるとしています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>この研究は、「似ている」という判断が本来は観点に依存するという当たり前の事実を、指標の設計に正面から取り込みました。観点つきの人間判断を大規模に集め、それで VLM を微調整することで、テキストで比較の軸を指定できる知覚類似度指標 TPIPS を実現しています。単一のスコアでは扱えなかった、より人間の意図に沿った画像比較・検索・評価への道を開く一歩と言えます。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>知覚類似度指標（perceptual similarity metric）</dt>
+        <dd>2 枚の画像が人間の目にどれだけ似て見えるかを測る指標。SSIM（手作り）、LPIPS・DreamSim（学習型）が代表で、従来は単一のスカラー値を返す。</dd>
+
+        <dt>aspect（側面・観点）</dt>
+        <dd>色・テクスチャ・照明・ポーズ・背景・スタイルなど、類似度を測るときの「見る軸」。本論文の中核概念で、自由記述のテキストで指定する。</dd>
+
+        <dt>TPIPS（Text-Prompted Image Perceptual Similarity）</dt>
+        <dd>本論文が提案する、テキストで観点を指定できる知覚類似度指標。名称は先行指標 LPIPS へのオマージュ。</dd>
+
+        <dt>odd-one-out（仲間はずれ）タスク</dt>
+        <dd>3 枚組の中から「最も違う 1 枚」を選ぶ相対比較の枠組み。直接スコアを付けにくい人間の判断を、比較の形で集めるための手法。</dd>
+
+        <dt>2AFC（two-alternative forced choice、二者択一）</dt>
+        <dd>参照画像に対し、2 つの候補のどちらが近いかを選ばせる評価プロトコル。</dd>
+
+        <dt>fusion（融合）レベル</dt>
+        <dd>2 枚の画像がネットワーク内で相互作用する早さ。late（最終出力だけ）・mid（中間活性）・early（入力から全層で相互 attention）の 3 段階。</dd>
+
+        <dt>human consensus / model-human agreement</dt>
+        <dd>前者は人間どうしの一致率（性能の上限の目安）、後者はモデルと人間の一致率（評価指標そのもの）。</dd>
+
+        <dt>LoRA（Low-Rank Adaptation）</dt>
+        <dd>大規模モデルを少数のパラメータで効率的に微調整する手法。mid-fusion で VLM 本体の適応に用いる。</dd>
+
+        <dt>VLM（Vision-Language Model）</dt>
+        <dd>画像と言語をまとめて扱うモデル。本論文ではバックボーン兼ベースライン（Qwen3-VL、GPT-5.4、Gemini 3.1 Pro など）。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">The Many Senses of Visual Similarity: A Text-Prompted Image Perceptual Metric</p>
+      <p><a href="https://arxiv.org/abs/2607.18237" target="_blank" rel="noopener noreferrer">arXiv:2607.18237 を読む（arxiv.org）</a></p>
+      <p><a href="https://peterwang512.github.io/TPIPS" target="_blank" rel="noopener noreferrer">プロジェクトページ（コード・データ・学習済みモデル公開）</a></p>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

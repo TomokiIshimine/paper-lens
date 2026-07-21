@@ -19,6 +19,21 @@
     <ul class="article-list">
       <li class="article-card">
         <figure class="article-card__thumb">
+          <a href="articles/2026-07-20-2607.18237-tpips-text-prompted-image-perceptual-similarity.html">
+            <img src="assets/2026-07-20-2607.18237-tpips-text-prompted-image-perceptual-similarity-cover.png"
+                 alt="テキストで比較の観点を指定できる画像類似度指標 TPIPS のインフォグラフィック。同じ 2 枚の画像でも「色」「ポーズ」「背景」という観点を変えると「似ている度合い」が変わることを示し、観点つきの人間の類似度判断で Vision-Language Model を微調整するという構図を描く。約 100 万件の観点つき判断、仲間はずれタスクで人間コンセンサス 67.5% に対し提案手法 64.7%、2AFC タスクで提案手法 79.3% という数値を配置している。">
+          </a>
+        </figure>
+        <div class="article-card__body">
+          <p class="article-card__date">2026-07-20</p>
+          <h2 class="article-card__title">
+            <a href="articles/2026-07-20-2607.18237-tpips-text-prompted-image-perceptual-similarity.html">「似ている」は一つじゃない：比べる観点をテキストで指定できる画像類似度指標 TPIPS</a>
+          </h2>
+          <p class="article-card__summary">2 枚の画像が「似ている」かどうかは、色を見るのか、ポーズを見るのか、背景を見るのかといった「どの側面（aspect）を比べるか」で変わります。ところが従来の画像類似度指標（SSIM・LPIPS・DreamSim など）は、似ている度合いを 1 つの数値に押し込めてしまい、この観点の違いを扱えませんでした。牛の像を参照に「全体として最も似た 1 枚」を選ぶと答えは一意に決まりませんが、「色」「ポーズ」「背景」と観点を指定すると答えが明確になります。この論文は、人間が「観点ごとに」付けた約 100 万件の類似度判断からなる大規模データセットを作り、それで Vision-Language Model（VLM）を微調整することで、テキストで比較の観点を指定できる知覚類似度指標 TPIPS（Text-Prompted Image Perceptual Similarity、名称は先行指標 LPIPS へのオマージュ）を提案しました。データは 2 種類です。学習用は 3 枚組から観点ごとに「最も違う 1 枚」を選ばせる仲間はずれ（odd-one-out）タスクで、各組を 5 人が注釈し「判断できない」も選べます。画像は text-to-image モデルで生成し、LLM がプロンプトの変種を作って同じシードで画像化し、複数の側面が同時に変わるよう中庸の難易度を狙います。検証用は実在の画像アルゴリズム出力から作った分布外（OOD）の 2AFC（二者択一）で、画像編集・画像合成・新規視点合成・1 枚画像からの 3D 復元の 4 分野をカバーします。学習ではテキスト条件つきのペア類似度を注釈者の選びに一致させ、2 枚が何層目で相互作用するかで late（埋め込み型）・mid（活性差型）・early（早期融合型）の 3 構成を比較しました。評価は人間の投票とモデルの一致率で、上限の目安となる人間コンセンサスは仲間はずれ 67.5%・2AFC 89.3% です。観点を活かせない LPIPS は 46.2%、DreamSim は 50.5% にとどまり、既製ベースライン最良の Gemini-3.1-Pro は 58.4% でした。提案手法（Qwen3-VL-Embedding をバックボーンに微調整）はコンセンサスとの差を 9.1% から 2.8% へ縮め（約 58.4%→64.7%）、2AFC にも転移して誤差 15.8% から 10.0% へ（約 73.5%→79.3%）改善しました。3 構成では early が mid/late をわずかに一貫して上回り（仲間はずれ / 2AFC で Early 64.7%/79.3%、Late 64.1%/77.9%、Mid 63.8%/75.9%）、late は同等の性能に加え埋め込みを事前計算できる効率の利点を持ちます。3 枚すべてを見せる有利な設定でも既製モデルを上回り、学習データの 60% で 64.0% に到達、2B 版も 8B 版とほぼ同等でした。「overall」条件で推論すれば既存ベンチマーク BAPPS・NIGHTS でもベース VLM を上回ります（NIGHTS で 87.9%→94.0%）。応用として観点ごとに違う近傍を返す検索や複数観点の組み合わせ検索も示されます。著者らは、VLM ベースゆえの計算コストの高さ、注釈者バイアスの継承、VLM が捉えられない観点の見落としといった限界も率直に認めています。</p>
+        </div>
+      </li>
+      <li class="article-card">
+        <figure class="article-card__thumb">
           <a href="articles/2026-07-17-2607.16184-pagedweight-moe-dynamic-quality-aware-quantization.html">
             <img src="assets/2026-07-17-2607.16184-pagedweight-moe-dynamic-quality-aware-quantization-cover.png"
                  alt="MoE LLM のメモリを賢く配り直す PagedWeight のインフォグラフィック。左の「課題」ではモデルの重みと KV キャッシュが GPU メモリを奪い合う様子を、右の「手法」では影響の小さい重みの精度を実行中に下げてメモリを空ける様子を示す。下部に最大 72.0% の GPU メモリ削減、1.94 倍のスループット向上、FP16 相当の精度維持という 3 つの数値を配置している。">
