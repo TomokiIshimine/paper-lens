@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>長い文章を渡すと AI は「写経」を始める — 根拠だけを見るよう報酬で導く GEAR — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-21-2607.19345-gear-evidence-aware-reward-repetitive-copying-cover.png"
+           alt="長い文章を渡すと AI は「写経」を始める GEAR のインフォグラフィック。左から「課題：反復コピー（思考トレースに入力を書き写す、7 種類の最先端モデルすべてで観測）」「原因：根拠を見分けられない（根拠と無関係な部分の区別がつかない）」「手法：報酬に 2 項を足す（正解報酬 + α×根拠との重なり − β×無関係との重なり、α=0.1, β=0.3）」の 3 段構成で示す。下部の結果帯には、平均スコア改善が最大 +4.6 ポイント（128k, Qwen3.5-9B, GSPO → GEAR）、Ruler の重なり率が 35.7% → 27.0%、思考長が 2808 → 2066 トークン（いずれも Qwen3.5-35B-A3B・32k での測定）という 3 つの数値を配置し、末尾に「コピーを禁じるのではなく『何を写すか』を制御する」と結ぶ。">
+    </figure>
+
+    <h1 class="article__title">長い文章を渡すと AI は「写経」を始める — 根拠だけを見るよう報酬で導く GEAR</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-21</span>
+      <span>arXiv：2607.19345</span>
+      <span>カテゴリ：cs.CL / cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>長い文書を読ませて推論させると、大規模言語モデル（LLM）は問題を解く代わりに入力の文章を思考の途中経過へ延々と書き写してしまう、という失敗パターンがあります。この論文はこの現象を<strong>反復コピー（repetitive copying）</strong>と名づけ、その原因が「どこが根拠なのかを見分けられていないこと」にあると突き止めました。そのうえで、正解したかどうかだけを見ていた強化学習の報酬に「根拠部分をなぞったら加点、無関係な部分をなぞったら減点」という項を足した <strong>GEAR</strong> という手法を提案しています。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>発想の転換は「コピーを禁じる」のではなく「何を写すかを制御する」こと。</strong>問題はどれだけコピーするかではなく、何をコピーするかでした。根拠に絞れているモデルは成功しやすく、区別せずに広く写すモデルは失敗しやすい。だから報酬で「根拠へは加点、無関係へは減点」という区別そのものを学ばせます。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">7 / 7 モデル</p>
+          <p class="stat__label">反復コピーが観測された最先端モデル。商用 API とオープンウェイトの両方にまたがり、入力が長くなるほど悪化した</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">52.7%</p>
+          <p class="stat__label">Qwen3.5-9B の 10-gram 重なり率（64k）。思考トレース中の 10 語窓の過半数がプロンプトからの直接の書き写しだった計算</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">最大 +4.6</p>
+          <p class="stat__label">正解報酬のみの強化学習（GSPO）からの平均スコア改善（ポイント）。同時にコピー量と思考の長さも減った</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>最近の LLM は、答えを出す前に「思考トレース（thinking trace）」と呼ばれる考えの途中経過を長々と書き出すようになりました。この方式は複雑な推論タスクで効果を上げています。一方で、長文コンテキスト（long-context）LLM の評価も、単に長い文書から一箇所を探し出す検索タスクから、長い入力全体を踏まえた複雑な推論へと移りつつあります。この二つが交わる「長い入力を読んで、じっくり考えて答える」領域が、いま最前線になっています。</p>
+      <p>ところがこの論文は、その最前線で目立った失敗が起きていることを示しました。モデルが考える代わりに、与えられたプロンプトの文章をそのまま思考トレースへ写しているのです。しかもこの挙動は特定のモデルの癖ではなく、商用 API のモデルもオープンウェイトのモデルも含めた 7 種類の最先端モデルすべてに共通して観測され、入力が長くなるほど悪化していました。</p>
+      <p>影響は精度の低下だけではありません。生成できるトークン数には上限があるため、入力の書き写しに予算を使い切ってしまうと、答えに到達する前に打ち切られます。つまり、<strong>精度もコストも同時に悪化する失敗モード</strong>です。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>著者らはまず、この現象がどれくらい広く起きているのかを測りました。測定には「重なり率（overlap rate）」という指標を使います。モデルが出力した思考トレースを長さ n の窓でずらしながら見て、そのうち何割がプロンプトに登場する n 語のつながり（n-gram）と一致するかを数えたものです。n=3 なら「コピーの総量」を、n=10 なら「長い一続きを意図的に書き写した箇所」を捉えられる、と使い分けています。</p>
+      <p>診断には GSM-Infinite というタスクを使いました。これは算数の文章題を大量の数値記述の中に埋め込んで長文化したデータで、手続き的に生成されるため「どこが答えに必要な根拠か」が正確に分かっています。だからこそ「何をコピーしているか」を精密に測れます。</p>
+      <p>対象は、商用 API のモデルとオープンウェイトのモデルにまたがる 7 種類です。Claude-Opus-4.5、DeepSeek-V3.2、Qwen-3.5-Plus、GLM-4.7、QwQ-32B、Qwen3.5-35B-A3B、Qwen3.5-9B の 7 つで、モデル名の表記は原論文に従っています（Qwen-3.5-Plus は、オープンウェイトの Qwen3.5-9B などとは別に挙げられているモデルです）。</p>
+
+      <h3>コンテキストが伸びるほどコピーは増える</h3>
+      <p>比較的短い 8k トークンのコンテキストでも、全モデルが実質的なコピーを見せました。8k での 3-gram 重なり率は、最も少ない Claude-Opus-4.5 の 20.0% から、最も多い Qwen3.5-9B の 43.7% までの範囲に収まります。そしてコンテキストが伸びると一様に悪化しました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>モデル</th>
+            <th>3-gram 重なり率（8k）</th>
+            <th>3-gram 重なり率（64k）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Claude-Opus-4.5（影響が最も小さい）</th>
+            <td>20.0%</td>
+            <td>29.7%</td>
+          </tr>
+          <tr>
+            <th>Qwen-3.5-Plus</th>
+            <td>41.5%</td>
+            <td>70.8%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>さらに、コピーの多くは長い一続きでした。Qwen3.5-9B の 10-gram 重なり率は 64k で 52.7% に達しています。思考トレース中の 10 語窓の過半数が、プロンプトからの直接の書き写しだった計算になります。</p>
+
+      <h3>コピーは実際に性能を害している</h3>
+      <p>次に、このコピーが実際に性能を害しているかを確かめます。DeepSeek-V3.2 で 64k コンテキストの事例を 10-gram の重なり率で分析したところ、正解したサンプルは誤答したサンプルよりも明確にコピーが少なく、両者の分布ははっきり分かれていました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>10-gram 重なり率（DeepSeek-V3.2, 64k）</th>
+            <th>精度</th>
+            <th>思考長</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>0.4 未満</th>
+            <td>55〜64%</td>
+            <td>約 21k トークン</td>
+          </tr>
+          <tr>
+            <th>0.4 超</th>
+            <td>11% へ崩れ、最終的には 0%</td>
+            <td>58k トークン超（約 3 倍）</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>「難しい問題だからコピーも精度低下も起きただけではないか」という交絡（別の要因が原因を取り違えさせること）の可能性も確かめています。必要な推論ステップ数でグループ分けして見たところ、どの難易度でも同じパターンが現れました。</p>
+
+      <h3>原因は「何をコピーするか」だった</h3>
+      <p>では原因は何か。著者らはプロンプトを二つに分けて調べました。答えを出すのに必要な根拠を含む部分（key evidence）と、それ以外の紛らわしい残りの部分（distractor context）です。両者へのコピー量の比を「grounding ratio（接地比）」と定義して比べると、正解サンプルは接地比が明らかに高いことが分かりました。さらに分解すると、正解サンプルは根拠部分への重なりが高く、かつ無関係部分への重なりが低いという形になっています。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 280" role="img" aria-label="プロンプトを根拠部分（key evidence）と無関係部分（distractor context）に分けて、思考トレースへ何を写したかを比べる図。正解したサンプルは根拠への重なりが高く無関係への重なりが低いため接地比が高い。誤答したサンプルは両方を見境なく写すため接地比が低い。">
+          <defs>
+            <marker id="ge-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+            <marker id="ge-arrow-accent" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-accent)"></path>
+            </marker>
+          </defs>
+
+          <text x="100" y="30" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">入力プロンプト</text>
+
+          <rect x="18" y="48" width="164" height="66" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="100" y="74" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">key evidence</text>
+          <text x="100" y="94" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">答えに必要な根拠</text>
+
+          <rect x="18" y="128" width="164" height="94" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="100" y="164" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">distractor context</text>
+          <text x="100" y="184" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">紛らわしい残りの部分</text>
+
+          <path d="M186,96 L358,74" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ge-arrow-accent)"></path>
+          <path d="M186,178 L358,208" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#ge-arrow)"></path>
+
+          <text x="272" y="146" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">思考トレースへ</text>
+          <text x="272" y="162" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">何を写したか</text>
+
+          <rect x="362" y="34" width="340" height="84" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="382" y="60" style="font-size:12px;font-weight:700;fill:var(--color-heading)">正解したサンプル</text>
+          <text x="382" y="80" style="font-size:11px;fill:var(--color-text-muted)">根拠への重なり 高 ／ 無関係への重なり 低</text>
+          <text x="382" y="100" style="font-size:12px;font-weight:700;fill:var(--color-accent)">→ 接地比（grounding ratio）が高い</text>
+
+          <rect x="362" y="166" width="340" height="84" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="382" y="192" style="font-size:12px;font-weight:700;fill:var(--color-heading)">誤答したサンプル</text>
+          <text x="382" y="212" style="font-size:11px;fill:var(--color-text-muted)">根拠と無関係を区別せず、広く写す</text>
+          <text x="382" y="232" style="font-size:12px;font-weight:700;fill:var(--color-text-muted)">→ 接地比が低い</text>
+        </svg>
+        <figcaption class="diagram__caption">正解サンプルは根拠部分に絞ってコピーし、誤答サンプルは区別せず広くコピーする。根本原因は「コピーすること」ではなく「根拠を見分けられていないこと（insufficient grounding）」だった。</figcaption>
+      </figure>
+
+      <p>つまり問題は「どれだけコピーするか」ではなく「何をコピーするか」でした。コピーそれ自体が悪なのではなく、根拠を見分けられていないこと（insufficient grounding）が根本原因だ、というのが著者らの診断です。このパターンは追加検証した 6 モデル中 5 モデルで観測されました。例外は Claude-Opus-4.5 で、そもそもコピーが非常に少なく（サンプルの 94% が重なり率 0.2 未満）、接地比では差がつきにくかったためです。</p>
+      <p>長文向けの強化学習（RL）の研究は既にいくつもあります。文書のかたまり（チャンク）単位で一致を見る報酬を使う LongRLVR、タスク単位で報酬を正規化する GoLongRL、易しい問題から難しい問題へ順に学ばせるカリキュラム学習（curriculum learning）を組み合わせる QwenLong などです。この論文が違うと主張するのは、診断と手法の両面です。反復コピーを長文推論に固有の失敗モードとして同定した点と、粗いチャンク識別ではなく n-gram という細かい単位で根拠と無関係部分を区別する報酬を設計した点です。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>報酬に 2 つの項を足すだけ</h3>
+      <p>提案手法 GEAR（Grounding Evidence-Aware Reward）の中身は、驚くほど素朴です。報酬をこう定義します。</p>
+
+      <pre><code>R(x, y) = R_acc + α · Overlap_n(y‖x_key) − β · Overlap_n(y‖x_dist)</code></pre>
+
+      <p>記号を読み下しておきます。<code>x</code> はモデルへ与える入力プロンプト、<code>y</code> はモデルが生成した思考トレースです。<code>Overlap_n(y‖x_key)</code> は「思考トレース <code>y</code> の n 語窓のうち、根拠部分 <code>x_key</code> に現れる n-gram と一致した割合」を表します（<code>‖</code> は「<code>y</code> を <code>x_key</code> と照らし合わせる」ことを示す区切り記号で、割り算ではありません）。つまりこの式は「正解したか」に「根拠をどれだけなぞったか」と「無関係な部分をどれだけなぞったか」を足し引きしたものです。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">第 1 項</span>正解報酬 R_acc</p>
+          <p>従来どおりの二値の正解報酬。正解なら 1、不正解なら 0 を与える。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">第 2 項</span>grounding reward（根拠報酬）</p>
+          <p>根拠部分 <code>x_key</code> との重なりに応じて<strong>加点</strong>し、根拠へ選択的に関わることを促す。係数は α（非負）。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">第 3 項</span>distractor penalty（ディストラクタ罰則）</p>
+          <p>無関係部分 <code>x_dist</code> との重なりに応じて<strong>減点</strong>し、見境のないコピーを抑える。係数は β（非負）。</p>
+        </div>
+      </div>
+
+      <p>実装上の細かい配慮として、根拠部分と無関係部分の両方に現れる n-gram は罰則の計算から除外しています。根拠への正当な参照が巻き添えで罰されないようにするためです。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 260" role="img" aria-label="GEAR の報酬設計を示す図。正解報酬 R_acc に、根拠との重なりへの加点（+α）とディストラクタとの重なりへの減点（−β）を足し合わせて GEAR の報酬を作り、その結果としてモデルが根拠に絞ってコピーする挙動を学び、コピー量と思考長が減って精度が上がることを示す。">
+          <defs>
+            <marker id="ge2-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+            <marker id="ge2-arrow-accent" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-accent)"></path>
+            </marker>
+          </defs>
+
+          <rect x="14" y="16" width="212" height="56" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="120" y="40" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">R_acc（正解報酬）</text>
+          <text x="120" y="59" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">正解なら 1 / 不正解なら 0</text>
+
+          <rect x="14" y="98" width="212" height="60" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="120" y="122" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">＋ α × 根拠との重なり</text>
+          <text x="120" y="141" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">加点：根拠へ関わらせる（α=0.1）</text>
+
+          <rect x="14" y="184" width="212" height="60" rx="8" fill="var(--color-surface)" stroke="var(--color-text-muted)" stroke-width="1.5"></rect>
+          <text x="120" y="208" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">− β × 無関係との重なり</text>
+          <text x="120" y="227" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">減点：無差別コピーを抑える（β=0.3）</text>
+
+          <path d="M230,44 L296,110" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#ge2-arrow)"></path>
+          <path d="M230,128 L296,128" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ge2-arrow-accent)"></path>
+          <path d="M230,214 L296,148" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#ge2-arrow)"></path>
+
+          <rect x="300" y="98" width="146" height="60" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="2"></rect>
+          <text x="373" y="124" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">GEAR の報酬</text>
+          <text x="373" y="143" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">n-gram だけで計算</text>
+
+          <path d="M450,128 L516,128" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ge2-arrow-accent)"></path>
+
+          <rect x="520" y="80" width="186" height="96" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="613" y="106" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">根拠に絞って写す挙動</text>
+          <text x="613" y="129" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">コピー量 ↓ ／ 思考長 ↓</text>
+          <text x="613" y="152" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-accent)">精度 ↑</text>
+        </svg>
+        <figcaption class="diagram__caption">GEAR は正解報酬に加点と減点の 2 項を足すだけの報酬シェイピング。外部の検証器も検索モジュールも使わず、n-gram の統計だけで計算できる。</figcaption>
+      </figure>
+
+      <p>著者らは、この 2 つの力が相補的だと述べています。加点だけでは「全部コピーする」挙動を防げません（全部写せば根拠との重なりも高くなるからです）。罰則だけでは根拠へ関わる動機が生まれません。両方あって初めて、区別することを学べるという理屈です。</p>
+      <p>この報酬は、外部の検証器（verifier）も検索モジュールも必要としません。既存の根拠注釈から計算できる n-gram の統計だけで動きます。軽量さがこの手法の売りの一つです。</p>
+
+      <h3>根拠注釈つきデータをどう用意するか</h3>
+      <p>この報酬を計算するには「プロンプトのどこが根拠か」という注釈が必要です。手作業で用意すると大変なので、著者らは 2 つの経路で自動化しました。</p>
+      <p><strong>構造化された合成データ</strong>として、GSM-Infinite と PhantomWiki を使います。前者は算数の文章題を長文の中に埋め込み、10〜20 の演算を鎖状につないだもの。後者は相互リンクされた架空の百科事典記事で、複数記事をまたいだ人物追跡（multi-hop の entity tracking）が必要になります。どちらも手続き的に生成されるため、生成器が構築ロジックの一部として根拠の位置（support indices）をそのまま出力します。追加の注釈作業がいりません。この 2 つを選んだのは、数値の連鎖と人物追跡という相補的な推論タイプをカバーし、タスク固有の抜け道ではなく汎用的な「根拠に接地する挙動」を学ばせるためだと説明されています。</p>
+      <p><strong>自然言語の文書向け</strong>には、3 段階の合成パイプラインを組みました。発想が面白いところで、通常の注釈作業の順序を逆転させています。普通は「質問に対してどこが根拠かを探す」のですが、ここでは「先に根拠にする領域を決めて、そこだけから質問を作る」ため、注釈が構成上おのずと得られます。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">文書の分析と選別</p>
+          <p>言語モデルが文書の情報特性（事実の記述、数値データ、因果関係、比較など）を分析し、どんな質問が作れるかを判断する。表形式データや商品リストなど QA に向かない文書は除外する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">根拠を制約した QA 生成</p>
+          <p>文書を 1,024 文字のチャンクに分割し、そのうち 1〜3 個をランダムに「制約文脈（constraint context）」として抜き出す。ここが根拠領域で、残りが無関係部分になる。言語モデルはこの制約文脈だけから答えられる質問と、1〜3 個の根拠の原文引用、簡潔な答えを生成する。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">答えの検証</p>
+          <p>生成された質問に、制約文脈だけを使って独立にもう一度答えさせる。再導出された答えが元の答えと一致したペアだけを残す。</p>
+        </li>
+      </ol>
+
+      <p>報酬を自動計算できるようにするため、答えは単一の値（数値か固有名詞のフレーズ）に限定し、yes/no 質問は除外しています。最終的な訓練セットは計 3,200 問という構成になりました。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">1,000 問</p>
+          <p class="stat__label">GSM-Infinite（算数の文章題を長文に埋め込んだ合成データ）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1,000 問</p>
+          <p class="stat__label">PhantomWiki（架空の百科事典記事をまたぐ人物追跡）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1,200 問</p>
+          <p class="stat__label">RedPajama-v2 の文書から自然言語パイプラインで作成</p>
+        </div>
+      </div>
+
+      <h3>訓練設定</h3>
+      <p>ベースモデルは Qwen3.5-9B、Qwen3.5-27B、Qwen3.5-35B-A3B（MoE 版）の 3 つ。MoE は Mixture-of-Experts の略で、入力ごとにモデル内部の一部の専門家（expert）サブネットワークだけを働かせる構成を指します。強化学習アルゴリズムには GSPO（Group Sequence Policy Optimization）を使い、これに GEAR の報酬を組み合わせます。</p>
+      <p>n-gram のサイズは訓練では n=3 を使います（診断で使った n=10 とは別です）。短い n-gram のほうが一致が多く発生し、報酬が細かく得られる（密な報酬信号になる）ため RL の最適化に効くことを、追加実験で確認しています。係数は α=0.1、β=0.3。根拠への加点よりも、無関係部分のコピーへの減点をかなり強くした設定です。</p>
+      <p>訓練は 1 エポック（約 100 最適化ステップ）、学習率 2×10⁻⁶、バッチサイズ 32。1 つの問題につき 8 通りの回答を生成させて比較します（rollout のグループサイズ 8）。プロンプト長は最大 32k トークン、生成長は最大 16k トークンで、訓練データのコンテキスト長は 16k〜32k に一様に分布させています。</p>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>主要な性能</h3>
+      <p>評価には 5 つのベンチマークを使いました。Ruler（合成の検索タスク）、LongBench-v2（多様な長文理解）、BrowseComp-LC（ウェブ閲覧の理解）、GraphWalks（グラフ構造上の経路追跡）、AA-LCR（長文推論）です。いずれも GEAR の訓練データとは重なりがなく、すべて 128k トークンのコンテキストをそのまま使います。報告は、コンテキストが 32k に収まるタスクだけの「32k サブセット」と、フルの「128k セット」の 2 段階です。</p>
+      <p>比較したのは 4 構成。(1) 訓練前のベースモデル、(2) 正解報酬のみの GSPO、(3) GSPO に根拠報酬だけを足したもの、(4) GSPO にフルの GEAR を足したものです。GSPO + GEAR は、3 モデル × 2 コンテキスト規模の 6 通りすべてで最高の平均スコアを取りました。正解報酬のみの GSPO からの平均改善は次のとおりです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>コンテキスト</th>
+            <th>Qwen3.5-9B</th>
+            <th>Qwen3.5-27B</th>
+            <th>Qwen3.5-35B-A3B</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>32k</th>
+            <td>+2.8</td>
+            <td>+1.5</td>
+            <td>+2.1</td>
+          </tr>
+          <tr>
+            <th>128k</th>
+            <td class="is-best">+4.6</td>
+            <td>+2.1</td>
+            <td>+2.8</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>平均スコアの推移でいうと、たとえば 128k の Qwen3.5-9B では、ベース 59.2 → GSPO 70.2 → GEAR 74.8 と改善しています。個別のベンチマークでは、同じ設定で Ruler が 84.1 → 90.8、AA-LCR が 59.0 → 68.0（いずれも GSPO → GEAR）と伸びました。</p>
+      <p>興味深いのは、改善幅が 32k より 128k のほうが一貫して大きいことです。GEAR は 16k〜32k のコンテキストでしか訓練していないので、128k は訓練分布の 4 倍にあたります。著者らはこれを、学習された「根拠に接地する挙動」が未知のコンテキスト長へ頑健に汎化した証拠だと主張しています。</p>
+
+      <h3>2 つの報酬項はどちらも欠かせない</h3>
+      <p>ここが実験のなかでも重要な発見です。片方だけを使うと、どちらの場合も正解報酬のみの GSPO より性能が下がりました。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">根拠報酬だけ</span>一貫して悪化</p>
+          <p>罰則を外して根拠報酬だけを足すと、正解報酬のみの GSPO より<strong>一貫して性能が下がった</strong>。低下幅は 32k で最大 5.1 ポイント、128k で最大 8.3 ポイント。特に GraphWalks と BrowseComp-LC での劣化が深刻だった。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">罰則だけ</span>有用な参照まで潰す</p>
+          <p>罰則だけ（α=0, β=0.3）で訓練してもベースラインより悪くなる（平均 72.0 に対し、正解報酬のみの GSPO は 78.5）。根拠の信号がないと、罰則は単にあらゆるコピーを抑え込むだけになり、有用な参照まで一緒に潰してしまう。</p>
+        </div>
+      </div>
+
+      <p>つまり、片方だけでは逆効果になりうる設計であり、両方を組み合わせて初めてモデルは「関連する文脈と無関係な文脈を区別すること」を学べる、というのが論文の主張です。</p>
+
+      <h3>コピー量と思考長も減った</h3>
+      <p>Qwen3.5-35B-A3B、32k コンテキストで、3-gram の重なり率と思考長を測った結果です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ベンチマーク</th>
+            <th>指標</th>
+            <th>Base</th>
+            <th>GSPO</th>
+            <th>＋根拠報酬のみ</th>
+            <th>GEAR</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Ruler</th>
+            <td>重なり率</td>
+            <td>36.9%</td>
+            <td>35.7%</td>
+            <td>36.6%</td>
+            <td class="is-best">27.0%</td>
+          </tr>
+          <tr>
+            <th>Ruler</th>
+            <td>思考長</td>
+            <td>4290</td>
+            <td>2808</td>
+            <td>5727</td>
+            <td class="is-best">2066</td>
+          </tr>
+          <tr>
+            <th>LongBench-v2</th>
+            <td>重なり率</td>
+            <td>24.9%</td>
+            <td>27.2%</td>
+            <td>28.5%</td>
+            <td class="is-best">22.6%</td>
+          </tr>
+          <tr>
+            <th>LongBench-v2</th>
+            <td>思考長</td>
+            <td>5657</td>
+            <td>4677</td>
+            <td>6833</td>
+            <td class="is-best">3989</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>LongBench-v2 の重なり率に注目すると、24.9% → 27.2% → 28.5% → 22.6% という軌跡になっています。標準的な RL（GSPO 単独）はむしろコピーを増やしており、根拠報酬だけを足すとさらに増えます。著者らはこれを、標準的な RL も根拠報酬だけの設計も反復コピーには対処できないことの証拠だとしています。罰則がないと、無関係な部分も含めた入力全体からのコピーが誘発され、思考が長く反復的になって最終的に精度を害するわけです。</p>
+      <p>GEAR は重なり率と思考長を同時に減らしています。ディストラクタ罰則が、反復コピーそのものだけでなく、それが誘発する冗長な言い直し（redundant elaboration）も抑えている、と解釈されています。</p>
+
+      <h3>係数と n-gram サイズの感度</h3>
+      <p>Qwen3.5-9B、32k コンテキストでの追加実験（平均スコア）です。</p>
+      <ul>
+        <li><strong>報酬係数</strong>：(α=0.0, β=0.3) が 72.0、(0.1, 0.1) が 78.4、(0.1, 0.3) が 81.3（デフォルト・最良）、(0.1, 0.5) が 80.5、(0.3, 0.3) が 78.6。β を α に対して小さくしすぎると 2.9 ポイント落ちる一方、β を 0.5 まで上げても低下はわずかです。モデルは強い罰則には寛容だが、弱い罰則には不寛容だ、と表現されています。α を 0.3 に上げても劣化しており、根拠の信号は中程度で十分だとしています。</li>
+        <li><strong>n-gram サイズ</strong>：n=3 で 81.3（デフォルト・最良）、n=5 で 80.0、n=10 で 79.8。どの設定でも正解報酬のみの GSPO（78.5）を上回っており、この選択に対して手法は頑健です。</li>
+      </ul>
+
+      <h3>実際の出力に何が起きたか</h3>
+      <p>付録の事例が具体的です。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">事例 1</span>頻出語の抽出（Ruler, 32k）</p>
+          <p>ドット区切りの無意味なトークン列から、最も頻出する 3 語を答えるタスク。<strong>ベースモデル</strong>は 16,384 トークン（上限）を使い切り、重なり率 97.6% で不正解。入力を写し続けてトークン予算が尽き、答えに到達していません。<strong>GSPO</strong> は入力のコピーは解消したものの、今度は単一の候補語を延々と繰り返す退行的なループに陥り、やはり上限まで使って不正解。<strong>GEAR</strong> は 2,920 トークン、重なり率 0.6% で正解しました。入力を写さずに手順を言葉で組み立てて頻度を推論しており、論文は思考トークンが 82% 少ないと記述しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">事例 2</span>複数文書にまたがる学術 QA（LongBench-v2, 32k）</p>
+          <p>CLIP に対するタイポグラフィック攻撃を扱う 2 本の論文が与えられ、4 つの記述から正しいものを選ぶ問題。この例では 3 つのモデルとも正常に生成を終えており、トークン枯渇は起きていません。<strong>ベースモデル</strong>は 14,855 トークンを使い、早い段階で正解候補を正しく見つけたにもかかわらず「Wait, let me re-check...」というサイクルに入って同じ根拠を 15 回見直し、最後に誤答へ切り替えました。<strong>GSPO</strong> は 9,578 トークンで正解しましたが、7 回の逡巡サイクルが残っています。<strong>GEAR</strong> は 5,072 トークンで正解し、各選択肢を系統的に分析して誤りの選択肢を論理破綻と判定していました。ベースより 66% 少ない思考トークンです。</p>
+        </div>
+      </div>
+
+      <p>著者らはこの事例について、トークン枯渇も反復コピーも起きていないここでの「過剰な熟考（overthinking）」は、事例 1 の反復コピーを生むのと同じ根本問題がより微妙な形で現れたものだと解釈しています。結論にコミットする代わりに冗長なトークンを生み続けている、という点は共通しているわけです。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の位置づけを、著者らの言葉に沿って整理します。長文コンテキスト LLM の評価は、単純な検索から複雑な推論へ移りつつあります。それでもなお、関連する根拠に正確に接地する能力は、難しい長文タスクを解くうえで欠かせない構成要素であり続ける — これが論文の主張です。アブストラクトはこの点に「改善の余地が大きい（substantial room for improvement）」という表現を使っています。</p>
+      <p>手法面の利点は軽さです。外部の検証器も検索モジュールもいらず、既存の根拠注釈から計算できる n-gram の統計だけで動く報酬シェイピングだ、というのが論文の説明です。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>本文中に明示されている制約や注意点は次のとおりです。</strong>自然言語データの生成では、報酬を自動計算するために答えを単一の値（数値か固有名詞のフレーズ）に限定しており、yes/no 質問は除外している／QA に向かない文書（表形式データ、商品リストなど）はパイプラインの段階で除外される／Claude-Opus-4.5 は診断分析の例外で、もともと反復コピーが少ないため接地比では正誤の差を判別しにくく、また思考長の膨張こそ起こさないものの重なり率が高いと精度は劣化する／根拠報酬だけを単独で加えると性能はむしろ悪化するため、2 つの成分の併用が前提の設計である。なお、この論文には「Limitations」という独立した節はなく、今後の課題を明示的に列挙した節も見当たりません。上に挙げたものは本文の各所に記載された制約を拾ったものです。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>長文を読ませて考えさせると、LLM は問題を解く代わりに入力を思考トレースへ写してしまいます。この論文はその現象を 7 つの最先端モデルで確認し、原因が「根拠と無関係な部分を見分けられていないこと」にあると突き止めました。対処として提案された GEAR は、正解報酬に「根拠への重なりで加点、無関係部分への重なりで減点」という 2 項を足すだけの軽量な報酬設計です。3 つのモデル規模と 5 つのベンチマークで正解報酬のみの強化学習を一貫して上回り、改善は訓練時の 4 倍のコンテキスト長にも及びました。コピーそのものを禁じるのではなく「何を写すか」を制御する、という発想の転換が要点です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>長文コンテキスト（long-context）推論</dt>
+        <dd>数万〜十数万トークンといった長い入力全体を踏まえて答えを導くタスク。単に一箇所を探す検索より難しい。</dd>
+
+        <dt>思考トレース（thinking trace）／思考長</dt>
+        <dd>モデルが最終回答を出す前に生成する推論の途中経過と、そのトークン数。</dd>
+
+        <dt>反復コピー（repetitive copying）</dt>
+        <dd>問題を生産的に解く代わりに、プロンプトの長い一節を思考トレースへそのまま書き写してしまう挙動。この論文が同定した失敗モード。</dd>
+
+        <dt>重なり率（overlap rate）</dt>
+        <dd>思考トレース中の n 語窓のうち、プロンプトに現れる n-gram と一致した割合。n=3 はコピー総量、n=10 は長い一続きの意図的な転記を捉える。</dd>
+
+        <dt>key evidence / distractor context（キーエビデンス／ディストラクタ文脈）</dt>
+        <dd>プロンプトのうち、答えを出すのに必要な根拠を含む注釈済みの部分と、その残りの紛らわしい部分。</dd>
+
+        <dt>grounding ratio（接地比）</dt>
+        <dd>根拠部分への重なりを無関係部分への重なりで割った値。高いほどコピーが根拠に絞られている。</dd>
+
+        <dt>GEAR（Grounding Evidence-Aware Reward）</dt>
+        <dd>正解報酬に根拠報酬（α × 根拠との重なり）とディストラクタ罰則（β × 無関係部分との重なり）を加える報酬設計。この論文の提案手法。</dd>
+
+        <dt>報酬シェイピング（reward shaping）</dt>
+        <dd>本来の正解信号に補助的な報酬項を足して学習の方向づけを助ける手法。</dd>
+
+        <dt>RLVR（reinforcement learning with verifiable rewards）</dt>
+        <dd>検証可能な報酬だけを使い、教師ありファインチューニングなしで推論能力を引き出す学習パラダイム。DeepSeek-R1 が示した。</dd>
+
+        <dt>GSPO（Group Sequence Policy Optimization）</dt>
+        <dd>トークン単位ではなく系列単位の重要度比を使う強化学習アルゴリズム。MoE（Mixture-of-Experts、入力ごとに一部の専門家サブネットワークだけを働かせる構成）モデルでの分散の問題に対処する。この論文の訓練アルゴリズム。</dd>
+
+        <dt>support indices（サポートインデックス）</dt>
+        <dd>プロンプトのどこが根拠かを示す正解注釈。手続き的に生成されるデータでは生成器が自動で出力する。</dd>
+
+        <dt>過剰な熟考（overthinking）</dt>
+        <dd>推論モデルが必要以上に長い推論トレースを生成する問題。この論文は、長文設定ではその主な形が「あてどない言い直し」ではなく「プロンプトからの直接コピー」だと主張する。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Copy Less, Ground More: Overcoming Repetitive Copying in Long-Context Reasoning via Evidence-Aware Reinforcement Learning</p>
+      <p><a href="https://arxiv.org/abs/2607.19345" target="_blank" rel="noopener noreferrer">arXiv:2607.19345 を読む（arxiv.org）</a></p>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
