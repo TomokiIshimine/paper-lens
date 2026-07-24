@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RGB 映像だけで空間を立体的に読む：暗黙と明示の 2 種類の 3D 幾何を VLM に注入する VLM-IE3D — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-23-2607.21595-vlm-ie3d-implicit-explicit-geometries-cover.png"
+           alt="VLM-IE3D「RGB 映像だけで 3D を立体的に読む」を 3 段で示すインフォグラフィック。左の「課題」では、RGB だけの VLM は 3D 空間理解が苦手で、深度センサ・点群は常に手元にないことをバツ印付きで示す。中央の「手法」では、暗黙幾何トークン（IGTs、大域的な認知地図風のグリッド）と明示幾何トークン（EGTs、部屋の構造を線でとらえた図）を、下部の丸で示す暗黙・明示注意（IEA）で融合する流れを描く。右の「結果」では、Scan2Cap の C@0.5 = 80.4（最高）、空間推論 VSI-Bench 平均 47.6%、追加パラメータわずか +3.2% の 3 つの数値をアイコン付きで並べる。">
+    </figure>
+
+    <h1 class="article__title">RGB 映像だけで空間を立体的に読む：暗黙と明示の 2 種類の 3D 幾何を VLM に注入する VLM-IE3D</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-23</span>
+      <span>arXiv：2607.21595</span>
+      <span>カテゴリ：cs.CV / cs.AI / cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>普通のカラー映像（RGB）だけを入力に、2 種類の異なる 3D 幾何情報を視覚言語モデル（Vision-Language Model、<strong>VLM</strong>）に注入するフレームワーク「<strong>VLM-IE3D</strong>」を提案した研究です。粗く大域的な空間のとらえ方（暗黙表現）と、細かく定量的な構造情報（明示表現）を組み合わせ、両者を専用の注意機構で融合します。深度センサや点群といった追加の 3D 入力を一切使わずに、3D 物体検出・3D の言語による物体特定・3D シーンの文章生成・空間推論という複数のタスクで、RGB のみを使う手法として最高性能を達成しました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>中核のアイデアは「1 種類ではなく相補的な 2 種類の 3D 表現を、RGB だけから取り出す」こと。</strong>大域的で高レベルな暗黙表現（IGTs）と、細粒度で定量的な明示表現（EGTs）を、暗黙・明示注意（IEA）で照らし合わせて融合し、VLM に強い 3D の帰納バイアス（3D 情報を優先的に使う手がかり）を与えます。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">80.4</p>
+          <p class="stat__label">3D シーン文章生成（Scan2Cap）の C@0.5。比較したすべての手法の中で最高。ベースライン比 +22.4、暗黙のみの VG LLM 比 +1.8</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">43.2%</p>
+          <p class="stat__label">3D の言語による物体特定（ScanRefer）の Acc@0.25。3D 入力なしの手法として最高（ベースライン比 +9.2、VG LLM 比 +6.8）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">47.6%</p>
+          <p class="stat__label">空間推論（VSI-Bench）の平均。4B パラメータで Gemini-1.5-Pro（45.4%）や LLaVA-NeXT-Video-72B（40.9%）を上回る</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">+3.2%</p>
+          <p class="stat__label">学習可能パラメータの増加分（3.13B→3.23B、+0.10B）。推論速度も 7 FPS→6 FPS の低下にとどまる</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>「この机の右手前にあるカップを取って」といった指示をロボットが理解するには、映像の中の物体が空間のどこにあるかを立体的に把握する必要があります。しかし、2 次元のカラー画像から学習された既存の VLM は、こうした細かな空間理解や推論を要する 3D タスクを苦手としてきました。</p>
+      <p>一方で、深度センサや点群（point cloud）といった 3D 専用のデータを使えば空間把握は正確になりますが、そうしたセンサは常に手元にあるとは限りません。もし普通のカラー映像だけから立体的な理解を引き出せれば、特別なハードウェアなしに VLM を空間認識へ応用できます。この研究は、その「RGB だけでどこまで 3D を理解できるか」という問いに一つの答えを与えるものです。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>近年は、点群のような明示的な 3D データを直接使うのではなく、2 次元の観測から 3D の表現を学ぶ流れが生まれています。その代表的なアプローチは、3D 幾何エンコーダ（3D geometry encoder）を導入し、映像列から「暗黙の 3D 表現（implicit 3D representations）」を学習させるものです。</p>
+      <p>ただし、この暗黙表現には弱点があります。捉えられるのはシーン全体の粗く大域的なレイアウトにとどまり、精密な位置の特定や細かな推論を要するタスクには不十分なのです。論文はこれを人間の認知になぞらえて説明します。人間は幾何的な詳細を伴わない粗い「<strong>3D 認知地図（3D cognitive map）</strong>」を頭の中に作ります。既存 VLM の暗黙表現もこれと同じように高レベルの空間的な手がかりは与えますが、圧縮された潜在的な形式であるため、言語モデルが「何メートル離れているか」といった定量的な幾何量を読み取るのは難しいのです。</p>
+      <p>これに対しロボットのシステムは、深度マップや点群といった明示的な 3D 表現（構造化された「<strong>3D 再構成地図</strong>」）を使い、定量的な幾何データに直接アクセスします。しかし、この明示的な表現は RGB のみで動く VLM の枠組みではほとんど活用されてきませんでした。そこで本研究は、VLM に「大域的な認知地図」と「細粒度の再構成地図」の両方を備えさせ、このギャップを埋めることを狙います。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>2 種類の 3D 表現</th>
+            <th>比喩</th>
+            <th>とらえるもの</th>
+            <th>弱点・利点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>暗黙表現（既存 VLM が使う）</th>
+            <td>3D 認知地図</td>
+            <td>粗く大域的なレイアウト・物体間の空間関係を潜在ベクトルで</td>
+            <td>高レベルな手がかりは得られるが、定量的な幾何量の読み取りは難しい</td>
+          </tr>
+          <tr>
+            <th>明示表現（ロボットが使う）</th>
+            <td>3D 再構成地図</td>
+            <td>深度マップ・点群など定量的な幾何データに直接アクセス</td>
+            <td>精密だが、RGB のみの VLM ではほとんど活用されてこなかった</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>提案手法：何をしたのか</h2>
+      <p>中核となるアイデアは、純粋な RGB の映像列から相補的な 2 種類の幾何表現を取り出し、VLM に強い 3D の帰納バイアスを注入することです。フレームワークは主に次の 3 つの部品からなります。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">部品 1</span>暗黙幾何トークン（IGTs）</p>
+          <p>3D 幾何エンコーダが生成する、大域的で高レベルな空間情報（シーン全体のレイアウトや物体どうしの空間関係など）を捉えたトークン。3D 幾何エンコーダには <strong>AnySplat</strong> を採用し、その融合デコーダ（fusion decoder）が出す暗黙の潜在ベクトルを IGTs として使います。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">部品 2</span>明示幾何トークン（EGTs）</p>
+          <p>再構成された明示的な 3D 属性（深度マップ・点群・3D ガウススプラット）を、軽量な埋め込みモジュールで符号化したトークン。細かな構造や定量的な位置情報を保持します。重い 3D バックボーンは避け、1 層のパッチ埋め込みと 2 層の MLP（多層パーセプトロン）という単純な構成に抑えています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">部品 3</span>3D 対応アダプタ</p>
+          <p>通常の 2D 視覚トークン・IGTs・EGTs という 3 種類のトークンを統合し、一つにまとまった「3D を意識した視覚埋め込み」を作る融合モジュール。中核には後述の暗黙・明示注意（IEA）が置かれます。</p>
+        </div>
+      </div>
+
+      <p>EGTs の元になる明示属性のうち、深度マップ・カメラの向き・3D ガウススプラットは 3D 幾何エンコーダの予測ヘッドから直接取得し、点マップは深度マップを、再構成したカメラの向きに沿って 3D 座標へ逆投影（2 次元の画素を 3 次元空間へ投げ戻す操作）して得ます。全体を通じて入力は RGB のみで、追加の 3D 入力は一切必要としません。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 780 220" role="img" aria-label="VLM-IE3D の処理フロー図。RGB 映像列を 3D 幾何エンコーダ AnySplat（凍結）に入れ、そこから暗黙幾何トークン IGTs（大域・粗い）と明示幾何トークン EGTs（細粒度・定量）の 2 種類を取り出す。両者を 3D 対応アダプタが暗黙・明示注意（IEA）で 2D 視覚トークンとともに融合し、その結果を VLM（Qwen2.5-VL-3B）へ入力して 3D 検出・特定・生成・推論を行う。追加の 3D 入力は不要。">
+          <defs>
+            <marker id="ie-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+            <marker id="ie-arrow-accent" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-accent)"></path>
+            </marker>
+          </defs>
+
+          <!-- S1 RGB -->
+          <rect x="12" y="78" width="112" height="64" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="68" y="104" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">RGB 映像列</text>
+          <text x="68" y="123" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">追加 3D 入力なし</text>
+
+          <path d="M124,110 L142,110" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#ie-arrow)"></path>
+
+          <!-- S2 encoder -->
+          <rect x="146" y="78" width="150" height="64" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="221" y="104" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">3D 幾何エンコーダ</text>
+          <text x="221" y="123" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">AnySplat（凍結）</text>
+
+          <!-- encoder to IGTs / EGTs -->
+          <path d="M296,100 C310,88 306,74 318,74" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#ie-arrow)"></path>
+          <path d="M296,120 C310,132 306,146 318,146" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#ie-arrow)"></path>
+
+          <!-- S3a IGTs -->
+          <rect x="320" y="46" width="152" height="56" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="396" y="70" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">暗黙幾何トークン IGTs</text>
+          <text x="396" y="88" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">大域・粗い（認知地図）</text>
+
+          <!-- S3b EGTs -->
+          <rect x="320" y="118" width="152" height="56" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="396" y="142" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">明示幾何トークン EGTs</text>
+          <text x="396" y="160" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">細粒度・定量（再構成地図）</text>
+
+          <!-- IGTs / EGTs to adapter -->
+          <path d="M472,80 C486,90 484,100 492,102" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ie-arrow-accent)"></path>
+          <path d="M472,140 C486,130 484,120 492,118" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ie-arrow-accent)"></path>
+
+          <!-- S4 adapter -->
+          <rect x="494" y="76" width="152" height="68" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="2"></rect>
+          <text x="570" y="100" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">3D 対応アダプタ</text>
+          <text x="570" y="118" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">暗黙・明示注意（IEA）で</text>
+          <text x="570" y="134" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">2D 視覚トークンと融合</text>
+
+          <path d="M646,110 L664,110" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ie-arrow-accent)"></path>
+
+          <!-- S5 VLM -->
+          <rect x="666" y="76" width="104" height="68" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="718" y="100" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">VLM</text>
+          <text x="718" y="117" text-anchor="middle" style="font-size:10px;fill:var(--color-text-muted)">Qwen2.5-VL-3B</text>
+          <text x="718" y="133" text-anchor="middle" style="font-size:10px;fill:var(--color-text-muted)">検出・特定・生成・推論</text>
+        </svg>
+        <figcaption class="diagram__caption">RGB 映像列だけから 3D 幾何エンコーダで IGTs（暗黙）と EGTs（明示）を取り出し、3D 対応アダプタが IEA で 2D 視覚トークンとともに融合して VLM へ渡す。テキスト埋め込みも一緒に入力される。</figcaption>
+      </figure>
+
+      <h3>3D 対応アダプタの内部：暗黙・明示注意（IEA）</h3>
+      <p>3D 対応アダプタの中では、粗い暗黙表現と細かい明示表現を段階的に照らし合わせて融合します。その流れは次のとおりです。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">空間的に隣接する 2×2 の特徴を圧縮</p>
+          <p>まず隣り合う 2×2 の特徴をまとめ、2 層 MLP で圧縮してトークン数を抑えます。IGTs・EGTs・2D 視覚トークンをそれぞれ扱いやすい形に整えます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">IEA でマルチヘッド交差注意</p>
+          <p>フレームごとに、圧縮した IGTs（暗黙表現）を問い合わせる側、圧縮した EGTs（明示表現）を参照される側として、両者を照らし合わせるマルチヘッド交差注意（multi-head cross-attention）を行います。粗い表現と細かい表現がここで融合します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">残差接続で元の表現に足し戻す</p>
+          <p>照合の結果を残差接続（residual connection、元の入力に処理結果を足し戻す接続）で元の表現に加えます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">2D 視覚トークンと加算して統一</p>
+          <p>できあがった 3D トークンを、圧縮済みの 2D 視覚トークンと要素ごとに加算し、ひとつにまとまった「3D を意識した視覚表現」にします。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">テキストと一緒に VLM へ入力</p>
+          <p>この統一表現をテキストの埋め込みと一緒に、事前学習済みの VLM へ入力して予測を行います。入力は終始 RGB のみです。</p>
+        </li>
+      </ol>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>実装では VLM バックボーンに Qwen2.5-VL-3B、3D 幾何エンコーダに AnySplat を用い、2D 視覚エンコーダと 3D 幾何エンコーダは凍結（重みを固定）したまま、VLM バックボーンと明示埋め込み部分を学習しました。学習は 1 エポック、8 枚の H100 80G GPU で実施しています。以下は原論文が報告する主要な数値です。指標記号は、C が CIDEr、M が METEOR に基づく指標を、@0.5 は IoU 0.5、@0.25 は IoU 0.25 という重なり条件を示します（P25・R25・F125 は IoU 0.25 での適合率・再現率・F1）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>タスク（ベンチマーク）</th>
+            <th>主要指標</th>
+            <th>VLM-IE3D</th>
+            <th>ベースライン比</th>
+            <th>VG LLM 比</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>3D シーン文章生成（Scan2Cap）</th>
+            <td>C@0.5</td>
+            <td class="is-best">80.4（最高）</td>
+            <td>+22.4</td>
+            <td>+1.8</td>
+          </tr>
+          <tr>
+            <th>3D 言語物体特定（ScanRefer）</th>
+            <td>Acc@0.25</td>
+            <td>43.2%</td>
+            <td>+9.2</td>
+            <td>+6.8</td>
+          </tr>
+          <tr>
+            <th>3D 動画物体検出</th>
+            <td>F1（F125）</td>
+            <td>42.8%</td>
+            <td>+11.9</td>
+            <td>+4.6</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>「ベースライン」は Qwen2.5-VL-3B、「VG LLM」は暗黙表現のみを使う主要比較手法です。VLM-IE3D はいずれも 3D シーン入力を使わずにこれらを上回りました。ScanRefer では候補領域の精緻化（proposal refinement）を適用すると Acc@0.25 / Acc@0.50 が 55.4% / 48.9% となり、3D シーン入力を使う手法との差を縮めます。3D 動画物体検出では、適合率・再現率・F1 がそれぞれ P25＝44.2%、R25＝41.9%、F125＝42.8% でした。空間推論（VSI-Bench）は 4B パラメータで平均 47.6% を達成し、物体カウントで 67.5%（VG LLM を +1.5 で上回る）、相対距離の推定で 47.7%（VG LLM の 44.6% に対し +3.1）です。</p>
+
+      <h3>どの部品が効いているか（アブレーション）</h3>
+      <p>要素を外して比較するアブレーションを 3D 動画物体検出（F1＝F125）で行っています。暗黙・明示の両方を IEA で統合したときが最良でした。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>構成</th>
+            <th>F1（F125）</th>
+            <th>備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>ベースライン</th>
+            <td>30.9</td>
+            <td>幾何トークンなし</td>
+          </tr>
+          <tr>
+            <th>＋ EGTs（明示のみ）</th>
+            <td>34.7</td>
+            <td>明示表現を追加</td>
+          </tr>
+          <tr>
+            <th>＋ IGTs（暗黙のみ）</th>
+            <td>40.5</td>
+            <td>単独では EGTs より改善幅が大きい</td>
+          </tr>
+          <tr>
+            <th>両方を IEA で統合</th>
+            <td class="is-best">42.8</td>
+            <td>提案構成が最良</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>IGTs 単独の方が EGTs 単独より改善幅が大きく、より豊かで一般的な 3D の事前知識を符号化していると解釈されています。融合戦略の比較では、単純な連結（41.5）や加算（42.4）よりも提案の IEA が最良でした。明示的な 3D 属性の種類は、点マップ・深度マップ・ガウススプラットのいずれでも一貫して改善し（F125 は 42.5〜42.8）、最も入手しやすくパラメータ効率のよい深度マップを既定としています。効率面では、明示埋め込み・3D 対応アダプタ・EGTs 用の 3D 属性再構成を加えても、学習可能パラメータは VG LLM の 3.13B から 3.23B へ、わずか 0.10B（3.2% 増）の増加にとどまり、推論速度も単一 H100 GPU で 7 FPS から 6 FPS へ 1 FPS 下がるだけです。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の意義は、暗黙と明示という 2 種類の相補的な 3D 幾何表現を、純粋な 2D 視覚入力だけから統合してみせた点にあります。各種の 3D シーン理解・空間推論タスクで 2D 視覚入力の手法を上回り、3D シーン入力を使う手法とも競合する結果を示しました。フレームワークは多様な 3D 幾何エンコーダ（AnySplat のほか π3 や VGGT でも検証済み）と柔軟に組み合わせられ、今後の 3D 幾何エンコーダの進歩をそのまま取り込める余地を持ちます。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>限界について、論文本文には独立した「限界」の節は置かれていません。</strong>ただし定量結果として、候補領域の精緻化を適用しても ScanRefer では 3D シーン入力を使う手法（例：Video-3D LLM の Acc@0.25＝58.1、Acc@0.50＝51.7）との差が残ります。著者らも、明示的な 3D 入力が精密な位置特定に利点を与える一方で、本手法の暗黙・明示の幾何符号化はその競合的な代替になりうる、という位置づけで述べています。</p>
+        </div>
+      </div>
+
+      <h2>まとめ</h2>
+      <p>VLM-IE3D は、RGB 映像だけを入力に、粗く大域的な暗黙表現と細かく定量的な明示表現の 2 種類の 3D 幾何を VLM へ注入し、暗黙・明示注意（IEA）で両者を融合するフレームワークです。追加の 3D 入力もわずかなパラメータ増（3.2%）だけで、複数の 3D 理解・空間推論タスクにおいて RGB のみの手法として最高性能を示しました。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>VLM（Vision-Language Model、視覚言語モデル）</dt>
+        <dd>視覚と言語を統合的に扱うモデル。本研究では Qwen2.5-VL を土台に用いる。</dd>
+
+        <dt>暗黙幾何トークン（Implicit Geometry Tokens、IGTs）</dt>
+        <dd>3D 幾何エンコーダが生成する、粗く高レベルな大域的空間情報を潜在ベクトルとして符号化したトークン。</dd>
+
+        <dt>明示幾何トークン（Explicit Geometry Tokens、EGTs）</dt>
+        <dd>深度マップ・点群・ガウススプラットなど明示的な 3D 属性から軽量な埋め込みで得る、細粒度で定量的な幾何情報を保持するトークン。</dd>
+
+        <dt>3D 幾何エンコーダ（3D geometry encoder）</dt>
+        <dd>2D 画像から 3D 幾何情報を学習・表現するモデル。本論文では AnySplat を採用。</dd>
+
+        <dt>暗黙・明示注意（Implicit–Explicit Attention、IEA）</dt>
+        <dd>IGTs を問い合わせ、EGTs を参照先とする交差注意で両表現を整合・融合する提案モジュール。</dd>
+
+        <dt>3D 認知地図 / 3D 再構成地図</dt>
+        <dd>それぞれ「幾何的詳細を欠く粗い大域的な地図」と「定量的な幾何にアクセスできる構造化された地図」を指す、本論文の対比的な比喩。</dd>
+
+        <dt>深度マップ / 点群 / 3D ガウススプラット</dt>
+        <dd>EGTs の元となる明示的 3D 属性の種類。</dd>
+
+        <dt>Scan2Cap / ScanRefer / VSI-Bench</dt>
+        <dd>それぞれ 3D シーンの文章生成、3D の言語による物体特定、空間推論を評価するベンチマーク。</dd>
+
+        <dt>VG LLM</dt>
+        <dd>暗黙表現のみを用いる主要比較手法（暗黙のみのベースライン）。</dd>
+
+        <dt>C@0.5 / M@0.5 / P25 / R25 / F125</dt>
+        <dd>C@0.5・M@0.5 は Scan2Cap の指標（CIDEr / METEOR ベース、IoU 0.5 条件）、P25・R25・F125 は IoU 閾値 0.25 での適合率・再現率・F1。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">3D-Aware VLMs with Implicit and Explicit Geometries</p>
+      <p><a href="https://arxiv.org/abs/2607.21595" target="_blank" rel="noopener noreferrer">arXiv:2607.21595 を読む（arxiv.org）</a></p>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
