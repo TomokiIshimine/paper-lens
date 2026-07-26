@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>「誰が誰を押すか」を図で描いて動画を作る — インタラクショングラフで多物体の動きを操る GraphVid — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-23-2607.21580-graphvid-interactive-graph-controllable-video-cover.png"
+           alt="GraphVid「『誰が誰を押すか』を図で描いて動画を作る」を 3 段で示すインフォグラフィック。左の「課題」は複数の曲線が絡み合う軌跡の図とともに「軌跡を描く方式は物体が増えるほど負担が大きい」ことを示す。中央の「手法」は 3 つの円（ノード）を「押す」「持ち上げる」と書かれた矢印（有向エッジ）で結んだインタラクショングラフを描き、「物体をノード、関係を有向エッジに」「動画生成モデル本体は凍結し変換部だけ学習」と説明する。右の「結果」は学習可能パラメータ 0.6B、学習データ 27K クリップ、推論時間 200 秒（比較手法中で最速）、動きの誤差 EPE 2.9（低いほど良い）の 4 つの数値を並べる。">
+    </figure>
+
+    <h1 class="article__title">「誰が誰を押すか」を図で描いて動画を作る — インタラクショングラフで多物体の動きを操る GraphVid</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-23</span>
+      <span>arXiv：2607.21580</span>
+      <span>カテゴリ：cs.CV / cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>1 枚の静止画から動画を作るとき、「どの物体がどう動くか」をユーザーが指定する方法が課題でした。本論文が提案する <strong>GraphVid</strong> は、画像に写る物体を点（ノード）、物体同士の関わり方を矢印（有向エッジ）として表した「インタラクショングラフ」を編集することで、動きを対話的に指定できる枠組みです。学習済みの動画生成モデル本体は凍結（重みを更新せず、そのまま使うこと）したまま、グラフを条件情報に変換する小さな部品だけを学習させます。その結果、学習可能パラメータ 0.6B・学習データ 27K クリップという小規模さで、桁違いに大きい既存手法に匹敵する制御性と映像品質を達成しました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>発想の転換は「軌跡を描く」から「関係を編集する」へ。</strong>GraphVid は、動画生成の制御インターフェースを軌跡の描画から、物体同士の関係の編集へ置き換えます。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">0.6B</p>
+          <p class="stat__label">学習可能パラメータ。Wan-Move の 14.5B に対し約 24 分の 1</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">27K</p>
+          <p class="stat__label">学習データのクリップ数。Wan-Move の 2M、Motion-I2V の 10M と比べて約 2 桁少ない</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">200 秒</p>
+          <p class="stat__label">推論時間。比較手法中で最速（Wan-Move 1800 秒、Tora 1200 秒、WISA 1000 秒）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">EPE 2.9</p>
+          <p class="stat__label">動きの誤差（低いほど良い）。比較可能な軌跡ベース手法すべてを下回った</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>1 枚の写真を動画にする技術（Image-to-Video 生成、以下 <strong>I2V</strong>）は急速に実用に近づいていますが、「思った通りに動かす」のは依然として難しい部分です。静止画には未来の情報が一切含まれないため、モデルはどんな動きが妥当かを推測するしかなく、本質的に曖昧な問題になります。</p>
+      <p>そこで従来は、ユーザーが動きの軌跡を描いて渡す方式が主流でした。しかしこの方式は、物体が増えるほど負担が急激に大きくなります。3 つの物体が絡み合うシーンなら、3 本の正確な軌跡を破綻なく描き分けなければなりません。</p>
+      <p>GraphVid が提案するのは、この入力を「押す」「引く」「持ち上げる」といった関係のラベルに置き換えるという発想です。人間が動きを説明するときに使う語彙そのものをインターフェースにすることで、専門的な作図技能なしに多物体の動きを指定できるようになります。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>論文は既存の制御可能 I2V 手法を整理したうえで、3 つの限界を挙げています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 1</span>物理を低レベルの信号として符号化する</p>
+          <p>力や速度場、構造化された物理アノテーションを制御信号として与える、物理を意識した（physics-aware）手法があります。しかし物理を低レベルの制御場や、あらかじめ決めたカテゴリとして表現するため、オープンドメイン（対象を限定しない、あらゆる場面）における複数の実体同士の複雑な相互作用を表現しきれません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">限界 2</span>低レベルの幾何的手がかりに条件付ける</p>
+          <p>点の軌跡やオプティカルフロー（フレーム間で画素がどこへ動いたかを表す流れ場）、セグメンテーションマスク、疎なバウンディングボックスなどを与える方式です。多物体シーンでは制御が煩雑になり、少数の制御に生じた小さな誤りが、全体としては非現実的な動き（接触の不整合、滑り、物体の貫通、非同期な挙動）を引き起こします。オクルージョン（物体が別の物体に隠れること）や重なりの下では、そもそも軌跡の指定自体が曖昧になります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 3</span>データ取得コストの高さ</p>
+          <p>軌跡ベースの手法も、物理を条件として与える（physics-conditioned。限界 1 で述べた physics-aware な手法と同じ系統です）手法も、密なモーションアノテーション・軌跡・オプティカルフロー・物理ラベルを含む大規模なキュレーション済みデータセットに強く依存します。論文が挙げる具体例では、Wan-Move は 2M（200 万）サンプル、Motion Prompting は 2.2M、Motion-I2V は 10M サンプルで学習しています。この規模のデータを揃えるのは容易ではなく、多様な環境へスケールさせにくいという問題があります。</p>
+        </div>
+      </div>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>全体の流れ</h3>
+      <p>GraphVid の処理は 5 段階です。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">物体を検出してノード埋め込みへ</p>
+          <p>入力画像 I₀ から物体を検出し、ノード埋め込み（ベクトル表現）に符号化します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">MLLM が関係エッジを抽出</p>
+          <p>MLLM（マルチモーダル大規模言語モデル。画像とテキストの両方を扱える LLM）が関係エッジを抽出し、初期インタラクショングラフを構築します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">ユーザーがグラフを編集</p>
+          <p>ユーザーが画像上で直接操作して望むダイナミクスを指定し、グラフを編集します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">Edge-Aware Graph Reasoning で条件付けトークンへ</p>
+          <p>編集されたグラフを Edge-Aware Graph Reasoning（エッジを考慮したグラフ推論）で処理し、conditioning tokens（条件付けトークン）に変換します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">凍結した動画生成 transformer を誘導</p>
+          <p>凍結された動画生成 transformer をそのトークンで誘導し、相互作用と整合した動画を生成します。</p>
+        </li>
+      </ol>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 780 250" role="img" aria-label="GraphVid の処理フロー図。入力画像 I₀ から物体を検出してノード埋め込みを作り、MLLM が関係エッジを抽出して初期インタラクショングラフを構築する。ユーザーがグラフを編集し、Edge-Aware Graph Reasoning（GINEConv）が条件付けトークンへ変換する。そのトークンが凍結された動画生成 transformer（LTX-Video）を誘導して動画を生成する。学習されるのは GNN・アダプタの MLP・LoRA のみで、VAE と DiT バックボーンは凍結。">
+          <defs>
+            <marker id="gv-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+            <marker id="gv-arrow-accent" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-accent)"></path>
+            </marker>
+          </defs>
+
+          <!-- S1 input image -->
+          <rect x="10" y="72" width="118" height="66" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="69" y="98" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">入力画像 I₀</text>
+          <text x="69" y="117" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">物体検出 → ノード</text>
+
+          <path d="M128,105 L146,105" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#gv-arrow)"></path>
+
+          <!-- S2 graph construction -->
+          <rect x="148" y="60" width="164" height="90" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="230" y="82" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">インタラクショングラフ</text>
+          <!-- mini graph: three nodes with directed edges -->
+          <circle cx="188" cy="112" r="11" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></circle>
+          <circle cx="272" cy="112" r="11" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></circle>
+          <circle cx="230" cy="136" r="11" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></circle>
+          <path d="M200,110 L258,110" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#gv-arrow-accent)"></path>
+          <path d="M195,122 L216,133" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#gv-arrow-accent)"></path>
+          <text x="230" y="103" text-anchor="middle" style="font-size:10px;fill:var(--color-text-muted)">push / pull / lift</text>
+          <text x="230" y="160" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">MLLM が構築 → ユーザー編集</text>
+
+          <path d="M312,105 L330,105" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#gv-arrow-accent)"></path>
+
+          <!-- S3 GNN -->
+          <rect x="332" y="66" width="152" height="78" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="408" y="90" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">Edge-Aware</text>
+          <text x="408" y="107" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">Graph Reasoning</text>
+          <text x="408" y="126" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">GINEConv（学習対象）</text>
+
+          <path d="M484,105 L502,105" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#gv-arrow-accent)"></path>
+
+          <!-- S4 adapter -->
+          <rect x="504" y="66" width="142" height="78" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="2"></rect>
+          <text x="575" y="90" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">Graph-to-Video</text>
+          <text x="575" y="107" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">Adapter</text>
+          <text x="575" y="126" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">条件付けトークン</text>
+
+          <path d="M646,105 L664,105" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#gv-arrow-accent)"></path>
+
+          <!-- S5 DiT -->
+          <rect x="666" y="66" width="104" height="78" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="718" y="90" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">動画 DiT</text>
+          <text x="718" y="107" text-anchor="middle" style="font-size:10px;fill:var(--color-text-muted)">LTX-Video</text>
+          <text x="718" y="124" text-anchor="middle" style="font-size:10px;fill:var(--color-text-muted)">凍結（+ LoRA）</text>
+
+          <!-- training scope note: graph side (GNN + adapter MLP) -->
+          <path d="M332,152 L332,190 L646,190 L646,152" fill="none" stroke="var(--color-accent)" stroke-width="1.2" stroke-dasharray="4 4"></path>
+          <text x="489" y="208" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">枠内は学習対象：GNN・アダプタの MLP</text>
+          <!-- training scope note: LoRA inside the frozen DiT -->
+          <path d="M666,152 L666,176 L770,176 L770,152" fill="none" stroke="var(--color-accent)" stroke-width="1.2" stroke-dasharray="4 4"></path>
+          <text x="718" y="192" text-anchor="middle" style="font-size:10px;fill:var(--color-accent)">LoRA も学習対象</text>
+          <text x="489" y="232" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">VAE と DiT バックボーンは凍結のまま</text>
+        </svg>
+        <figcaption class="diagram__caption">入力画像からグラフを作り、エッジの意味を扱える GNN と軽量アダプタを介して、凍結した動画 DiT を条件付けトークンで誘導する。学習対象は GNN・アダプタの MLP・LoRA に限られる。</figcaption>
+      </figure>
+
+      <h3>インタラクショングラフとは何か</h3>
+      <p>グラフ G = (V, E) は属性付きの有向グラフです。各ノード v_i は入力画像中で検出された entity（実体、物体）に対応します。各有向エッジ e_ij は物体 i から物体 j への関係タイプ r_ij（例: push, pull, lift, hold）を符号化し、実体同士がどう影響し合うかを記述します。加えて任意で、粗い方向と大きさといった定性的な物理的手がかりも持てます。</p>
+      <p>「ある物体だけを回す」のような、相手のいない単項の指示は自己ループエッジ e_ii として表現します（例: rotate, move, scale）。目標は条件付き動画生成器 p(I_{1:T} | I₀, G) を学習することです。</p>
+      <p>ノードの中身は 3 つの情報の連結です。バウンディングボックス内の画像領域から得た視覚埋め込み、物体ラベルのテキスト埋め込み、そして正規化されたバウンディングボックス座標。これにより外観・意味的な同一性・空間的な位置を同時に捉えます。エッジのほうは、始点（source）の物体と終点（target）の物体の間で意図された相互作用を表す、自由な語彙のテキスト記述であり、テキスト埋め込みモデルで符号化されます。あらかじめ決めた関係カテゴリに縛られない点がポイントです。</p>
+
+      <h3>Edge-Aware Graph Reasoning：エッジの意味を捨てない</h3>
+      <p>グラフニューラルネットワークの標準的な手法である GCN は、エッジを「つながっているか否か」という二値の接続性信号としてしか扱わず、主にノードの特徴を伝播させます。しかし物理的な相互作用をモデル化する場合、関係のタイプそのものが運動の仕方を直接決めます。「押す」と「引く」では結果が正反対です。関係の属性を無視すると、グラフは単なる空間的な隣接情報に退化してしまいます。</p>
+      <p>そこで本手法は <strong>GINEConv</strong>（edge-aware Graph Isomorphism Network、エッジ特徴を扱えるグラフ同型ネットワーク）を採用します。ノード同士が情報をやり取りする message passing の集約ステップにエッジの意味を直接注入する仕組みです。ノード特徴とエッジ特徴を学習可能な MLP（多層パーセプトロン。単純な全結合ニューラルネットワーク）で共有の隠れ空間に射影し、L 層の GINEConv を適用します。</p>
+
+      <pre><code>h^(l+1)_i = MLP^(l) ( h^(l)_i + Σ_{j∈N(i)} ReLU( h^(l)_j + a_ji ) )</code></pre>
+
+      <p>記号の意味は次のとおりです。h は各ノード（物体）の表現、N(i) はノード i と繋がっている相手のノード、a_ji はエッジ j→i の特徴、ReLU は負の値を 0 に潰す標準的な活性化関数です。式は「自分の表現に、繋がっている相手の表現とその関係の特徴を足し合わせたものを混ぜ、MLP を通して次の層の表現を作る」と読めます。</p>
+      <p>この定式化により、各ノードの表現は「近くにどんな物体があるか」だけでなく「それらとどんな物理的関係にあるか」にも条件付けられます。</p>
+
+      <h3>Graph-to-Video Adapter：本体には触らない</h3>
+      <p>事前学習済みの <strong>DiT</strong>（Diffusion Transformer）バックボーンである LTX-Video は凍結したまま使います。そのうえで、グラフ埋め込みを transformer の入力空間と互換な conditioning tokens に変換する軽量なアダプタを導入します。</p>
+      <p>相互作用を織り込んだノード埋め込み h_i を MLP で transformer の潜在空間（モデルが内部で扱う圧縮された表現の空間）へ射影し、各ベクトルを意味的な条件付けトークンとして扱います。シーンごとに物体数が変わるため、ノード系列は最大長 N_max まで空のトークンで埋められます（パディング）。得られたトークンをエッジのテキストトークンと連結し、エンコーダ側の隠れ状態（encoder hidden states。条件情報として transformer に渡される入力）として渡します。こうすることで transformer の self-attention（自己注意機構。系列内の要素同士の関連度を計算する仕組み）が実体間の相互作用を推論し、グラフ構造を生成時の動きへ翻訳できるようになります。</p>
+
+      <h3>学習</h3>
+      <p>凍結した DiT を新しい「グラフ条件付け」という入力の種類に適応させるため、各 transformer ブロックの Q・K・V（self-attention の Query・Key・Value。注意の計算に使う 3 つの射影）と出力射影層に <strong>LoRA</strong>（Low-Rank Adaptation。事前学習済みの重みを変えずに少数の追加パラメータだけで適応させる手法）を注入します。</p>
+      <p>学習目標は、事前学習済み拡散モデルが用いる flow-matching（フローマッチング）です。まず目標動画 x₀ を潜在空間に符号化します。次に 0 と 1 の間の混合比 t を確率的に選び（論文は logit-normal 分布を使います。0 や 1 の近くより中間の値が出やすい分布です）、ノイズ x₁ と混ぜて x_t = (1−t)x₀ + t x₁ を作ります。損失は L_CFM(θ) = E[ ‖ v_θ(x_t, t, c) − (x₁ − x₀) ‖²₂ ] です。</p>
+      <p>平たく言えば、x₁ はノイズ、x_t は目標動画とノイズを比率 t で混ぜた中間状態です。モデル v_θ はその中間状態と混合比 t、そして条件 c（ここではグラフ由来の条件付けトークン）を受け取り、動画とノイズを結ぶ「進む向き」（x₁ − x₀）を予測するよう学習します。生成時はこの向きを逆にたどることで、ノイズを動画へと運びます。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>学習時に更新されるのは GNN のパラメータ、Graph-to-Adapter の MLP 層、LoRA モジュールだけです。</strong>VAE（動画を圧縮された潜在表現に変換し、また元に戻す部品）と DiT バックボーンは凍結のままです。</p>
+        </div>
+      </div>
+
+      <h3>GraphVid-Bench：グラフ付き動画データセット</h3>
+      <p>既存の動画生成ベンチマークは主にテキストプロンプトや低レベルのモーション手がかりに依存しており、物体レベルの相互作用を制御する評価が限られていました。そこで著者らは、動画とインタラクショングラフを対にした <strong>GraphVid-Bench</strong> を構築しています。</p>
+      <p>規模は約 27K の相互作用中心（interaction-centric）な動画クリップで、全クリップを 81 フレーム / 16 fps に標準化しています。1 グラフあたりのノード数は平均 7.76（中央値 5.0）、エッジ数は平均 4.85（中央値 4.0）。相互作用の複雑さで分類すると、次のような内訳です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>相互作用の複雑さ</th>
+            <th>クリップ数</th>
+            <th>位置づけ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>相互作用なし（N=0）</th>
+            <td>3,881 件</td>
+            <td>自然な物体運動のみ</td>
+          </tr>
+          <tr>
+            <th>単一相互作用（N=1）</th>
+            <td>10,982 件</td>
+            <td>1 組の相互作用</td>
+          </tr>
+          <tr>
+            <th>複数相互作用（N&gt;1）</th>
+            <td>12,641 件</td>
+            <td>複数が同時に絡む</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>N=0 のサンプルは実体間の直接的な相互作用がない自然な物体運動を含み、一般的な動画ダイナミクスを学ぶベースラインになります。推論時にユーザーがエッジを追加できる設計なので、こうしたサンプルは「新しい相互作用が導入されたときにシーンがどう変わるか」を学ぶのに役立ちます。</p>
+      <p>学習データは 3 つのオープンソースデータセット（WISA-80K、Something-Something v2、MagicData）から構成され、評価用には DAVIS 2017 と MoveBench から抽出・厳選した、評価専用の分割（テスト split）を用意しています。前処理では Qwen3-VL で各動画の支配的な運動源を分類し、個別の物体同士の相互作用（discrete object interactions）と判定された動画のみを残します。カメラの動きが支配的な動画などを除くためです。リサイズは 512×288 で、中央だけを切り出す center-crop ではなく dynamic letterboxing（元のアスペクト比を保ったまま余白を足してリサイズする手法）を使い、フレーム端の重要な相互作用が切り落とされるのを防いでいます。</p>
+
+      <h2>結果：何が分かったのか</h2>
+
+      <h3>主結果</h3>
+      <p>主評価は MoveBench の、相互作用が中心となるサブセットです。指標は FID・FVD（低いほど良い、画質と分布整合性）、PSNR・SSIM（高いほど良い、再構成の忠実度）、そして EPE（End-Point Error。予測と正解のオプティカルフローの平均変位で、生成された動きが意図した相互作用に従っているかを直接測る。低いほど良い）です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Train Data</th>
+            <th>Trainable Params (B)</th>
+            <th>Inference (s)↓</th>
+            <th>FID↓</th>
+            <th>FVD↓</th>
+            <th>PSNR↑</th>
+            <th>SSIM↑</th>
+            <th>EPE↓</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Wan-Move</th>
+            <td>2M</td>
+            <td>14.5</td>
+            <td>1800</td>
+            <td>15.56</td>
+            <td>82.17</td>
+            <td>17.21</td>
+            <td>0.61</td>
+            <td>2.6</td>
+          </tr>
+          <tr>
+            <th>Motion-I2V</th>
+            <td>10M</td>
+            <td>1.2</td>
+            <td>790</td>
+            <td>28.32</td>
+            <td>159.32</td>
+            <td>9.87</td>
+            <td>0.38</td>
+            <td>3.9</td>
+          </tr>
+          <tr>
+            <th>Tora</th>
+            <td>630K</td>
+            <td>5</td>
+            <td>1200</td>
+            <td>24.45</td>
+            <td>110.47</td>
+            <td>11.27</td>
+            <td>0.54</td>
+            <td>3.3</td>
+          </tr>
+          <tr>
+            <th>MagicMotion</th>
+            <td>23K</td>
+            <td>1.5</td>
+            <td>750</td>
+            <td>26.57</td>
+            <td>105.12</td>
+            <td>12.04</td>
+            <td>0.51</td>
+            <td>3.2</td>
+          </tr>
+          <tr>
+            <th>WISA</th>
+            <td>80K</td>
+            <td>1</td>
+            <td>1000</td>
+            <td>25.98</td>
+            <td>107.89</td>
+            <td>15.08</td>
+            <td>0.53</td>
+            <td>4.1</td>
+          </tr>
+          <tr>
+            <th>FlashMotion</th>
+            <td>23K</td>
+            <td>13</td>
+            <td>677</td>
+            <td>19.02</td>
+            <td>104.12</td>
+            <td>14.04</td>
+            <td>0.56</td>
+            <td>3.8</td>
+          </tr>
+          <tr>
+            <th>GraphVid (Ours)</th>
+            <td class="is-best">27K</td>
+            <td class="is-best">0.6</td>
+            <td class="is-best">200</td>
+            <td>17.02</td>
+            <td>99.42</td>
+            <td>15.98</td>
+            <td>0.61</td>
+            <td>2.9</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>同程度以下のデータ規模で学習した手法との比較では、GraphVid が広く優位に立ちます。WISA 比では FID を 34.5% 削減（25.98→17.02）、FVD を 7.8% 削減（107.89→99.42）、PSNR を 5.9% 向上（15.08→15.98）、SSIM を 15.0% 向上（0.53→0.61）、EPE を 29.3% 改善（4.1→2.9）。Motion-I2V 比では FID −39.9%、FVD −37.6%、PSNR +61.9%、SSIM +60.5%。FlashMotion 比では FID を 10.5% 削減し、MagicMotion 比では約 36% 削減しています。</p>
+      <p>動きの正確さを測る EPE では、GraphVid の 2.9 は比較可能な軌跡ベース手法すべて（Motion-I2V 3.9、FlashMotion 3.8、Tora 3.3、MagicMotion 3.2）を下回りました。明示的なモーション教師信号を一切使わずに、モーション誤差を 9.4〜25.6% 削減したことになります。</p>
+      <p>一方で Wan-Move は絶対値の指標では最良です。ただし約 2M 動画で学習し、14.5B パラメータのバックボーンを使っています。論文は、GraphVid が約 2 桁少ない学習データと約 24 分の 1 のモデルパラメータで競合する性能を達成した、という位置づけで述べています。</p>
+
+      <h3>多物体シーンでの比較</h3>
+      <p>複数物体が絡むシナリオだけを集めたサブセットでも評価しています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>TrainData</th>
+            <th>Trainable Params (B)</th>
+            <th>FID↓</th>
+            <th>FVD↓</th>
+            <th>PSNR↑</th>
+            <th>SSIM↑</th>
+            <th>EPE↓</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>Wan-Move</th>
+            <td>2M</td>
+            <td>14.5</td>
+            <td>31.29</td>
+            <td>252</td>
+            <td>16.69</td>
+            <td>0.61</td>
+            <td>2.2</td>
+          </tr>
+          <tr>
+            <th>Tora</th>
+            <td>630K</td>
+            <td>5</td>
+            <td>56.04</td>
+            <td>369</td>
+            <td>14.98</td>
+            <td>0.52</td>
+            <td>3.5</td>
+          </tr>
+          <tr>
+            <th>WISA</th>
+            <td>80K</td>
+            <td>1</td>
+            <td>60.12</td>
+            <td>341</td>
+            <td>13.13</td>
+            <td>0.55</td>
+            <td>3.9</td>
+          </tr>
+          <tr>
+            <th>FlashMotion</th>
+            <td>23K</td>
+            <td>13</td>
+            <td>55.03</td>
+            <td>311</td>
+            <td>12.12</td>
+            <td>0.52</td>
+            <td>3.9</td>
+          </tr>
+          <tr>
+            <th>GraphVid (Ours)</th>
+            <td>27K</td>
+            <td>0.6</td>
+            <td>49.45</td>
+            <td>291</td>
+            <td>14.44</td>
+            <td>0.55</td>
+            <td>3.0</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>同程度の規模の手法の中では、GraphVid が最良の FID（49.45、次点 FlashMotion 55.03 に対し 10.1% 改善）と最良の FVD（291、次点 311 に対し 6.4% 改善）を記録し、EPE も最小でした。再構成の忠実度では Tora（最良 PSNR）と WISA（最良 SSIM）に対して競合的な水準にとどまります。</p>
+
+      <h3>推論速度</h3>
+      <p>GraphVid は比較手法中で最速の 200 秒でした。Wan-Move の 1800 秒、Tora の 1200 秒、WISA の 1000 秒と比べて大幅に高速です。論文はこれを、軽量なインタラクショングラフ条件付けと LoRA ベースの統合により、重い補助モーションエンコーダや大規模なモーション予測モジュールが不要になったためだと説明しています。</p>
+
+      <h3>アブレーション：どの要素が効いているか</h3>
+
+      <p><strong>エッジの意味は必要か。</strong>何を条件として与えるかを比べると、次のようになります。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>条件として与えるもの</th>
+            <th>FID↓</th>
+            <th>FVD↓</th>
+            <th>PSNR↑</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>LTX のテキストプロンプト＋初期画像のみ</th>
+            <td>20.04</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <th>グラフの構造（トポロジー）のみ</th>
+            <td>17.52</td>
+            <td>—</td>
+            <td class="is-best">16.88</td>
+          </tr>
+          <tr>
+            <th>エッジ意味を含むフル構成</th>
+            <td class="is-best">17.02</td>
+            <td class="is-best">99.42</td>
+            <td>15.98</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>ここでトポロジーとは、どのノードがどのノードと繋がっているかという配線図のことです。グラフの構造だけを与えても FID は 20.04 から 17.52 へ改善し、空間的な境界を明示することが動きの局在化に効くと分かります。ただし、エッジのテキスト的な意味がないと「pushing」と「pulling」のような相反する相互作用を区別できず、深刻な動きの曖昧さが生じます。エッジ意味を含むフル構成が最良で FID 17.02、FVD 99.42 でした。なお PSNR に限っては、エッジテキストなしの 16.88 のほうがフル構成の 15.98 より高い値が報告されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">アブレーション</span>ノード数の上限</p>
+          <p>最大ノード容量は 30 が最良（FVD 99.42）で、128 や 256 を一貫して上回りました。実世界のシーングラフは、ノード数に対して繋がりが少ない疎な構造です。そのため必要以上に長い枠へ空のトークンを詰めると、self-attention が本来注目すべき情報に集中できず品質が落ちる、というのが著者らの説明です。全実験で上限 30 を採用しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">アブレーション</span>LoRA の rank</p>
+          <p>rank を上げると全指標が一貫して改善しました。16→128 で FID −7.2%、FVD −3.6%、PSNR +16.6%、SSIM +5.2%。報告実験ではすべて rank 128 を使用しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">アブレーション</span>バックボーンへの依存</p>
+          <p>2B の LTX を 5B の Wan 2.2 に置き換えても、FID 17.29 / FVD 100.01 と競合する性能を保ちました。エッジを考慮した GNN とアダプタが、グラフを別の潜在空間へ対応付けられているということです。グラフ表現が、土台となるモデルに依存しない（backbone-agnostic）条件付け信号であることを示しています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">アブレーション</span>エッジそのものの寄与</p>
+          <p>意味的なエッジ接続と message passing の層を省き、ノード情報だけを使う変種でも学習は収束し、ベースライン水準の制御は得られます（FVD 103）。しかし相互作用する実体間の複雑な物理的依存を十分には解けず、明示的なエッジ特徴を統合すると FVD 99.42、PSNR 15.98 へ全指標が改善しました。</p>
+        </div>
+      </div>
+
+      <h3>人手評価と環境負荷</h3>
+      <p>参加者 60 名、10 のインタラクションシナリオで、(a) プロンプトの意味的意図を最もよく満たす結果、(b) 視覚品質が最良の結果、をそれぞれ選んでもらう選好調査も実施されています（判定総数 1200）。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">60%</p>
+          <p class="stat__label">意味的意図で GraphVid が選ばれた割合（Win Rate）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">90%</p>
+          <p class="stat__label">視覚品質で GraphVid が選ばれた割合（Win Rate）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">192 kWh</p>
+          <p class="stat__label">GraphVid の学習コスト推定（8×A100 × 約 2.5 日 = 60 時間、GPU のみ）。Wan-Move（64×A100 × 10 日）は同じ仮定で 6144 kWh</p>
+        </div>
+      </div>
+
+      <p>10 シナリオ中 6 件で両指標の多数票を獲得し、3 件が引き分け、敗北は 1 件のみでした。意味的選好は全票の 39.5% を集め、Wan-Move（22.3%）、Tora（19.3%）、WISA（18.9%）を上回っています。</p>
+      <p>学習コストの推定は、NVIDIA A100 の最大 TDP（Thermal Design Power、熱設計電力。消費電力の上限の目安）を 400W と仮定したものです。</p>
+
+      <h3>定性的な違い</h3>
+      <p>論文の図では、ベースラインとの差が具体的に示されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">2 隻の船</span></p>
+          <p><strong>ベースライン：</strong>2 隻の運動軌跡を分離できないか、生成中に視覚アーティファクトを持ち込む。</p>
+          <p><strong>GraphVid：</strong>ユーザー指定の相互作用と整合した発散する軌跡を生成。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">ジョギング</span></p>
+          <p><strong>ベースライン：</strong>被写体をフレーム外に消したり、ジョギングではなく歩行を生成したり、モーションブラー（動きによる被写体のぶれ）を出したりする。</p>
+          <p><strong>GraphVid：</strong>被写体の同一性を安定に保つ。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">握手</span></p>
+          <p><strong>ベースライン：</strong>動きを突然終了させたり手をぼやけさせたりする。</p>
+          <p><strong>GraphVid：</strong>接触が一貫した滑らかな系列を生成。</p>
+        </div>
+      </div>
+
+      <h2>意義と限界</h2>
+      <p>著者らは、単一画像から構築した有向インタラクションシーングラフを通じて多物体ダイナミクスの対話的制御を可能にした最初のフレームワークである、と自らの知る限りという留保付きで述べています。</p>
+      <p>技術的な要点は 2 つあります。</p>
+      <ul>
+        <li>運動を「低レベルの信号」ではなく「実体間の構造化された相互作用」としてモデル化したこと。</li>
+        <li>凍結した動画 DiT に、パラメータ効率的な LoRA 条件付けで接続したこと。本体の重みを触らないため、事前学習で身についた「自然な動きらしさ」の感覚（生成の事前分布）を壊さずに、構造化された制御だけを足せます。</li>
+      </ul>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>共通する失敗モードは、シーングラフを構築する段階での物体検出の粒度です。</strong>VLM（Vision Language Model。画像と言語を扱うモデルで、ここでは前述の MLLM と同じくグラフの自動構築を担う部品を指します）が、小さい要素や記号的な要素を独立したノードとして分離できない場合に起こります。</p>
+        </div>
+      </div>
+
+      <p>例として、眠っているクマの上に描かれた小さな「Zzz」記号に回転を適用しようとしたケースが挙げられています。VLM はこの目立たないテキストを独立ノードとして切り出せませんでした。その結果、相互作用のベクトルが最も近い高信頼度の物体、つまりクマ本体に誤って結び付けられます。意図した記号ではなく被写体全体が丸ごと回転してしまい、フレーム間で深刻な幾何学的歪みが生じました。</p>
+      <p>著者らは、細かい粒度の相互作用制御に対して、現行のゼロショット検出（事前に学習していない対象も、その場で名前を頼りに検出しようとする方式）のパイプラインには限界があるとしています。そのうえで、将来のシステムは明示的なノード指定や対話的セグメンテーション（ユーザーが対象領域をその場で指定する方式）から恩恵を受けうると述べています。</p>
+      <p>このほか、ノード容量を過大にすると、空きを埋めるパディングが self-attention にノイズを持ち込み、関係の手がかりを薄めてしまうこと、トポロジーのみのグラフでは「押す」と「引く」を区別できないことも、アブレーションから確認された制約です。</p>
+      <p>広い影響についても言及があります。複雑なモーションアノテーションではなく直感的なインタラクショングラフでシーンダイナミクスを指定できるため、クリエイティブメディア制作、バーチャルプロトタイピング、物理現象の教育的可視化、ロボティクスや embodied AI（身体を持つ AI）研究のシミュレーション環境などへの寄与が期待されます。一方で、最小限の入力からリアルな動画を作れることは、誤情報やなりすましを含む改変メディアの作成にも寄与しうる懸念があります。著者らは、透かし（watermarking）、来歴追跡（provenance tracking）、検出手法といったセーフガードの探究を今後の研究に促しています。</p>
+
+      <h2>まとめ</h2>
+      <p>GraphVid は、動画生成の制御インターフェースを「軌跡を描く」から「関係を編集する」へ置き換えた研究です。物体をノード、相互作用を有向エッジとするグラフを条件として与え、エッジの意味まで扱える GNN と軽量アダプタで凍結した動画 DiT に接続することで、0.6B の学習可能パラメータと 27K クリップという小規模な構成で、桁違いに大きい既存手法に匹敵する制御性・品質・最速の推論速度を実現しました。残る課題は、グラフを自動構築する段階での物体検出の粒度であり、明示的なノード指定や対話的セグメンテーションが次の一手として示されています。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>インタラクションシーングラフ</dt>
+        <dd>ノードが入力画像中で検出された実体、有向エッジが物体 i から j への関係タイプ（push, pull, lift, hold 等）と任意の定性的物理手がかり（粗い方向・大きさ）を符号化するグラフ。相手を伴わない単項の指示（rotate, move, scale 等）は自己ループエッジで表す。</dd>
+
+        <dt>Edge-Aware Graph Reasoning</dt>
+        <dd>有向エッジの属性に message passing を条件付けるモジュール。GINEConv を用いてエッジの意味を集約ステップへ直接注入する。</dd>
+
+        <dt>GINEConv</dt>
+        <dd>エッジ属性を集約に注入できる GNN 層。標準の GCN がエッジを二値の接続性としてしか扱わない点を克服する。</dd>
+
+        <dt>conditioning tokens（条件付けトークン）</dt>
+        <dd>グラフ埋め込みを DiT の潜在空間へ射影して得る意味的トークン。エッジのテキストトークンと連結し、エンコーダ側の隠れ状態（encoder hidden states）として渡される。</dd>
+
+        <dt>DiT (Diffusion Transformer)</dt>
+        <dd>transformer ベースの拡散モデル。大規模化により長距離の時間的一貫性と視覚忠実度が向上する、動画合成の主流アーキテクチャ。本手法は事前学習済みバックボーン LTX-Video（Appendix B では LTX 2B と記載）を凍結して用いる。</dd>
+
+        <dt>LoRA (Low-Rank Adaptation)</dt>
+        <dd>事前学習済みの重みを変更せず、少数の学習可能パラメータで適応させる手法。本手法では attention の <code>to_q</code>, <code>to_k</code>, <code>to_v</code>, <code>to_out.0</code> に注入。</dd>
+
+        <dt>flow matching 目的関数</dt>
+        <dd>本手法の学習損失 L_CFM。x_t = (1−t)x₀ + t x₁ に対して v_θ(x_t, t, c) が (x₁ − x₀) を予測するよう学習する。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">GraphVid: Interactive Graph-Controllable Video Generation</p>
+      <p><a href="https://arxiv.org/abs/2607.21580" target="_blank" rel="noopener noreferrer">arXiv:2607.21580 を読む（arxiv.org）</a></p>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>

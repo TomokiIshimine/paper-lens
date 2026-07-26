@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>生成の途中で「キャンバス」を広げる — 出力サイズを自由度として扱う Expanding Flow Maps — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-23-2607.21585-expanding-flow-maps-variable-dimension-generation-cover.png"
+           alt="Expanding Flow Maps（EFM）「生成の途中でキャンバスを広げる」を 3 段で示すインフォグラフィック。左の「課題」は、四方を鍵で閉じられた四角形で「入れ物のサイズを最後まで変えられない」ことを示す。中央の「手法」は、小さな四角が段階的に大きな四角へ広がっていく図と、(1) 拡張作用素 E：次元を持ち上げる、(2) 輸送写像 X：データへ運ぶ、の 2 部構成を示す。右の「結果」は、分子配座生成で EFlow（蒸留前）が拡散ベースラインに対して 16〜50 倍少ないステップであること、分子グラフ生成（QM9）の 1 ステップ生成の FCD が EFM 0.44、CFM 2.14（低いほど良い）であることを棒グラフで示す。下部に「検証タスク：分子配座・分子グラフ・可変長テキスト」と記載。">
+    </figure>
+
+    <h1 class="article__title">生成の途中で「キャンバス」を広げる — 出力サイズを自由度として扱う Expanding Flow Maps</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-23</span>
+      <span>arXiv：2607.21585</span>
+      <span>カテゴリ：cs.LG</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>拡散モデルやフローマッチングといった近年の生成モデルは、最初に決めた「入れ物のサイズ」（画像なら解像度、文章ならトークン数）を最後まで変えられません。この論文は、生成の途中で次元やトークン数が増えていく道筋を定式化し、その上を流れる生成フロー Expanding Generative Flows（<strong>EFlow</strong>）を提案しました。さらに、それを少ないステップ数で走れるよう圧縮した（蒸留した）フローマップ Expanding Flow Maps（<strong>EFM</strong>）も併せて提案しています。中核は、状態をより高い次元へ持ち上げる「拡張作用素（expand operator）」と、持ち上がった状態をデータへ運ぶ「輸送写像（transport map）」の二部構成です。分子の 3 次元配座生成（連続空間）、分子グラフ生成と可変長テキスト生成（離散空間）の 3 タスクで検証され、既存の拡散手法より大幅に少ないステップ数で同等以上の結果を示しました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>中核のアイデアは「生成を、次元が増えていく空間の間の輸送として捉え直す」こと。</strong>部品は 2 つだけです。条件付きノイズで状態をより高次元の空間へ持ち上げる<strong>拡張作用素</strong>と、持ち上がった状態をターゲット分布へ押し進める<strong>輸送写像</strong>。この分解によって、出力のサイズそのものが学習と制御の対象になります。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">16〜50 倍</p>
+          <p class="stat__label">分子配座生成で、EFlow が拡散ベースライン（500〜1000 ステップ）より少ないステップ数。両データセットで競合ないし上回る</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">0.4876Å</p>
+          <p class="stat__label">GEOM-QM9 の AMR-P。EFlow+R（合計 30 ステップ）が全手法中最良を達成</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">0.44</p>
+          <p class="stat__label">分子グラフ生成（QM9）の 1 ステップ生成での EFM の FCD（低いほど良い）。CFM は 2.14</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">0.79M</p>
+          <p class="stat__label">可変長テキスト生成で、挿入ヘッドが追加するパラメータ数。バックボーンは DDiT</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>画像生成にせよテキスト生成にせよ、いまの主流の生成モデルは「ノイズから始めてデータへ向かう連続的な変形」を学びます。拡散モデル（diffusion model）やフローマッチング（flow matching）と呼ばれる枠組みです。ここには暗黙の前提があります。ノイズの入れ物とデータの入れ物が同じ形をしていること、つまり最初に用意した固定サイズのキャンバスの上だけで話が完結することです。</p>
+      <p>しかし現実の生成対象は、サイズそのものが決まっていないものだらけです。解像度が違う画像や 3D 形状、長さの分からない音声や動画、何単語になるか事前に分からない文章。異なるモダリティが混ざったデータでは、そもそも内在する次元が対象ごとに違います。固定キャンバスの前提は、こうした対象と正面から衝突します。</p>
+      <p>もう一つの流れが「少ステップ生成」です。拡散モデルは高品質な代わりに、生成に数百から千回のネットワーク評価を要します。これを 1〜2 回程度に圧縮する枠組みとして登場したのがフローマップ（flow map）です。この論文が掲げる問いは、その二つを同時に満たせるかというものでした。原文の言葉では「推論時に次元を適応的に変えながら、連続データと離散データの両方の少ステップ生成をどう可能にするか」です。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>まず用語を整理します。</p>
+      <p><strong>確率的補間路（stochastic interpolant）</strong> とは、ノイズの分布 <code>p_0</code> とデータの分布 <code>p_1</code> の間を連続時間でつなぐ経路のことです。もっとも素直な線形補間は、ノイズ <code>x_0</code> とデータ <code>x_1</code> を時刻 <code>t</code> で混ぜた <code>I_t(x_0, x_1) = (1−t) x_0 + t x_1</code> という形をとります。この経路に沿ってどちらへ動けばよいかを表すのが速度場（velocity field）で、これをニューラルネットで学習するのがフローマッチングです。生成時は速度場を時間方向に積分していきます。だから多数のステップが要ります。</p>
+      <p><strong>フローマップ（flow map）</strong> は、この積分をショートカットする発想です。任意の 2 時刻 <code>s</code> と <code>t</code> について「時刻 <code>s</code> の状態を時刻 <code>t</code> の状態へ直接送る写像」<code>X_{s,t}</code> をネットワークにパラメータ化します。形は <code>X_{s,t}(x_s) = x_s + (t−s) v_{s,t}(x_s)</code> で、<code>v_{s,t}</code> は「<code>s</code> から <code>t</code> へ一気に跳ぶときの平均速度（mean velocity）」です。訓練は、多ステップの教師フローから知識を移す蒸留（distillation）か、データから直接学ぶ自己蒸留（self-distillation）で行われます。これにより 1〜2 回の関数評価で生成できるようになります。</p>
+      <p>問題は、既存のフローマップがすべて <strong>固定キャンバス</strong> に縛られていることです。連続空間なら固定次元 <code>d</code>、離散空間なら固定系列長 <code>L</code>。論文は 3 節の冒頭で「標準的な連続フローの主要な限界は、状態空間が初期化時に固定されることにある」と述べています。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>なぜ単純に次元を増やせないのか。</strong>理由は数学的にはっきりしています。<code>s &lt; t</code> で次元が <code>d(s) &lt; d(t)</code> と増えるとき、出発点 <code>x_s</code> は <code>R^{d(s)}</code> に、到着点 <code>x_t</code> は <code>R^{d(t)}</code> に住んでいます。次元の違う空間の間には微分同相写像（滑らかで逆も滑らかな 1 対 1 対応）が存在しません。したがって <code>p_s</code> を <code>p_t</code> へ運ぶ固定次元の速度場も存在しません。フローという枠組みそのものが、次元の変化を許さないのです。</p>
+        </div>
+      </div>
+
+      <p>可変長生成を扱う研究は他にもあります。論文は FlexMDMs や Edit Flows をはじめとする複数の手法を挙げていますが、これらは可変長生成を実現する一方で「フローマップのパラダイムの外側にとどまる」と位置づけています。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>1. 拡張生成フロー（EFlow）：次元スケジュールを導入する</h3>
+      <p>出発点はシンプルです。固定次元 <code>d</code> を、時刻の関数である <strong>次元スケジュール</strong> <code>d(t)</code> に置き換えます。<code>d</code> は非減少、つまり <code>0 ≤ s &lt; t ≤ 1</code> のとき常に <code>d(s) ≤ d(t)</code> です。時刻 <code>t</code> の状態は <code>x_t ∈ R^{d(t)}</code> に住みます。この上で、フローを 3 つの部品に分解します。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 780 250" role="img" aria-label="EFlow の二部構成を示す処理フロー図。左端は時刻 s の状態 x_s（次元 d(s)、小さい入れ物）。まず拡張作用素 E_{s,t} が条件付きノイズ ε を注入して足りない座標を埋め、次元を d(t) へ持ち上げる。持ち上がった状態は、輸送写像 X_{s,t} によって局所時間に沿って前進し、時刻 t の状態 x_t（次元 d(t)）になる。輸送では挿入済みの座標だけが速度場に従って動き、未挿入の座標は速度 0 で動かない。全体は合成写像 Φ_{s,t} = X_{s,t} ∘ E_{s,t} と書ける。">
+          <defs>
+            <marker id="ef-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+            <marker id="ef-arrow-accent" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-accent)"></path>
+            </marker>
+          </defs>
+
+          <!-- x_s -->
+          <rect x="14" y="86" width="112" height="64" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="70" y="112" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">x_s</text>
+          <text x="70" y="132" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">次元 d(s)</text>
+
+          <path d="M126,118 L152,118" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ef-arrow-accent)"></path>
+
+          <!-- expand operator -->
+          <rect x="156" y="78" width="176" height="80" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="2"></rect>
+          <text x="244" y="104" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">拡張作用素 E_{s,t}</text>
+          <text x="244" y="123" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">次元を持ち上げる</text>
+          <text x="244" y="141" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">足りない座標を埋める</text>
+
+          <!-- noise input -->
+          <rect x="176" y="192" width="136" height="42" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5" stroke-dasharray="4 3"></rect>
+          <text x="244" y="218" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">条件付きノイズ ε</text>
+          <path d="M244,192 L244,162" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#ef-arrow)"></path>
+
+          <path d="M332,118 L358,118" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ef-arrow-accent)"></path>
+
+          <!-- expanded state -->
+          <rect x="362" y="78" width="130" height="80" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="427" y="104" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">拡張された状態</text>
+          <text x="427" y="123" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">次元 d(t) へ</text>
+          <text x="427" y="141" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">局所時間を各座標に付与</text>
+
+          <path d="M492,118 L518,118" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ef-arrow-accent)"></path>
+
+          <!-- transport -->
+          <rect x="522" y="78" width="176" height="80" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="2"></rect>
+          <text x="610" y="104" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">輸送写像 X_{s,t}</text>
+          <text x="610" y="123" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">データへ運ぶ</text>
+          <text x="610" y="141" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">未挿入の座標は速度 0</text>
+
+          <path d="M698,118 L722,118" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#ef-arrow-accent)"></path>
+
+          <!-- x_t -->
+          <rect x="726" y="86" width="46" height="64" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></rect>
+          <text x="749" y="112" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">x_t</text>
+          <text x="749" y="132" text-anchor="middle" style="font-size:10px;fill:var(--color-text-muted)">d(t)</text>
+
+          <!-- composite label -->
+          <text x="390" y="36" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">Φ_{s,t} := X_{s,t} ∘ E_{s,t}</text>
+          <text x="390" y="56" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">まず次元を持ち上げ、次に運ぶ</text>
+        </svg>
+        <figcaption class="diagram__caption">EFlow は「拡張作用素で次元を持ち上げてから、輸送写像で運ぶ」という順番の合成写像。周辺分布を合わせるだけでなく、どの出発点がどの到着点に対応するかというカップリングまで定めます。</figcaption>
+      </figure>
+
+      <p><strong>拡張作用素（expand operator）<code>E_{s,t}</code></strong> は、次元を持ち上げる役です。<code>R^{d(s)} × R^{d(t)−d(s)} → R^{d(t)}</code> という型を持ち、扱いやすい条件付き分布から引いたノイズ <code>ε</code> を使って、足りない座標を埋めます。どこに新しい座標を置くかという配置スキームには 3 通りが示されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">スキーム 1</span>Concatenation（連結）</p>
+          <p>末尾に新しい座標を足します。自己回帰的な系列生成や、点群への点の追加に自然な形です。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">スキーム 2</span>Positional Insertion（位置挿入）</p>
+          <p>系列の任意の位置に <code>ε</code> の要素を挿入します。任意長の系列生成や、穴埋め（infilling）に向きます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">スキーム 3</span>Child Expansion（子拡張）</p>
+          <p>新しい座標それぞれを親の座標 <code>pa(i)</code> に紐づけ、<code>x^ε_s[i] = x_s[pa(i)] + σ ε_i</code> と初期化します。構造を持った状態を粗いところから細かいところへ作っていく生成に適します。</p>
+        </div>
+      </div>
+
+      <p>挿入するノイズとその配置は、決定論的に決めてもよいですし、専用のネットワーク <code>Ê</code> に予測させることもできます。</p>
+
+      <p><strong>局所時間座標（local time coordinate）</strong> は、時計を揃える工夫です。座標ごとに生まれた時刻が違うので、そのままでは「いまどれくらいノイズが取れているか」を共通に語れません。そこで成分 <code>i</code> に、挿入時刻 <code>t^ins_i</code> を基準にした自分だけの時計 <code>t_i = (t − t^ins_i)/(1 − t^ins_i) ∈ [0,1]</code> を割り当てます。挿入された瞬間は <code>t_i = 0</code> で、時刻 1 で <code>t_i = 1</code> になります。</p>
+
+      <p><strong>輸送（transport）</strong> は、拡張された状態を前に進める役です。すでに挿入済みの座標（<code>t^ins_i ≤ t</code>）は標準的な速度場 <code>b_t</code> に従って自分の局所時間に沿って積分され、まだ挿入されていない座標は速度 0、つまり動きません。</p>
+
+      <p>この 2 段を合成したものが EFlow の定義です。</p>
+
+      <div class="math-display">
+        <p><code>Φ_{s,t} := X_{s,t} ∘ E_{s,t}: R^{d(s)} → R^{d(t)}</code></p>
+      </div>
+
+      <p>まず次元を持ち上げ、次に運ぶ、という順番です。これは周辺分布を合わせるだけでなく、<code>x_s</code> と <code>x_t</code> の完全なカップリング（どの出発点がどの到着点に対応するか）まで定めます。理論面では次のことが示されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">命題 3.1</span>押し出しとしての拡張作用素</p>
+          <p>拡張作用素は、挿入ノイズの分布を「押し出した（pushforward）」ものとして書けます。押し出しとは、ある分布を写像で送った先にできる分布のことです。つまり「時刻 <code>s</code> の状態 <code>x_s</code> を与えたときの時刻 <code>t</code> の状態の分布は、ノイズ <code>ε</code> の分布を拡張作用素で送ったものになる」ということです。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">命題 3.2</span>拡張フローは PDMP</p>
+          <p>拡張フローは、次元の異なる空間をすべて重ならないように一つに束ねた集合の上の <strong>区分決定論的マルコフ過程（PDMP）</strong> です。生成子は「滑らかに運ぶ輸送項」と「座標が挿入される瞬間のジャンプ項」の和になります。座標が生まれる瞬間には不連続なジャンプが起きるため、フローの言葉だけでは全区間 <code>t ∈ [0,1]</code> を通した記述ができません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">系 3.1</span>変数変換公式</p>
+          <p>変数変換公式（密度の変化を追う式）が導かれます。密度の変化に効くのは挿入済みの座標だけで、まだ生まれていない座標は挿入時刻まで密度に寄与しません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">注意 3.1</span>固定次元フローの回収</p>
+          <p>従来の固定次元フローは、<code>R^{d(t)}</code> が <code>t</code> によらず一定という特別な場合として回収されます。</p>
+        </div>
+      </div>
+
+      <h3>2. 拡張フローマップ（EFM）：次元の増加と時間の前進を一度に</h3>
+      <p>EFlow はまだ多ステップの積分を必要とします。ここに少ステップ生成を持ち込むのが EFM です。拡張補間路の上で、2 つの時刻の間を <strong>単一の学習済みステップ</strong> で移す写像を作ります。</p>
+
+      <div class="math-display">
+        <p><code>Φ_{s,t}(x_s) := X_{s,t}(E_{s,t}(x_s)) = E_{s,t}(x_s) + (t − s) v_{s,t}(E_{s,t}(x_s))</code></p>
+      </div>
+
+      <p>つまり「次元を上げてから、平均速度で一気に跳ぶ」形です。<code>s → t</code> の極限で瞬時速度に一致するという接条件（tangent condition）を課し、<code>s = t</code> にあたる場合を回帰することで訓練します。回帰ターゲットは、データからの自己蒸留なら <code>x_1^{(t)} − E_{0,t}(x_0)</code>、教師フローからの蒸留なら教師の速度 <code>b̂_t(x_t)</code> です。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>命題 4.1（実用上の含意が大きい結果）：</strong>固定次元のフローマップが満たすべき 3 つの整合条件は、拡張設定でもそのまま成り立ちます。唯一の違いは、条件の一つに現れるヤコビアン（写像が各点で入力をどう伸縮させるかを表す行列）<code>∇_x Φ_{s,t}</code> が <strong>長方形の行列</strong> になることだけです。入力側の次元 <code>d(s)</code> と出力側の次元 <code>d(t)</code> が違うため、行列の縦横のサイズが揃わないのです。既存のフローマップの学習手法をほぼそのまま移植できる、という意味で実用上大きな含意を持ちます。ただし固定次元の場合と違い、フローマップは拡張作用素 <code>Ê_{s,t}</code> と速度 <code>v̂_{s,t}</code> の両方でパラメータ化されます。</p>
+          <p><strong>命題 4.2：</strong>EFM は決定論的な写像ではなく <strong>確率的なフローマップ</strong> です。確率性は条件付きノイズ <code>ε</code> の明示的な注入から生まれ、<code>t = 1</code> でクリーンな事後分布を復元します。単一の軌道にコミットせず、将来状態の分布全体を捉えられるということです。</p>
+        </div>
+      </div>
+
+      <h3>3. 離散版：拡張はトークン挿入、輸送はトークン脱ノイズ</h3>
+      <p>離散データ（分子グラフや文章）へは、カテゴリカル分布の空間であるシンプレックス（simplex）を経由して持ち込みます。この設定では、拡張作用素は <strong>トークンの挿入</strong> に、輸送は <strong>トークンの脱ノイズ</strong> に対応します。直感的には、文章が空の状態から少しずつ単語の枠を増やしながら、同時にそれぞれの枠の中身を意味の通る単語へ整えていくイメージです。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">挿入スケジュール <code>α_t</code> を訓練時に固定する</p>
+          <p><code>α_0 = 0</code>、<code>α_1 = 1</code> とします。位置 <code>i</code> が時刻 <code>t</code> までに挿入済みである確率が <code>α_t</code> です。各位置は「未挿入」か「局所時間 <code>t_i</code> における潜在状態」のどちらかを取ります。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">挿入期待値 <code>I_{s,t}(x_s)[i]</code> を定める</p>
+          <p>隣り合う 2 つの活性トークンの間の隙間（ギャップ）<code>i</code> に、区間 <code>(s,t]</code> で挿入されるトークン数の期待値です。<code>I_{s,t}(x_s)[i] = ((α_t − α_s)/(1 − α_s)) I_s(x_s)[i]</code> と書けます。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">挿入損失 <code>L_insert</code> で挿入ヘッドを学習する</p>
+          <p>挿入を担当するヘッドに 2 つの教師信号を与えます。<code>s = t</code> にあたる場合は「時刻 <code>t</code> の時点で各ギャップに何本入っているか」を、<code>s &lt; t</code> の場合は「区間 <code>(s,t]</code> で何本入るか」を学習させます。これにより、2 時刻間の挿入本数を直接予測できるようになります（損失の形は Poisson 分布、すなわちまれな事象の個数を表す確率分布の負の対数尤度です）。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">離散の拡張作用素が二項分布に従ってトークンを挿入する</p>
+          <p>ギャップごとに決めた本数 <code>ℓ_i</code> だけ潜在トークンを挿入します。この本数を <strong>二項分布（Binomial）</strong> <code>ℓ_i ~ Binomial(L − n_s, Î_{s,t}(x_s)[i]/(L − n_s))</code> から引くのがポイントです。期待値を <code>Î_{s,t}</code> に保ちながら、各ギャップを残りのトークン予算で打ち切ります。</p>
+        </li>
+      </ol>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>なぜ二項分布なのか。</strong>この論文で特に読みどころのある議論です。多ステップの場合、1 ステップあたりの挿入は少ないので、残り予算 <code>L − n_s</code> が挿入期待値 <code>Î_{s,t}</code> よりずっと大きくなります。このとき二項分布は Poisson 分布へ収束し、3 節の PDMP が定める微小ジャンプ則と一致します。ところが少ステップで <code>(s,t)</code> が <code>(0,1)</code> に近づくと、1 回でほぼ全長を挿入することになり、事情が変わります。Poisson 分布は上限が非有界で分散が平均に等しいため、この領域では破綻します。一方で二項分布の分散 <code>np(1−p)</code> は <code>p → 1</code> で消えていくので、正確なカウントへ集中します。<strong>多ステップと少ステップの両方を 1 つの定式化で扱うために、二項分布が必要だった</strong>わけです。</p>
+        </div>
+      </div>
+
+      <p>離散版の EFM 自体は <code>Φ_{s,t}(x_s) := ((1−t)/(1−s)) E_{s,t}(x_s) + ((t−s)/(1−s)) ψ_{s,t}(E_{s,t}(x_s))</code> という形で、<code>ψ_{s,t}</code> は平均脱ノイザ（mean denoiser）です。各位置の出力がシンプレックス上にあるため、通常のクロスエントロピー損失で最適化できます。<strong>命題 5.1</strong> で、連続版と同じ 3 つの整合条件の離散版が示されています。</p>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>検証は 3 タスクで行われました。連続空間の分子配座生成、離散の分子グラフ生成、そして可変長の言語モデリングです。</p>
+
+      <h3>分子コンフォーマ生成（連続空間）</h3>
+      <p>分子の 3 次元的な立体配置（コンフォーマ）を生成するタスクです。データセットは GEOM-QM9 と GEOM-Drugs で、テストは各データセット 200 分子（QM9 で 22,409 コンフォーマ、Drugs で 14,324）。評価指標は Coverage（COV、どれだけ網羅できたか）と Average Minimum RMSD（AMR、最も近い相手までの平均距離、単位はÅ）を、recall（R）と precision（P）の両面で見ます。</p>
+      <p>設定が面白いところです。粗いところから細かいところへの二段階の生成を、原子ごとの局所時間を持つ <strong>単一の挿入フロー</strong> で実現しています。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">重原子の骨格をガウスノイズから脱ノイズする</p>
+          <p>まず分子の骨格にあたる重原子の配置を作ります。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">途中の時刻で骨格を凍結する</p>
+          <p>できあがった骨格をその時点で固定します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">水素原子を挿入し、骨格の周りだけを解く</p>
+          <p>分子グラフから原子数は既に分かっているため、拡張作用素は child expansion の決定論的なケースを使います。速度場のネットワークは公平な比較のため MSGEN が用いる GeoDiff の dual-encoder を流用しています。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">（任意）10 ステップの精錬器（refiner）で仕上げる</p>
+          <p>追加 10 回の評価だけで、凍結した重原子骨格の周りの局所的な幾何を整え、精度系の指標を一貫して改善します。</p>
+        </li>
+      </ol>
+
+      <p>比較対象の GeoDiff、SubgDiff、MSGEN といった拡散ベースラインは 500〜1000 回の脱ノイズステップを要します。これに対する結果です。</p>
+      <ul>
+        <li>EFlow は拡散ベースラインより <strong>16〜50 倍少ないステップ</strong> で、両データセットにおいて競合ないし上回る結果を出しました。</li>
+        <li>GEOM-QM9 での EFlow（20 ステップ）は COV-R 88.51%、COV-P 53.07%。</li>
+        <li>10 ステップの精錬器を加えた EFlow+R（合計 30 ステップ）は、QM9 で <strong>全手法中最良の AMR-P 0.4876Å</strong> を達成しました。</li>
+        <li>改善が最も顕著なのは最大 181 原子の GEOM-Drugs で、4 指標すべてで最良か次点を占めました。</li>
+        <li>注目すべきは、<strong>まだ蒸留していない EFlow の時点で</strong> 多ステップ拡散の性能をごくわずかな予算で上回っていることです。</li>
+        <li>蒸留後の EFM は 4 ステップ、2 ステップ、さらには <strong>1 ステップ</strong> でコンフォーマを生成できます。EFM+R は GEOM-Drugs の 4 指標すべてで単独最良でした（14 ステップで COV-R 87.97/95.45、AMR-R 0.9029/0.8836、COV-P 64.67/73.25、AMR-P 1.1575/1.0875、値は Mean/Median）。</li>
+      </ul>
+
+      <p>正直な数字も載っています。EFM 単独の 1 ステップ（QM9）は COV-R 69.21/69.23、AMR-R 0.4884/0.4635、COV-P 32.18/29.09、AMR-P 0.6093/0.5794 で、多ステップのベースラインには劣ります。2 ステップ、4 ステップと増やすと段階的に改善し、QM9 の COV-R は 72.83 から 83.62 へ伸びます。</p>
+
+      <p>化学的な妥当性も、量子化学計算ソフト Psi4 で確認されています。GEOM-QM9 の 30 分子について 50 コンフォーマずつ生成し、生成したコンフォーマ集団の物性を評価しました。指標は <code>E</code>、<code>E_min</code>、<code>∆ε_avg</code>、<code>∆ε_max</code>、<code>∆ε_min</code> の 5 つで、いずれも参照値との絶対誤差の中央値（単位 eV、低いほど良い）です。各記号が指す物性の詳しい定義は原論文の付録に譲ります。結果は次のとおりです。EFlow+R（30 ステップ）は 5 指標のうち 4 つで、既存手法である RDKit と ConfGF の両方を上回りました。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法</th>
+            <th><code>E</code>↓</th>
+            <th><code>E_min</code>↓</th>
+            <th><code>∆ε_avg</code>↓</th>
+            <th><code>∆ε_max</code>↓</th>
+            <th><code>∆ε_min</code>↓</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>EFlow+R（30 ステップ）</th>
+            <td class="is-best">0.4506</td>
+            <td class="is-best">0.0731</td>
+            <td class="is-best">0.2204</td>
+            <td class="is-best">0.1156</td>
+            <td>0.8717</td>
+          </tr>
+          <tr>
+            <th>RDKit</th>
+            <td>0.8914</td>
+            <td>0.6629</td>
+            <td>0.2947</td>
+            <td>0.1617</td>
+            <td>0.5196</td>
+          </tr>
+          <tr>
+            <th>ConfGF</th>
+            <td>0.5328</td>
+            <td>0.1145</td>
+            <td>0.3207</td>
+            <td>0.1337</td>
+            <td>—</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>単位は eV、参照値との絶対誤差の中央値（低いほど良い）。網掛けは EFlow+R が RDKit・ConfGF の両方を上回った 4 指標。「—」は本記事で数値を挙げていない箇所。</p>
+
+      <p>一方で悪化した項目もあります。<code>∆ε_min</code> は 0.8717 で、RDKit の 0.5196 より悪くなっています。また EFM+R（14 ステップ）は <code>E</code> が 2.0521、<code>∆ε_min</code> が 2.6383 など、複数の項目で悪化しました。少ステップ化には代償があるということです。</p>
+
+      <h3>離散分子グラフ生成</h3>
+      <p>QM9 データセットで、分子をグラフ（ノードが原子、エッジが結合）として直接生成するタスクです。10,000 分子を生成し、Validity（RDKit で有効な分子として解釈できる割合）、Uniqueness（そのうち互いに異なる割合）、FCD（Fréchet ChemNet Distance、参照分布との距離、低いほど良い）で評価します。</p>
+      <p>コンフォーマ生成と違い、ここではグラフのサイズが事前に分かりません。そのため拡張作用素は、サンプリング時に挿入するノード数を予測する <strong>学習ヘッド</strong> になります。脱ノイザは公平な比較のため DeFoG の graph transformer を使っています。多ステップ領域での DeFoG との比較です（Valid↑ / Unique↑ / FCD↓）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ステップ数</th>
+            <th>DeFoG</th>
+            <th>EFlow</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>100</th>
+            <td>99.2 / 96.2 / 0.134</td>
+            <td>98.9 / 95.9 / <span class="is-best">0.116</span></td>
+          </tr>
+          <tr>
+            <th>50</th>
+            <td>98.8 / 96.2 / 0.260</td>
+            <td>98.8 / 96.1 / <span class="is-best">0.131</span></td>
+          </tr>
+          <tr>
+            <th>10</th>
+            <td>88.6 / 92.8 / 1.630</td>
+            <td class="is-best">97.9 / 96.1 / 0.390</td>
+          </tr>
+          <tr>
+            <th>4</th>
+            <td>53.6 / 63.1 / 3.008</td>
+            <td class="is-best">91.7 / 92.8 / 1.780</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>100 ステップの予算でも EFlow は FCD で既に DeFoG を上回っており、ステップ予算が縮むほど差が広がります。100 から 10 ステップへ減らしても EFlow の FCD の劣化はわずかで、validity と uniqueness は 95% 超を保ちます。一方 DeFoG は同じ範囲で大きく崩れ、4 ステップでは validity が 53.6% まで落ちました。しかもこれは <strong>蒸留していない EFlow 教師</strong> での結果であり、少ステップ領域にはまだ伸び代があると論文は示唆しています。</p>
+
+      <p>蒸留後の少ステップ比較（CFM との対決）です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ステップ数</th>
+            <th>CFM</th>
+            <th>EFM</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>2</th>
+            <td>91.1 / 97.6 / 0.49</td>
+            <td>90.0 / 97.9 / <span class="is-best">0.40</span></td>
+          </tr>
+          <tr>
+            <th>1</th>
+            <td>90.0 / 91.8 / 2.14</td>
+            <td class="is-best">90.2 / 97.7 / 0.44</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>2 ステップでは validity と uniqueness が同等で FCD がより低く、1 ステップになると差が広がります。CFM の FCD は 2.14 へ劣化し uniqueness も 91.8 へ落ちるのに対し、EFM は FCD 0.44、uniqueness 97.7% を維持しました。論文はこれを「1 ステップで EFM の FCD は CFM のほぼ 5 分の 1」と表現しています。</p>
+
+      <h3>可変長の言語モデリング</h3>
+      <p>One Billion Word（LM1B）での無条件テキスト生成です。生成した文を GPT-2 Large で評価した生成 perplexity（低いほど良い）と、生成トークン分布のエントロピーを報告しています。語彙サイズは 30,522（bert-base-uncased トークナイザ）と大きいため、挿入時刻を区間 <code>[0, 0.5]</code> に制限し、脱ノイズに十分な時間を確保しています。</p>
+      <p>文に対して離散拡張補間路を定義し、各トークンに独立な挿入時刻を割り当て、学習ヘッドがギャップごとの挿入数を予測します。単一のネットワークがトークンのカテゴリを脱ノイズしながら、系列が空から完全長へ成長していきます。アーキテクチャは DDiT backbone（12 ブロック、hidden 768、12 attention head）で、挿入ヘッドが追加するパラメータはわずか <strong>0.79M</strong> です。訓練は 4×NVIDIA B200 GPU、global batch 512、2×10^5 ステップで行われました。</p>
+      <p>まず多ステップ領域で、固定長のフロー言語モデル FLM との比較です（生成 PPL↓ / エントロピー）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>ステップ数</th>
+            <th>EFlow</th>
+            <th>FLM</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>1024</th>
+            <td class="is-best">103.63 / 4.16</td>
+            <td>111.36 / 4.30</td>
+          </tr>
+          <tr>
+            <th>512</th>
+            <td class="is-best">110.97 / 4.16</td>
+            <td>114.89 / 4.31</td>
+          </tr>
+          <tr>
+            <th>256</th>
+            <td class="is-best">117.69 / 4.16</td>
+            <td>120.19 / 4.32</td>
+          </tr>
+          <tr>
+            <th>128</th>
+            <td class="is-best">126.20 / 4.15</td>
+            <td>129.06 / 4.34</td>
+          </tr>
+          <tr>
+            <th>64</th>
+            <td class="is-best">133.62 / 4.14</td>
+            <td>143.73 / 4.36</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>EFlow は評価したすべてのステップ予算で FLM を改善しています。論文が強調するのは、EFlow のほうが「厳密により表現力の高い可変長問題を解いている」にもかかわらずこの結果だという点です。生成 perplexity はステップ予算とともに単調に下がり、エントロピーは 4.14〜4.16 とほぼ平坦でした。FLM の 4.30〜4.36 よりやや低い値です。</p>
+
+      <p>次に少ステップ領域です（生成 PPL↓ / エントロピー）。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>手法</th>
+            <th>1 step</th>
+            <th>2 steps</th>
+            <th>4 steps</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>EFM（本論文）</th>
+            <td>98.35 / 3.56</td>
+            <td>125.95 / 3.95</td>
+            <td>99.85 / 3.93</td>
+          </tr>
+          <tr>
+            <th>FMLM</th>
+            <td>119.34 / 4.16</td>
+            <td>110.19 / 4.21</td>
+            <td>98.76 / 4.21</td>
+          </tr>
+          <tr>
+            <th>CFM</th>
+            <td>269.72 / 3.10</td>
+            <td>267.39 / 3.15</td>
+            <td>267.97 / 3.28</td>
+          </tr>
+          <tr>
+            <th>Duo + DCD</th>
+            <td>1224.52 / 4.33</td>
+            <td>520.08 / 4.20</td>
+            <td>210.88 / 4.23</td>
+          </tr>
+          <tr>
+            <th>Duo + Di4C</th>
+            <td>292.94 / 3.79</td>
+            <td>247.69 / 3.87</td>
+            <td>150.67 / 4.00</td>
+          </tr>
+          <tr>
+            <th>MDLM + SDTT</th>
+            <td>1429.48 / 4.31</td>
+            <td>602.14 / 4.28</td>
+            <td>241.01 / 4.28</td>
+          </tr>
+          <tr>
+            <th>MDLM + Di4C</th>
+            <td>1217.10 / 4.38</td>
+            <td>621.59 / 4.37</td>
+            <td>247.32 / 4.00</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>EFM は 2 ステップと 4 ステップで首尾一貫したテキストを生成し、すべての蒸留拡散ベースラインと CFM を大差で上回りつつ、FMLM と競合的な水準にあります。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>1 ステップサンプリングではモード崩壊（mode collapse）が発生した</strong>と論文は率直に報告しています。著者はその原因を「全長分の拡張を予測し、区間全体に対してフローマップを一度に適用することの難しさ」に帰しています。サンプルのエントロピーが固定長ベースラインより低い点についても、要因の一つとして「EFM は共有の一様スケジュールではなく、より大きな局所時間座標の空間に条件づけている」ことを挙げ、スケジュールの追加チューニングによる改善を期待すると述べています。</p>
+        </div>
+      </div>
+
+      <p>なお、この言語モデリングの結果について著者らは「知る限り、これは可変長離散系列に対するフローマップの初の実証であり、固定長トークングリッドと一様な時間条件づけで動作する既存フローマップ枠組みの設計空間を拡張する」と主張しています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この論文の位置づけは、個別のタスクで最高性能を出したというより、生成モデリングの見方を組み替えたところにあります。生成を「次元が増えていく周辺分布の間を、拡張補間路に沿って輸送すること」として捉え直しました。部品は 2 つだけです。条件付きノイズで状態をより高次元の空間へ持ち上げる拡張作用素と、持ち上がった状態をターゲット分布へ押し進める輸送写像です。</p>
+      <p>理論的な収まりの良さも特筆できます。既存の固定キャンバスのフローとフローマップは、拡張作用素が恒等写像である特別な場合としてこの枠組みに回収されます。整合条件も、ヤコビアンが長方形になる点を除けば既存のものと一致します。そのうえで、分子配座生成・分子グラフ生成・言語モデリングという性質の異なる 3 タスクに、領域とサンプリング予算を問わない「単一の統一レシピ」として適用できることが示されました。</p>
+      <p>限界も明示されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 1</span>検証規模</p>
+          <p>GEOM-QM9 は最大 29 原子、GEOM-Drugs は最大 181 原子、LM1B は最大 128 長の系列にとどまります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 2</span>スケーリングの未検証</p>
+          <p>二項分布による挿入のパラメータ化と、可変サイズ入力に対する輸送写像の安定性は理論的に示されています。しかし実際にスケールさせるのは容易ではありません。次元ごとに局所時間座標へ条件づける仕組みが複雑さを持ち込むうえ、1 つのクリーンデータに対して取り得る補間路の組み合わせが非常に多いためです。著者らは、より大きな次元へスケールさせるにはさらなるチューニングが必要であり、計算コストが大きいため経験的に十分探索できなかったと述べています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 3</span>1 ステップ生成の課題</p>
+          <p>言語生成の 1 ステップサンプリングでモード崩壊が起きています。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">限界 4</span>少ステップ化の代償</p>
+          <p>分子コンフォーマ生成では、蒸留後の EFM+R が化学的物性の複数項目で EFlow+R より悪化しました。</p>
+        </div>
+      </div>
+
+      <p>今後の方向としては、条件付きノイズ分布をガウスに限定せず挿入次元をサンプルする平均・共分散を学習可能にすること、挿入時刻に条件づけた別の補間路を設計すること、挿入時刻の順序に構造を課すことが挙げられています。また、本論文は次元が増加する補間路に限定していますが、PDMP による構成では <strong>次元が減少する操作</strong> も考えうると述べられています。</p>
+      <p>コードとモデルは GitHub（<a href="https://github.com/sophtang/ExpandingFlowMaps" target="_blank" rel="noopener noreferrer">github.com/sophtang/ExpandingFlowMaps</a>）と Hugging Face（<a href="https://huggingface.co/ChatterjeeLab/ExpandingFlowMaps" target="_blank" rel="noopener noreferrer">huggingface.co/ChatterjeeLab/ExpandingFlowMaps</a>）で公開されています。</p>
+
+      <h2>まとめ</h2>
+      <p>生成モデルが縛られてきた「最初に決めたキャンバスのサイズを変えられない」という制約を、この論文は正面から外しにいきました。鍵は、次元スケジュールに沿って状態を持ち上げる拡張作用素と、持ち上がった状態を運ぶ輸送写像への分解、そして座標ごとに時計を分ける局所時間座標です。次元が跳ぶ瞬間があるためフローの言葉では記述しきれない過程を、区分決定論的マルコフ過程として捉え直したところに理論的な工夫があります。分子配座生成では拡散ベースラインの 16〜50 分の 1 のステップで競合ないし上回り、分子グラフ生成と可変長テキスト生成でも少ステップ領域で優位を示しました。1 ステップ生成のモード崩壊やスケーリングの検証といった課題は残るものの、出力のサイズそのものを学習と制御の対象にする道筋を示した仕事です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>フローマッチング（flow matching）</dt>
+        <dd>ノイズからデータへ向かう連続的な経路上の速度場を学習し、それを積分して生成する枠組み。</dd>
+
+        <dt>確率的補間路（stochastic interpolant）</dt>
+        <dd>ノイズ分布とデータ分布の間を連続時間でつなぐ経路を構成する枠組み。線形補間 <code>I_t(x_0, x_1) = (1−t) x_0 + t x_1</code> が代表例。</dd>
+
+        <dt>フローマップ（flow map）</dt>
+        <dd>任意の 2 時刻 <code>s, t</code> について ODE の状態を直接出力する決定論的写像 <code>X_{s,t}</code>。多ステップの積分を少ステップに蒸留するために使う。</dd>
+
+        <dt>平均速度（mean velocity）<code>v_{s,t}</code></dt>
+        <dd><code>x_s</code> から <code>(t−s)</code> 幅のステップを取るときの速度。<code>t = s</code> の極限で瞬時速度に帰着する。</dd>
+
+        <dt>拡張補間路（expanding interpolant）</dt>
+        <dd>固定次元 <code>d</code> を、時刻とともに非減少な次元スケジュール <code>d(t)</code> に置き換えた補間路。</dd>
+
+        <dt>拡張作用素（expand operator）<code>E_{s,t}</code></dt>
+        <dd>現在の状態に条件づけて、新しい座標やトークンで状態空間を広げる学習可能な作用素。配置スキームとして concatenation、positional insertion、child expansion が示されている。</dd>
+
+        <dt>輸送写像（transport map）<code>X_{s,t}</code></dt>
+        <dd>拡張された状態を補間路に沿って前進させる学習可能な写像。</dd>
+
+        <dt>ヤコビアン（Jacobian）</dt>
+        <dd>写像が各点で入力をどう伸縮させるかを表す行列。拡張設定では入力と出力の次元が違うため、縦横のサイズが揃わない長方形の行列になる。</dd>
+
+        <dt>押し出し（pushforward）</dt>
+        <dd>ある分布を写像で送った先にできる分布。拡張作用素は、挿入ノイズの分布の押し出しとして次の時刻の分布を定める。</dd>
+
+        <dt>局所時間座標（local time coordinate）<code>t_i</code></dt>
+        <dd>挿入時刻の異なる各成分を共通の <code>[0,1]</code> の時計上で脱ノイズするための時間の射影。<code>t_i = (t − t^ins_i)/(1 − t^ins_i)</code>。</dd>
+
+        <dt>PDMP（piecewise-deterministic Markov process、区分決定論的マルコフ過程）</dt>
+        <dd>滑らかな決定論的輸送と、ランダムに起きるジャンプからなる確率過程。拡張フローはこの枠組みで特徴づけられる。</dd>
+
+        <dt>平均脱ノイザ（mean denoiser）<code>ψ_{s,t}</code></dt>
+        <dd>離散状態空間における平均速度の等価なパラメータ化。出力がシンプレックス上にあるためクロスエントロピーで訓練できる。</dd>
+
+        <dt>シンプレックス空間 <code>∆^{V−1}</code></dt>
+        <dd>語彙サイズ <code>V</code> のカテゴリカル分布の空間。離散データを連続的な分布として表すことで、連続向けのフローマップ手法を離散設定へ転用できる。</dd>
+
+        <dt>挿入期待値（insertion expectation）</dt>
+        <dd>区間 <code>(s,t]</code> の間に、ある隙間へ挿入されるトークン数の期待値。</dd>
+
+        <dt>挿入ハザード（insertion hazard）<code>λ_t</code></dt>
+        <dd><code>λ_t := α̇_t/(1−α_t)</code>。時刻 <code>t</code> における未挿入トークンの瞬時挿入率。</dd>
+
+        <dt>COV / AMR</dt>
+        <dd>コンフォーマ生成の標準指標。Coverage は閾値内で一致した割合、Average Minimum RMSD は最近傍までの平均最小 RMSD。recall は参照側、precision は生成側を基準にした版。</dd>
+
+        <dt>FCD（Fréchet ChemNet Distance）</dt>
+        <dd>ChemNet の埋め込み空間で測った、生成分子と参照分子の分布間距離。低いほど良い。</dd>
+
+        <dt>Validity / Uniqueness</dt>
+        <dd>生成グラフのうち有効な分子として解釈できる割合と、そのうち互いに異なるものの割合。</dd>
+
+        <dt>生成 perplexity（generative perplexity）</dt>
+        <dd>生成テキストを GPT-2 Large で評価した perplexity。低いほど良い。</dd>
+
+        <dt>モード崩壊（mode collapse）</dt>
+        <dd>生成モデルが出力の多様性を失い、限られたパターンばかり出すようになる現象。EFM の 1 ステップサンプリングで観測された。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Expanding Flow Maps</p>
+      <p><a href="https://arxiv.org/abs/2607.21585" target="_blank" rel="noopener noreferrer">arXiv:2607.21585 を読む（arxiv.org）</a></p>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
