@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>「この 2 つの理論は同じものか」を AI に解かせる — Seiberg 双対性を GNN と経路探索で辿る — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-30-2607.28628-learning-to-trace-seiberg-dualities-cover.png"
+           alt="「Seiberg 双対性を GNN と経路探索で辿る」を 3 段で示すインフォグラフィック。左の「課題」は、理論 A と理論 B という 2 つの有向グラフ（クイバー）を「?」で結び、その下に枝分かれしていく木構造を描いて「見た目が違う 2 つの理論は同じか」「双対操作を重ねると記述が爆発的に増える」ことを示す。中央の「手法」は、DGNN が距離を推定、AGNN が次の一手を提案し、両者を A* 探索へ流し込む構成と、格子の上に引かれた経路を示す。右の「結果」は Hybrid LCA の成功率 100%、および学習データと同じ分布での実効効率比（LCA 基準）を LCA 1.00、Hybrid LCA 1.14、DGNN 0.83 の棒グラフで示す。">
+    </figure>
+
+    <h1 class="article__title">「この 2 つの理論は同じものか」を AI に解かせる — Seiberg 双対性を GNN と経路探索で辿る</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-30</span>
+      <span>arXiv：2607.28628</span>
+      <span>カテゴリ：hep-th / cs.AI / cs.LG / hep-ph</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>理論物理の世界には「見た目はまったく違うのに、実は同じ物理を記述している 2 つの理論」が存在します。この論文は、そうした関係（Seiberg 双対性）で 2 つの理論が結ばれているか、また何回の基本操作で結べるかを、グラフニューラルネットワーク（graph neural network, GNN）と経路探索アルゴリズムの組み合わせで解く枠組みを作りました。理論をグラフ（クイバー）として表し、距離を推定するネットワークと次の一手を提案するネットワークを学習させ、それらを A* 探索のヒューリスティックとコストに組み込みます。ノード数 10 程度の中規模な問題では、この学習ベースの手法が決定論的アルゴリズムを上回る傾向を示しました。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>結論の核心は「学習したネットワーク単体では、物理に基づく決定論的ヒューリスティックに必ずしも勝てない」こと。</strong>それでも両ネットワークを A* の枠組みに組み込み、基本ステップコストという安全弁を残し、さらに物理インフォームドな規則と併用すれば、成功率 100% を保ったまま効率で上回れます。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">100.00%</p>
+          <p class="stat__label">Hybrid・LCA・Hybrid LCA の成功率 SR（学習データと同じ分布での評価）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1.14</p>
+          <p class="stat__label">Hybrid LCA の効率比 ER。物理インフォームドな LCA を基準にした倍率</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">790.08</p>
+          <p class="stat__label">Hybrid の効率比 ER。無情報の BFS を基準にした探索空間の削減倍率</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">500 組</p>
+          <p class="stat__label">各ベンチマークで無作為抽出して評価したクイバーのペア数</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>物理学における双対性（duality）とは、まったく違って見える 2 つの理論記述が、同じ物理現象を表しているという関係のことです。Kramers–Wannier 双対性、Maxwell 理論の電磁双対性、弦理論・M 理論・F 理論、ホログラフィーなど、幅広い分野に現れます。双対性が価値を持つのは、片方の記述では計算が困難な「強結合」の領域を、もう片方の記述では扱いやすい形で覗けるからです。</p>
+      <p>問題は、双対性のルール自体は既知でも、「与えられた 2 つの系が実際に双対かどうか」を効率よく確かめるのが計算上難しい点にあります。双対性は 2 つ以上の記述を結ぶことが多く、双対操作を重ねていくと記述の数が爆発的に増えてしまいます。つまりこれは、物理の問題であると同時に、探索空間が指数的に膨らむ組合せ探索の問題でもあります。</p>
+      <p>著者らは、この種の問題が「理論物理に適用される最先端 AI モデルの有用なベンチマークになりうる」と述べています。ルールは明確で正解の検証も可能、しかし素朴な探索では手が出ない、という性質は、機械学習側から見ても興味深い題材です。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>この論文が扱うのは Seiberg 双対性です。もとは超対称ゲージ理論（supersymmetric QCD, SQCD）についての関係で、あるゲージ群を持つ理論と、別のゲージ群＋追加の場を持つ理論とが、低エネルギー領域で等価になることを述べます。ここでいう超対称性（supersymmetry）は、理論の形を強く制限する追加の対称性だと捉えておけば、この先を読み進められます。この関係をクイバーゲージ理論（quiver gauge theory）に適用すると、「指定した 1 つのノードを双対化する」という局所的な操作になります。</p>
+      <p>クイバー（quiver）とは有向グラフのことです。各ノードがゲージ群 SU(N_i) を表し、ノード間の矢印が物質場を表します。物質場は正確には bifundamental 表現のカイラル多重項と呼ばれるもので、ここでは「2 つのゲージ群にまたがって働く物質場」と考えてください。数学の言葉では、この 1 ノード双対化はクイバーの mutation（変異）と呼ばれ、Fomin–Zelevinsky 則という決まった式で隣接行列が書き換わります。</p>
+      <p>ここで探索の難しさが出てきます。1 回の mutation で新しいクイバーが生まれ、そこからまた別のノードを選んで mutation でき、理論の集合は木構造（duality tree）に広がっていきます。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 290" role="img" aria-label="1 回の mutation ごとにクイバーが分岐し、理論の集合が木構造（duality tree）へ広がる様子を示す図。1 つの根クイバーから深さ 1 で複数のクイバーが生まれ、そこからさらに深さ 2 へ枝分かれし、深さが増すごとに候補の数が指数的に膨らむ。">
+          <defs>
+            <marker id="st-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+          </defs>
+
+          <text x="14" y="48" style="font-size:11px;fill:var(--color-text-muted)">深さ 0</text>
+          <text x="14" y="146" style="font-size:11px;fill:var(--color-text-muted)">深さ 1</text>
+          <text x="14" y="240" style="font-size:11px;fill:var(--color-text-muted)">深さ 2</text>
+
+          <path d="M360,60 L200,120" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#st-arrow)"></path>
+          <path d="M360,60 L360,120" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#st-arrow)"></path>
+          <path d="M360,60 L520,120" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#st-arrow)"></path>
+
+          <path d="M200,158 L140,212" fill="none" stroke="var(--color-border)" stroke-width="1.5"></path>
+          <path d="M200,158 L200,212" fill="none" stroke="var(--color-border)" stroke-width="1.5"></path>
+          <path d="M200,158 L260,212" fill="none" stroke="var(--color-border)" stroke-width="1.5"></path>
+          <path d="M360,158 L300,212" fill="none" stroke="var(--color-border)" stroke-width="1.5"></path>
+          <path d="M360,158 L360,212" fill="none" stroke="var(--color-border)" stroke-width="1.5"></path>
+          <path d="M360,158 L420,212" fill="none" stroke="var(--color-border)" stroke-width="1.5"></path>
+          <path d="M520,158 L460,212" fill="none" stroke="var(--color-border)" stroke-width="1.5"></path>
+          <path d="M520,158 L520,212" fill="none" stroke="var(--color-border)" stroke-width="1.5"></path>
+          <path d="M520,158 L580,212" fill="none" stroke="var(--color-border)" stroke-width="1.5"></path>
+
+          <circle cx="360" cy="42" r="18" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="2"></circle>
+          <text x="360" y="47" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">Q</text>
+
+          <circle cx="200" cy="140" r="15" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></circle>
+          <circle cx="360" cy="140" r="15" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></circle>
+          <circle cx="520" cy="140" r="15" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></circle>
+
+          <circle cx="140" cy="224" r="11" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></circle>
+          <circle cx="200" cy="224" r="11" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></circle>
+          <circle cx="260" cy="224" r="11" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></circle>
+          <circle cx="300" cy="224" r="11" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></circle>
+          <circle cx="360" cy="224" r="11" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></circle>
+          <circle cx="420" cy="224" r="11" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></circle>
+          <circle cx="460" cy="224" r="11" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></circle>
+          <circle cx="520" cy="224" r="11" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></circle>
+          <circle cx="580" cy="224" r="11" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5"></circle>
+
+          <text x="348" y="104" text-anchor="end" style="font-size:11px;fill:var(--color-accent)">1 回の mutation</text>
+          <text x="620" y="146" style="font-size:11px;fill:var(--color-text-muted)">…</text>
+          <text x="620" y="229" style="font-size:11px;fill:var(--color-text-muted)">…</text>
+          <text x="360" y="272" text-anchor="middle" style="font-size:12px;fill:var(--color-text-muted)">深さが増すごとに候補が増え、理論の集合は duality tree に広がる</text>
+        </svg>
+        <figcaption class="diagram__caption">1 回の mutation で新しいクイバーが生まれ、そこからまた別のノードを選んで mutation できる。</figcaption>
+      </figure>
+
+      <p>既存研究では、有限回の mutation で元に戻る「有限 mutation 型（finite mutation type）」という特殊なクイバーに AI/ML の適用が集中していました。より一般的な場合には、各双対性ごとに組合せ的な可能性が劇的に増えます。先行研究では、一般的な状況では双対理論が無限系列をなし、ゲージ結合定数（理論を特徴づける物理パラメータの 1 つ）の初期条件に鋭敏で、双対性の系列がカオス的に広がることも示されています。</p>
+      <p>著者らは、この構造が「与えられた結び目がほどけるか（unknot と関係するか）を判定する問題」と数学的に似ていると指摘しています。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>問題の定式化</h3>
+      <p>対象は 4D N=1 の SU 型ゲージ群を持つクイバーゲージ理論です。4D N=1 とは「4 次元時空で、超対称性を 1 組だけ持つ理論」を指す呼び方です。ただし超ポテンシャル（場どうしの相互作用を定める追加の物理データ）などは落とし、次の 2 つだけを扱います。</p>
+      <ul>
+        <li>隣接行列 A（成分 A_ij は非負整数で、ノード i から j への矢印の本数）</li>
+        <li>ランクベクトル N = {N_i}（各ゲージ群の大きさ）</li>
+      </ul>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p>著者らはこの組 (A, N) を、理論を指定するのに<strong>「必要だが十分ではないデータ（necessary but not sufficient data）」</strong>と明記しています。</p>
+        </div>
+      </div>
+
+      <p>ノード k での Seiberg 双対（simple duality operation）D_k は、そのノードのランクを <code>N'_k = Σ_j N_j A_jk − N_k</code> と更新し、他ノードはそのままにします。新しいランクが非負である限り、この操作は well-defined です。隣接行列のほうは Fomin–Zelevinsky 則で書き換わり、その過程で生じる vector-like pair（互いに逆向きの矢印の対）は質量項で消えるため自動的に削除します。</p>
+      <p>2 つのクイバー Q_A と Q_B の「双対距離」d(Q_A, Q_B) は、両者を結ぶのに必要な単純双対操作の最小回数と定義されます。</p>
+
+      <h3>データセットの作り方</h3>
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">出発点（seed）となる理論を選ぶ</p>
+          <p>弦理論に現れる特定の幾何（トーリック Calabi–Yau 3 重特異点）とそれをプローブする D3-brane から導かれるクイバー群を使います。細かい出自に立ち入らずに言えば、「物理的に意味のある実例の集まり」だと考えてください。ここでは最大 12 ゲージノードのものを使います。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">幅優先探索（BFS）で duality tree を広げる</p>
+          <p>seed から層ごとに mutation を適用して木を広げ、データセットを作ります。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">枝刈りと重複排除</p>
+          <p>ランクが非正になる、あるいはクイバーが分裂してしまう mutation は枝刈りし、訪問済み集合を保持して重複や自明な往復を排除します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">距離ラベルを付ける</p>
+          <p>木構造上の最短経路として計算します。具体的には 2 つの経路列の最長共通接頭辞を最小共通祖先（LCA）とみなし、<code>d = |P_A| + |P_B| − 2|P_LCA|</code> で求めます。ただしクイバーに置換対称性がある場合、この値は真の距離の上界にとどまります。学習ではこの上界をそのまま目標距離として使っています。</p>
+        </li>
+      </ol>
+
+      <h3>2 種類の GNN</h3>
+      <p>いずれも、メッセージパッシング型 GNN によるトークナイザと Transformer エンコーダを組み合わせた既存の構成（GraphGPS 系）を採っています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">DGNN</span>Distance GNN（距離を推定する）</p>
+          <p>2 つの理論の距離を回帰推定します。入力はランクと重みの対数変換（x_i = log(1+N_i)、w_ij = log(1+A_ij)）。3 層の GNN トークナイザ（隠れ次元 64、LayerNorm と LeakyReLU、残差接続）を通し、2 層の Transformer エンコーダ（ヘッド数 4、射影次元 16）へ渡します。</p>
+          <p>その後、ノードごとの差 d_local と、プーリング後の大域表現 z_A・z_B を連結し、MLP ヘッドと Softplus を通して予測距離 d̂ を出します。<strong>大域的な差だけでなく、プーリング前のノード単位の差も併用する点が設計上の要点です。</strong></p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">AGNN</span>Adviser GNN（次の一手を提案する）</p>
+          <p>Q_A から Q_B へ向かうとき「最初にどのノードを mutate すべきか」の確率分布を出す方策ネットワーク（policy adviser）です。入力は 5 次元のノード特徴（ランクと入出次数などの対数）に Laplacian 位置符号化（Laplacian positional encoding, LPE）を加えたものです。LPE は、グラフ上でのノードの位置関係を数値化して入力に足す仕組みです。</p>
+          <p>エンコーダを通した後、深層側の差・生の差・隣接行列の差を連結して MLP 分類ヘッドに渡します。<strong>実行できないノードのロジットは −∞ にする action masking</strong> を入れているため、不可能な mutation の確率は厳密にゼロになります。</p>
+        </div>
+      </div>
+
+      <p>なお、LPE を DGNN 側の入力にも導入したところ学習性能は劣化したと報告されています。著者らは、大域的な性質の抽出が難しくなるためではないかと推測しています。</p>
+
+      <h3>経路探索（pathfinder）</h3>
+      <p>学習したネットワークを、実際に 2 理論を結ぶ手順を探す探索アルゴリズムに組み込みます。著者らはこれを「クイバーのための Google マップ（Google Maps for quivers）」と表現しています。各ステップでクイバーは Weisfeiler–Lehman（WL）ハッシュで正準化して比較し、ノードの並び順の違いで一致を取り逃さないようにします。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 360" role="img" aria-label="pathfinder の構成を示す図。入力のクイバー Q_A と Q_B が 2 つのネットワークへ渡り、DGNN が距離を推定して A* のヒューリスティックになり、AGNN が次の一手の確率を出してステップコストになる。両者を双方向 A* 探索（Hybrid）へ組み込み、基本ステップコスト 1 を安全弁として残す。出力は Q_A と Q_B を結ぶ双対操作の列。">
+          <defs>
+            <marker id="pf-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+            <marker id="pf-arrow-accent" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-accent)"></path>
+            </marker>
+          </defs>
+
+          <rect x="40" y="14" width="180" height="46" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="130" y="43" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">クイバー Q_A</text>
+
+          <rect x="500" y="14" width="180" height="46" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="590" y="43" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">クイバー Q_B</text>
+
+          <path d="M130,60 L130,84" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5"></path>
+          <path d="M590,60 L590,84" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5"></path>
+          <path d="M130,84 L590,84" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5"></path>
+          <path d="M170,84 L170,106" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#pf-arrow)"></path>
+          <path d="M550,84 L550,106" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#pf-arrow)"></path>
+
+          <rect x="40" y="112" width="260" height="72" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="170" y="138" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">DGNN：距離を推定</text>
+          <text x="170" y="159" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">予測距離 d̂ を出す</text>
+          <text x="170" y="176" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">→ A* のヒューリスティック</text>
+
+          <rect x="420" y="112" width="260" height="72" rx="8" fill="var(--color-surface)" stroke="var(--color-accent-2)" stroke-width="1.5"></rect>
+          <text x="550" y="138" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">AGNN：次の一手を提案</text>
+          <text x="550" y="159" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">mutate すべきノードの確率</text>
+          <text x="550" y="176" text-anchor="middle" style="font-size:11px;fill:var(--color-accent-2)">→ ステップコスト（負対数尤度）</text>
+
+          <path d="M170,184 L170,206 L280,206 L280,224" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#pf-arrow-accent)"></path>
+          <path d="M550,184 L550,206 L440,206 L440,224" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#pf-arrow-accent)"></path>
+
+          <rect x="200" y="230" width="320" height="72" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="2"></rect>
+          <text x="360" y="256" text-anchor="middle" style="font-size:13px;font-weight:700;fill:var(--color-heading)">双方向 A* 探索（Hybrid）</text>
+          <text x="360" y="277" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">WL ハッシュでクイバーを正準化して比較</text>
+          <text x="360" y="294" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">安全弁：基本ステップコスト 1 を残す</text>
+
+          <path d="M360,302 L360,322" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#pf-arrow-accent)"></path>
+          <text x="360" y="346" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">Q_A と Q_B を結ぶ双対操作 D_k の列</text>
+        </svg>
+        <figcaption class="diagram__caption">2 つのネットワークの出力を、それぞれ A* のヒューリスティックとステップコストへ割り当てる。基本ステップコスト 1 を残すことが安全弁になる。</figcaption>
+      </figure>
+
+      <p>著者らは次の 6 通りの pathfinder を比較しています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Pathfinder</th>
+            <th>探索方式</th>
+            <th>学習の利用</th>
+            <th>要点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>BFS</th>
+            <td>双方向探索</td>
+            <td>なし</td>
+            <td>ヒューリスティックを使わない無情報のベースライン</td>
+          </tr>
+          <tr>
+            <th>DGNN</th>
+            <td>双方向 A*</td>
+            <td>DGNN</td>
+            <td>ヒューリスティック関数に DGNN の出力を使う</td>
+          </tr>
+          <tr>
+            <th>AGNN</th>
+            <td>ビーム幅 3 の単方向ビームサーチ</td>
+            <td>AGNN</td>
+            <td>コストは累積の負対数尤度。逆方向のビームと交差しにくいため単方向に限定</td>
+          </tr>
+          <tr>
+            <th>Hybrid</th>
+            <td>双方向 A*</td>
+            <td>DGNN＋AGNN</td>
+            <td>DGNN をヒューリスティックに、AGNN の対数確率をステップコストに組み込む</td>
+          </tr>
+          <tr>
+            <th>LCA</th>
+            <td>コスト重み付き探索</td>
+            <td>なし</td>
+            <td>物理インフォームドなベースライン。ランクの増加を強く罰する</td>
+          </tr>
+          <tr>
+            <th>Hybrid LCA</th>
+            <td>双方向 A*</td>
+            <td>DGNN＋AGNN＋LCA</td>
+            <td>Hybrid に LCA のコストとヒューリスティックを統合</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>Hybrid で基本ステップコスト 1 を残す狙いは、探索の累積パスコスト g が 1 手ごとに必ず増加すること（admissibility）を保証することにあります。ここで保証されるのは g の増加であって、後述する DGNN ヒューリスティックの単調性ではありません。この安全弁により、両ネットワークが誤っても最悪 BFS 相当に劣化するにとどまります。</p>
+      <p>LCA pathfinder は、ランクが減る／変わらない／増える場合のコスト比をおよそ 1 : 10 : 100 とハードコードし、ランクの増加を強く罰します。結果として探索木が「最小ランクの理論」へ重力井戸のように吸い寄せられます。これは、人間の物理学者が 2 つの理論のより単純な共通祖先を探す発想を模したものです。Hybrid LCA のハイパーパラメータは「成功率 100% を保ちながら効率比を最大化する」よう最適化されています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>探索方式</th>
+            <th>計算量</th>
+            <th>性質</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>無情報探索</th>
+            <td>O(b<sup>d/2</sup>)</td>
+            <td>指数関数</td>
+          </tr>
+          <tr>
+            <th>理想的な単調ヒューリスティックを持つ A*</th>
+            <td>O(d)</td>
+            <td>距離に比例</td>
+          </tr>
+          <tr>
+            <th>AGNN のビームサーチ</th>
+            <td>O(B · b_avg · d)</td>
+            <td>線形だが完全性（必ず見つける保証）を犠牲にする</td>
+          </tr>
+          <tr>
+            <th>Hybrid</th>
+            <td>—</td>
+            <td>AGNN の上位 k 個で実効分岐因子を抑えつつ A* のバックトラックを保つ</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>評価は、主にノード数 13 以下のクイバーを対象に、学習データは最大 12 回の Seiberg 双対まで含むものを使っています。データセット生成は個人用ラップトップと UPenn のクラスタで 2〜3 日、8 CPU で 256 GB の RAM という規模で完了したと報告されています。各ベンチマークは無作為抽出した 500 組のクイバーペアに対して実施されました。</p>
+      <p>評価指標は次の通りです。成功率 SR（経路を見つけられた割合）、効率比 ER（ベースラインの展開ノード数 ÷ 手法の展開ノード数。1 より大きければ探索空間を削減できたことを意味する）、そして実効効率比 EER = ER × SR です。</p>
+
+      <h3>ネットワーク単体の性能</h3>
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">1.137</p>
+          <p class="stat__label">DGNN の最終的な MSE 損失。約 250 エポック学習し、pathfinder にはエポック 247 のチェックポイントを使用</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1.132</p>
+          <p class="stat__label">9 ノードでの平均絶対誤差 MAE。13 ノードで 1.224、3 ノードでは 6.547</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">32.07%</p>
+          <p class="stat__label">DGNN の出力が単調性（A* が最適経路だけを展開するための条件）を破る割合</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">約 96%</p>
+          <p class="stat__label">AGNN の top-3 精度（平均）。top-1 精度は 70% を超えない</p>
+        </div>
+      </div>
+
+      <p>ノード数別に見ると、DGNN は小さいクイバーで大きな距離を予測するのが苦手、という傾向になります。重要な弱点として、著者らは 32.07% の単調性違反が A* の失敗要因になると明言しています。</p>
+      <p>AGNN は 49 エポックで学習を打ち切り（検証損失が増加に転じたため）、最良の検証損失はエポック 39 でした。上位 3 ノードを分岐候補とみなせば「90% 以上の割合で正解を含む」ことになります。なお、クイバーの対称性と最短路の非一意性のため、これらの精度は真の成功率の下界にすぎないと注記されています。</p>
+
+      <h3>ベースライン比較</h3>
+      <p>学習データと同じ分布（ID: in-distribution）での結果は次の通りです。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Pathfinder</th>
+            <th>成功率 SR (%)</th>
+            <th>ER（BFS 基準）</th>
+            <th>EER（BFS 基準）</th>
+            <th>ER（LCA 基準）</th>
+            <th>EER（LCA 基準）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>DGNN</th>
+            <td>99.94</td>
+            <td>430.25</td>
+            <td>429.99</td>
+            <td>0.83</td>
+            <td>0.83</td>
+          </tr>
+          <tr>
+            <th>AGNN</th>
+            <td>76.12</td>
+            <td>928.59</td>
+            <td>706.84</td>
+            <td>2.04</td>
+            <td>1.55</td>
+          </tr>
+          <tr>
+            <th>Hybrid</th>
+            <td class="is-best">100.00</td>
+            <td>790.08</td>
+            <td>790.07</td>
+            <td>1.10</td>
+            <td>1.10</td>
+          </tr>
+          <tr>
+            <th>LCA</th>
+            <td class="is-best">100.00</td>
+            <td>763.66</td>
+            <td>763.66</td>
+            <td>—</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <th>Hybrid LCA</th>
+            <td class="is-best">100.00</td>
+            <td>—</td>
+            <td>—</td>
+            <td>1.14</td>
+            <td>1.14</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>「—」は、その手法自身が基準なので比が定義できない場合（LCA 行の LCA 基準）か、論文の該当表に数値の記載がない場合（Hybrid LCA 行の BFS 基準）を示します。</p>
+      <p>無情報の BFS を基準にすると、どの手法も数百倍のオーダーで探索空間を削減しています。しかし本当の勝負は、物理インフォームドな LCA を基準にしたときです。ここでは差がぐっと縮まり、DGNN 単体は LCA に届きません（0.83 倍）。AGNN は効率だけ見れば 2.04 倍と優秀ですが、成功率が 76.12% しかないため、成功率を掛けた実効値（EER）では 1.55 倍にとどまります。Hybrid（1.10 倍）と Hybrid LCA（1.14 倍）が、成功率 100% を保ったまま LCA を上回る構成です。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>条件</th>
+            <th>Hybrid と LCA の比較</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>全体平均</th>
+            <td>1.09 倍の高速化</td>
+          </tr>
+          <tr>
+            <th>ノード数 5 未満</th>
+            <td>LCA のほうが効率的</td>
+          </tr>
+          <tr>
+            <th>ノード数 5 以上</th>
+            <td>Hybrid が上回る</td>
+          </tr>
+          <tr>
+            <th>ノード数 10 以上</th>
+            <td class="is-best">平均 1.18 倍までスケール</td>
+          </tr>
+          <tr>
+            <th>距離 d = 2〜8</th>
+            <td>Hybrid が優位</td>
+          </tr>
+          <tr>
+            <th>距離 d = 4〜5 付近</th>
+            <td class="is-best">約 1.21 倍のピーク</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>興味深いのは経路長の内訳です。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">約 3.4%</p>
+          <p class="stat__label">Hybrid が LCA より短い経路を見つけた割合</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">約 12.6%</p>
+          <p class="stat__label">Hybrid のほうが経路が長くなった割合</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">約 84%</p>
+          <p class="stat__label">経路長が同じだった割合</p>
+        </div>
+      </div>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>つまり高速化の中身は「近道を発見したから」ではなく「探索で展開したノード数が減ったから」です。</strong>Hybrid LCA では平均 EER が 1.13 倍となり、ノード数・距離のいずれについても優位が長く続きます。</p>
+        </div>
+      </div>
+
+      <h3>分布外での頑健性</h3>
+      <p>学習に使っていない理論族（OOD: out-of-distribution）でのストレステストも行われています。ここには有限 mutation 型・無限 mutation 型の双方に加え、アノマリー相殺条件を破るクイバーも含まれます。アノマリー（anomaly）とは、量子効果によって理論の整合性が壊れてしまう現象のことで、これを相殺できない配位は物理的に成立しません。実際、アノマリーを持つ配位は 4D N=1 超対称ゲージ理論としては物理的な実現を持ちませんが、有向グラフ上の組合せ操作としての mutation は問題なく定義できるため、位相的な頑健性を試す材料として使われています。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th>Pathfinder</th>
+            <th>分布外での成功率</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th>DGNN</th>
+            <td>97% 超を保つ</td>
+          </tr>
+          <tr>
+            <th>AGNN</th>
+            <td>距離が大きくなると崩れ、アノマラスな理論・有限 mutation 型では 0.00</td>
+          </tr>
+          <tr>
+            <th>Hybrid</th>
+            <td>ノード数の多いクイバーで経路発見に失敗</td>
+          </tr>
+          <tr>
+            <th>Hybrid LCA</th>
+            <td class="is-best">100%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>効率面では、有限 mutation 型やアノマラスな理論群ではどの pathfinder も総じて LCA に及ばないものの、Hybrid LCA の最悪性能は LCA と同程度に踏みとどまります。無限 mutation 型では ID と同様の挙動を示し、LCA より約 1.6 倍速いピーク効率に達しました。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p>著者ら自身が、このベンチマークの厳しさを明示しています。LCA pathfinder はデータセット生成に使ったのと同じ基準（向きは逆）に従うため、<strong>生成されたデータセットは構造的に LCA に有利であり、そこで LCA を上回るのは最も難しいテストになる</strong>、という指摘です。</p>
+        </div>
+      </div>
+
+      <h3>どこで壊れるか</h3>
+      <p>著者らは破綻点を調べるため、複雑性を C = d_true × log10 K（d_true は真の距離、K はノード数）と定義しました。ID データセットではノード数 10 まで距離 12、ノード数 13 まで距離 10 を学習しており、対応する複雑性はそれぞれ 12 と約 11.1 になります。そのうえで、学習複雑性を約 5.73 まで下げて再学習し、より高い複雑性まで評価しています。</p>
+      <p>その結果、DGNN pathfinder は学習複雑性に達する前から劣化しました。AGNN は高い複雑性で最も効率的に見えるものの、予測される成功率は急速にゼロへ向かいます。Hybrid と Hybrid LCA は、学習時の複雑性より大きい領域まで LCA を上回り続けます。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">1.44 倍</p>
+          <p class="stat__label">Hybrid が「LCA を上回れなくなる複雑性」÷「学習時の複雑性」（EER 基準）</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1.97 倍</p>
+          <p class="stat__label">Hybrid LCA の同じ比。論文本文では 1.46 倍とも記されています</p>
+        </div>
+      </div>
+
+      <p>重要なのは、Hybrid 系の破綻点が成功率 100% を割り込む前に訪れる点で、著者らは「LCA より良い性能を出している間はずっと信頼できる」と述べています。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の位置づけは 2 つあります。1 つは物理側で、Seiberg 双対な理論を結ぶことの計算複雑性を、実際に測れる形にしたことです。もう 1 つは AI 側で、ルールが明快で正解の検証もできる一方、素朴な探索では歯が立たない問題を、最先端 AI モデルのベンチマーク候補として提示したことです。</p>
+      <p>手法面での教訓もはっきりしています。学習したネットワーク単体では、決定論的で物理に基づくヒューリスティック（LCA）に必ずしも勝てません。距離推定は単調性を 32.07% の割合で破って A* を混乱させ、方策ネットワークは分布外で完全に失敗することもあります。それでも、両者を A* の枠組みに組み込み、基本ステップコストによる安全弁を残し、さらに物理インフォームドな規則と併用すれば、成功率 100% を保ったまま効率で上回れます。この「学習と既存の探索・ドメイン知識を混ぜる」という結論は、この分野に限らない示唆を含んでいます。</p>
+      <p>一方、論文が自ら認めている限界も明確です。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <ul>
+            <li><strong>物理データの省略</strong>: 扱っているのは隣接行列とランク (A, N) のみで、超ポテンシャルやゲージ結合定数は含みません。これは 4D QFT を完全に指定するには「必要だが十分ではない」と著者らも書いています。</li>
+            <li><strong>距離ラベルの不正確さ</strong>: 学習の目標に使った距離は、クイバーに置換対称性がある場合には上界にすぎません。</li>
+            <li><strong>DGNN の非単調性</strong>: 32.07% の違反が A* の再展開やタイムアウトを招きます。</li>
+            <li><strong>AGNN のビームサーチ</strong>: バックトラックを持たないため、誤って枝刈りして真の経路を失うと回復できません。</li>
+            <li><strong>LCA の限界</strong>: 学習を使わない LCA も、位相的複雑性の局所最小に捕まりうると指摘されています。</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>今後の課題としては、次の 4 点が挙げられています。</p>
+      <ul>
+        <li>ここで測った計算複雑性が、ホログラフィーにおける bulk の complexity（重力側で定義される複雑さの量）の提案と一致するかの検証</li>
+        <li>物理的に異なるクイバーゲージ理論の分類</li>
+        <li>4D Seiberg 双対以外への拡張（弦・M・F 理論のコンパクト化や、他の次元の QFT（量子場の理論））</li>
+        <li>学習データ規模とネットワーク規模のスケーリング則の研究</li>
+      </ul>
+
+      <p>加えて著者らは、「2 つの双対化されたクイバーをそのまま渡して、LLM に最も効率的で正確な経路を見つけさせられないか」という問いも挙げ、専用の GNN が本当に必要かを検証したいと述べています。ただし、LLM と本研究の（かなり控えめな）計算資源との公平な比較は難しい、とも注意を添えています。</p>
+      <p>なお本論文には、コードの執筆に Gemini Pro 3.1 の助けを借りたという謝辞と、学習済みチェックポイントと pathfinder を GitHub リポジトリで公開しているという記載があります。また論文の最終化中に、同じくクイバーゲージ理論の Seiberg 双対性の同定を扱う別の研究が現れたことにも触れ、そちらは AI モデルの評価（検証器を使って誤った双対性の主張をデバッグする能力のテスト）が主眼であるのに対し、本論文は物理・計算複雑性・推論の理解が主眼であるという違いを説明しています。</p>
+
+      <h2>まとめ</h2>
+      <p>見た目の違う 2 つの超対称ゲージ理論が Seiberg 双対で結ばれるかを、クイバーというグラフの上の経路探索問題として定式化し、距離推定 GNN と方策 GNN を A* に組み込んで解いた研究です。学習した推定器は単独では物理インフォームドな決定論的ベースラインに届きませんが、両ネットワークと物理的な規則を組み合わせた Hybrid LCA pathfinder は、成功率 100% を保ちながら効率でベースラインを上回り、分布外のクイバーに対しても頑健でした。著者らはこの種の問題を、理論物理に適用される最先端 AI のベンチマークとして提案しています。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>双対性（duality）</dt>
+        <dd>まったく違って見える 2 つの理論記述が、同じ物理を表しているという関係。片方で扱いにくい強結合領域を、もう片方で見通しよく調べられる。</dd>
+
+        <dt>Seiberg 双対性（Seiberg duality）</dt>
+        <dd>超対称ゲージ理論における双対性。クイバーに適用すると「指定した 1 つのノードを双対化する」という局所操作になる。</dd>
+
+        <dt>超対称性（supersymmetry）／4D N=1</dt>
+        <dd>理論の形を強く制限する追加の対称性。4D N=1 は「4 次元時空で、その対称性を 1 組だけ持つ理論」を指す。</dd>
+
+        <dt>アノマリー（anomaly）</dt>
+        <dd>量子効果によって理論の整合性が壊れてしまう現象。相殺できない配位は物理的に成立しないが、グラフ上の組合せ操作としての mutation は定義できる。</dd>
+
+        <dt>LPE（Laplacian 位置符号化）</dt>
+        <dd>グラフ上でのノードの位置関係を数値化して入力に足す仕組み。本論文では AGNN の入力に使い、DGNN に入れると性能が劣化した。</dd>
+
+        <dt>クイバーゲージ理論（quiver gauge theory）</dt>
+        <dd>有向グラフで指定されるゲージ理論。ノードがゲージ群 SU(N_i)、矢印が物質場（bifundamental 表現のカイラル多重項）を表す。</dd>
+
+        <dt>mutation（変異）</dt>
+        <dd>クイバーのノードに対する組合せ的操作。Fomin–Zelevinsky 則で隣接行列が変換される。クラスター代数の用語。</dd>
+
+        <dt>duality tree</dt>
+        <dd>双対操作で互いに移り合える理論のなす木構造。</dd>
+
+        <dt>duality distance（双対距離）</dt>
+        <dd>2 つのクイバーを結ぶのに必要な単純双対操作の最小回数。</dd>
+
+        <dt>finite mutation type（有限 mutation 型）</dt>
+        <dd>有限回の mutation で元に戻るクイバー。既存の AI/ML 研究はこの特殊ケースに集中していた。</dd>
+
+        <dt>DGNN（Distance GNN）</dt>
+        <dd>2 理論間の距離を推定する GNN。A* のヒューリスティック関数として使う。</dd>
+
+        <dt>AGNN（Adviser GNN）</dt>
+        <dd>次に mutate すべきノードの確率を出す方策ネットワーク。探索のコスト関数に使う。</dd>
+
+        <dt>pathfinder</dt>
+        <dd>2 理論を結ぶ双対操作の連鎖を探す探索アルゴリズム。本論文では双方向 A* とビームサーチの 2 系統。</dd>
+
+        <dt>LCA pathfinder</dt>
+        <dd>学習を使わず、ランクを下げる方向に強くバイアスをかけて共通の祖先へ向かわせる物理インフォームドな探索。人間の物理学者の発想を模したベースライン。</dd>
+
+        <dt>単調ヒューリスティック（monotonic heuristic）</dt>
+        <dd>A* が最適経路だけを展開するための整合性条件。満たせば計算量は距離に比例する。</dd>
+
+        <dt>action masking</dt>
+        <dd>実行不可能な選択肢のロジットを −∞ にして、その確率を厳密にゼロにする手法。</dd>
+
+        <dt>WL ハッシュ（Weisfeiler–Lehman hashing）</dt>
+        <dd>グラフをノードの並び順によらず正準化し、同型判定に使うハッシュ。</dd>
+
+        <dt>SR / ER / EER</dt>
+        <dd>成功率（Success Rate）、効率比（Efficiency Ratio、ベースラインに対する探索ノード数の削減倍率）、実効効率比（Effective Efficiency Ratio = ER × SR）。</dd>
+
+        <dt>ID / OOD</dt>
+        <dd>in-distribution（学習に使った理論族から取ったテスト集合）／ out-of-distribution（学習外の理論族。有限・無限 mutation 型やアノマラスなクイバーを含む）。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">Learning to Trace Seiberg Dualities</p>
+      <p><a href="https://arxiv.org/abs/2607.28628" target="_blank" rel="noopener noreferrer">arXiv:2607.28628 を読む（arxiv.org）</a></p>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
