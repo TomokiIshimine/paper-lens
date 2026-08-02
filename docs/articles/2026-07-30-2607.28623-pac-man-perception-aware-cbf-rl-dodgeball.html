@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ヒューマノイドは「見えた分しか避けられない」— 頭部カメラだけでドッジボールを避ける PAC-MAN — paper-lens</title>
+  <link rel="stylesheet" href="../assets/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="site-header__inner">
+      <p class="site-header__title"><a href="../index.html">paper-lens</a></p>
+    </div>
+  </header>
+
+  <main class="article">
+    <figure class="article__cover">
+      <img src="../assets/2026-07-30-2607.28623-pac-man-perception-aware-cbf-rl-dodgeball-cover.png"
+           alt="「見えた分しか避けられない — 頭部カメラだけでドッジボールを避ける PAC-MAN」を 4 つの区画で示すインフォグラフィック。左上の「入力」は、人型ロボットの頭部から広がる視野の扇形と飛んでくるオレンジ色のボールを描き、「深度映像 + 関節センサ」「ボールの真の位置は使わない」と示す。右上の「2 つのバリア設計」は「Link-CBF 学習報酬のみ」「Joint-CBF 関節速度への射影」の 2 帯を並べる。左下は固定カメラ・Deployment のシミュレーション成功率を No barrier 86、Link-CBF 89、Joint-CBF 76 の棒グラフで示す。右下は「実機 Unitree G1 95%」と「20 球中 19 球を回避」「被弾 1 球」「転倒 0」を示す。最下段の帯は「安全構造の強さは、使える情報量に見合わせる」。">
+    </figure>
+
+    <h1 class="article__title">ヒューマノイドは「見えた分しか避けられない」— 頭部カメラだけでドッジボールを避ける PAC-MAN</h1>
+    <div class="article__meta">
+      <span>公開日：2026-07-30</span>
+      <span>arXiv：2607.28623</span>
+      <span>カテゴリ：cs.RO / cs.AI</span>
+    </div>
+
+    <div class="article__body">
+
+      <h2>この論文のひとことまとめ</h2>
+      <p>人型ロボットが飛んでくるボールを避ける、という課題に取り組んだ研究です。著者らは「ロボットが実際に搭載しているセンサで何が見えるか」と「安全性をどう数式で保証するか」を切り離さず、ひとつの設計問題として扱う枠組み PAC-MAN を提案しました。学習時にはボールの正確な位置を使って安全な動きを教え込みますが、実機で動かすときは頭部カメラの深度映像と関節センサの情報しか使いません。実機の Unitree G1 に載せたところ、手投げ 20 球のうち 19 球を回避し、転倒はゼロでした（成功率 95%）。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p><strong>中心的な発見は「理論上いくら強力な安全保証の仕組みを組み込んでも、ロボットがその判断に必要な情報を観測できなければ機能しない。むしろ性能が落ちることさえある」という点です。</strong>設計上の含意は、安全構造の強さを利用できる情報量に見合わせなければならない、というものです。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">95%</p>
+          <p class="stat__label">実機 Unitree G1 での回避成功率。手投げ 20 球のうち 19 球を回避</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">0</p>
+          <p class="stat__label">実機実験での転倒回数。シミュレーションでも転倒率は全条件で 0</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">4%</p>
+          <p class="stat__label">動かない静止ロボットが生き延びる投球の割合。ほぼすべてが命中する設定</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">約 0.6 秒</p>
+          <p class="stat__label">既定設定でのボールの飛行時間。これが反応の持ち時間を決める</p>
+        </div>
+      </div>
+
+      <h2>なぜこの研究が重要か</h2>
+      <p>人と同じ空間で働くロボットには、「動いてくるものを瞬時に避ける」能力が求められます。しかも人型ロボットの場合、避ける動作そのものでバランスを崩して転んでしまっては意味がありません。ドッジボールは、この「短時間で判断し、全身を使って安全を確保する」という問題をきれいに切り出した課題だと著者らは位置づけています。</p>
+      <p>この論文が面白いのは、「安全性の理論」と「センサで実際に見えるもの」のズレを正面から扱っている点です。理論上いくら強力な安全保証の仕組みを組み込んでも、ロボットがその判断に必要な情報を観測できなければ機能しません。むしろ性能が落ちることさえある、というのが本研究の中心的な発見です。</p>
+
+      <h2>背景：何が問題だったのか</h2>
+      <p>ロボット制御で安全性を扱う代表的な道具に、<strong>制御バリア関数</strong>（CBF: Control Barrier Function）があります。これは「安全な状態の集合」を数式で表現し、その集合から外れそうな指令を修正する仕組みです。ただし CBF には前提があります。安全判定に必要な状態量（この場合はボールの位置と速度）が手元で使えることです。</p>
+      <p>ところが搭載センサの現実は厳しいものです。論文が挙げる問題は次のとおりです。</p>
+      <ul>
+        <li>ボールは短い時間しか視野に入らない。</li>
+        <li>カメラの視野から外れてしまう。</li>
+        <li>遠いうちは、ノイズの乗った数個の深度ピクセルとしてしか映らない。</li>
+      </ul>
+      <p>この前提の崩れに対処する一つの方向が <strong>CBF-RL</strong> です。これはバリア条件の違反を強化学習（RL: Reinforcement Learning）の報酬に組み込み、方策（policy、観測から行動を決める関数）自身に安全構造を覚え込ませる手法です。実行時に特権的な幾何情報が要らなくなる利点があります。しかし著者らは、方策が内在化できる安全構造は「その観測が支えられる分だけ」だと指摘します。つまり脅威をどう表現するか（知覚）とバリアをどう設計するか（安全）は独立に決められるものではなく、結合した一つの問題として扱う必要があるという主張です。</p>
+      <p>なお、ドッジボールは移動ロボットのナビゲーションとも異なります。危険は一過性で、しかも「いつどう避けるか」を指示する目標速度も参照動作もロボットには与えられません。地形を走破する parkour 系の研究とも違い、危険なのは地面ではなく高速で飛んでくる物体です。</p>
+
+      <h2>提案手法：何をしたのか</h2>
+
+      <h3>全体の構え</h3>
+      <p>PAC-MAN の方策は、29 次元の関節位置目標を出力します。これは標準姿勢からのずれを表す値で、PD 制御器（比例微分制御器。目標値との差と、その差が縮まる速さの両方を見て指令を作る古典的な制御器）が 50 Hz で追従します。</p>
+      <p>実行時に方策が見られるのは、搭載センサから計算できる信号だけです。具体的には深度観測、関節の位置と速度、胴体の角速度、投影重力（重力方向がロボットから見てどちらか）、そして 1 ステップ前の行動です。<strong>カメラを使う構成では、ボールの状態は方策の入力に一切含まれません。</strong> ボールについて知ることはすべて深度画像から推論します。</p>
+      <p>学習には<strong>非対称 actor-critic</strong>（asymmetric actor-critic）を使います。行動を決める側（actor）は上記の観測しか見ませんが、状態の良し悪しを評価する側（critic）は学習中だけ特権情報（ボールの真の相対位置・速度・半径、可視性、全身リンクの運動学）を追加で見ます。この特権情報は実行時には捨てられます。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 344" role="img" aria-label="非対称 actor-critic の情報の流れを示す図。学習時（シミュレータ）では critic だけがボールの真の相対位置・速度・半径、可視性、全身リンクの運動学という特権情報を見て、actor は深度観測・関節の位置と速度・胴体角速度・投影重力・1 ステップ前の行動だけを見る。実行時（実機 Unitree G1）では特権情報は捨てられ、同じ actor が搭載センサ観測のみで動く。出力は 29 次元の関節位置目標で、PD 制御器が 50 Hz で追従する。">
+          <defs>
+            <marker id="pm-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-text-muted)"></path>
+            </marker>
+            <marker id="pm-arrow-accent" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-accent)"></path>
+            </marker>
+          </defs>
+
+          <path d="M360,10 L360,132" fill="none" stroke="var(--color-border)" stroke-width="1.5" stroke-dasharray="5 5"></path>
+
+          <text x="180" y="24" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">学習時（シミュレータ）</text>
+          <text x="540" y="24" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">実行時（実機 Unitree G1）</text>
+
+          <rect x="30" y="38" width="300" height="80" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="180" y="62" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">critic：特権情報も見る</text>
+          <text x="180" y="83" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">ボールの真の相対位置・速度・半径、可視性、</text>
+          <text x="180" y="100" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">全身リンクの運動学</text>
+
+          <rect x="390" y="38" width="300" height="80" rx="8" fill="var(--color-surface)" stroke="var(--color-border)" stroke-width="1.5" stroke-dasharray="6 4"></rect>
+          <text x="540" y="62" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-text-muted)">特権情報は捨てられる</text>
+          <text x="540" y="83" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">ボールの真の状態も速度推定も</text>
+          <text x="540" y="100" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">実行時には利用できない</text>
+
+          <path d="M180,118 L180,146" fill="none" stroke="var(--color-text-muted)" stroke-width="1.5" marker-end="url(#pm-arrow)"></path>
+          <text x="192" y="138" style="font-size:10.5px;fill:var(--color-text-muted)">学習中だけ価値推定に使う</text>
+
+          <rect x="30" y="152" width="300" height="94" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="180" y="176" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">actor（方策）：搭載センサ観測のみ</text>
+          <text x="180" y="197" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">深度観測 / 関節の位置・速度 / 胴体の角速度</text>
+          <text x="180" y="214" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">投影重力 / 1 ステップ前の行動</text>
+          <text x="180" y="234" text-anchor="middle" style="font-size:10.5px;fill:var(--color-accent)">ボールの状態は入力に含まれない</text>
+
+          <rect x="390" y="152" width="300" height="94" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="2"></rect>
+          <text x="540" y="176" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">同じ actor をそのまま実機へ</text>
+          <text x="540" y="197" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">深度観測 / 関節の位置・速度 / 胴体の角速度</text>
+          <text x="540" y="214" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">投影重力 / 1 ステップ前の行動</text>
+          <text x="540" y="234" text-anchor="middle" style="font-size:10.5px;fill:var(--color-accent)">ボールの情報は深度画像から推論</text>
+
+          <path d="M330,199 L384,199" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#pm-arrow-accent)"></path>
+
+          <path d="M540,246 L540,272" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#pm-arrow-accent)"></path>
+
+          <rect x="390" y="278" width="300" height="56" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="540" y="302" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">出力：29 次元の関節位置目標</text>
+          <text x="540" y="322" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">PD 制御器が 50 Hz で追従する</text>
+        </svg>
+        <figcaption class="diagram__caption">critic だけが学習中に特権情報を見る。実行時には特権情報が捨てられ、同じ actor が搭載センサ観測だけで動く。</figcaption>
+      </figure>
+
+      <h3>2 段階のバリア設計</h3>
+      <p>論文の中核は、強さの異なる 2 種類のバリアの対比にあります。比較用の上限として、テスト時も射影を残す構成も報告されています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">Link-CBF</span>リンクごとの軽量なクリアランス報酬</p>
+          <p>各リンク（腕・脚・胴など、身体を構成する各部位）について「ボールとの隙間」を計算します。式としてはボール中心とリンク中心の距離から、両者の有効半径の和を引いたものです。この値が 0 以上なら安全、というわけです。全身の安全集合は、全リンクの安全条件の共通部分として定義されます。骨盤だけを守るのでは、腕や脚に当たるケースに対処できないためです。</p>
+          <p>報酬は、最も切迫しているリンクのバリア条件の違反だけを罰します。ボールが空中を飛んでいるとき以外はゼロになるようゲートされるので、普段の直立姿勢には干渉しません。重要なのは、<strong>Link-CBF は学習報酬を通してしか作用しない</strong>という点です。実行時にオンラインでバリア条件を強制することはありません。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">Joint-CBF</span>関節空間への強い射影</p>
+          <p>こちらはより強力です。方策が出す関節位置目標は、現在の関節角との差を通じて「目標の関節速度」を意味しています。Joint-CBF はまず、最も脅かされている点でのバリア条件を「関節速度がこの範囲に収まっていれば安全」という 1 本の不等式（関節速度についての線形制約）に書き直します。そのうえで、目標速度がその範囲から外れていれば、範囲内の最も近い値へ直接（反復計算をせずに一度の計算で）引き戻します。制約がすでに満たされていれば、元の目標速度がそのまま通ります。さらに、接触までの残り時間が短いほど制約を締める「緊急度マージン」も入っています。</p>
+          <p>報酬にも 2 つの整形項を加えます。射影による修正量が大きいことへのコスト（フィルタが頻繁に介入しないよう促す）と、安全境界すれすれを滑ることを抑えるバッファコストです。評価時には、この射影モジュールを外します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">+filter</span>特権的な上限構成</p>
+          <p>比較用の上限として、射影をテスト時も有効に保つ構成 <code>+filter</code> も報告されています。ただしこの射影はオンラインでボールの真の状態を読むため、<strong>視覚だけで実現できる展開可能な構成ではありません</strong>。実機で動かすには、現状の視覚スタックが供給できない精度のボール状態推定器が必要だと論文は明記しています。</p>
+        </div>
+      </div>
+
+      <h3>知覚の 3 レジーム</h3>
+      <p>制御課題は固定したまま、ボールの見え方だけを 3 通りに変えて情報量の効果を切り分けます。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">1</span>State oracle</p>
+          <p>ボールの真の状態を直接観測する構成（カメラなし）。安全情報の上限を与えます。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge badge--accent-2">2</span>Fixed depth camera</p>
+          <p>頭部に固定した単一カメラの RGB-D 映像からボールを切り出します。水平視野 102°、垂直視野 57°、上向き 20° の傾斜です。カメラは固定なので、視野外に出た球や遠すぎて小さく映る球は観測できません。<strong>実機に展開したのはこの固定カメラの構成です。</strong></p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">3</span>Active gimbal（視線追従）</p>
+          <p>同じカメラを ±30° のピッチ関節に載せ、飛行中のボールを追う構成です。ただし照準はボールの真の状態を使って駆動されるため、これはシミュレーション上の天井にあたります。展開可能な版は追跡結果で同じ関節を駆動すればよいものの、実機実現には追加ハードウェアが要るため今後の課題です。</p>
+        </div>
+      </div>
+
+      <p>固定カメラ構成での深度観測は、次の手順で作られます。</p>
+
+      <ol class="timeline">
+        <li class="timeline__step">
+          <p class="timeline__step-title">マスク深度を作る</p>
+          <p>ボール上のピクセルは実測深度を保ち、それ以外は最遠面に設定します。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">16×9 にプーリングする</p>
+          <p>そのマスク画像を 16×9 に縮約し、方策に収まる小ささにします。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">疎な時間オフセットで重ねる</p>
+          <p>連続フレームではなく、直近 <code>[0, 3, 8, 18]</code> フレームという疎な時間オフセットのスナップショットを重ねます。これは接近の手がかり（<strong>looming</strong>）と横方向の動きを符号化するためです。</p>
+        </li>
+        <li class="timeline__step">
+          <p class="timeline__step-title">学習時に外乱を付与する</p>
+          <p>ボールの全消失、不規則なピクセル欠損、深度のジッタ、輪郭のちらつきをランダムに加えます。実際の知覚失敗を模擬するためです。</p>
+        </li>
+      </ol>
+
+      <h3>動作の「形」を整える</h3>
+      <p>バリア項は「どこが安全か」は決めますが、「どんな全身動作で避けるべきか」は決めません。そこで <strong>AMP</strong>（Adversarial Motion Prior、敵対的動作事前分布）を動作の正則化として加えます。識別器が方策の動きと人間由来の動作クリップ（かがむ、傾く、サイドステップ、跳ぶ、立つ）の動きを見分けようとし、方策は見分けがつきにくい動きを目指します。参照データは 1 分 43 秒分の人間動作を Unitree G1 にリターゲットしたものです。これにより、でたらめな関節の振れではなく、反射的なかがみや傾きが選ばれやすくなります。</p>
+      <p>学習は PPO（Proximal Policy Optimization、強化学習で標準的に使われる方策最適化アルゴリズム）と AMP 識別器を用い、8192 並列環境で 20k イテレーション、物理シミュレータ mjlab 上で行われます。</p>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">8192</p>
+          <p class="stat__label">学習に使った並列環境の数。物理シミュレータ mjlab 上で実行</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">20k</p>
+          <p class="stat__label">学習イテレーション数。PPO と AMP 識別器を併用</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">1 分 43 秒</p>
+          <p class="stat__label">AMP の参照データ。人間動作を Unitree G1 にリターゲットした長さ</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">±25° / 2〜3 m</p>
+          <p class="stat__label">既定の投球設定。進行方向から ±25° 以内・前方 2〜3 m から発射</p>
+        </div>
+      </div>
+
+      <h3>脅威モデルと評価基準</h3>
+      <p>ボールは断続的に投げられ、投球の間には回復のための時間があります。既定の設定では、進行方向から ±25° 以内・前方 2〜3 m から発射され、飛行時間はおよそ 0.6 秒です。この 0.6 秒が反応の持ち時間を決めます。脅威は 2 種類を半々で混ぜます。脚を横切って落ちてくる球（横に踏み出す・またぐ）と、胴や頭の高さまで上がる低い弾道の球（かがむ・のけぞる）です。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p>評価基準は意図的に厳しく設定されています。<strong>ボールがどの身体リンクに当たっても hit</strong> とし、姿勢や胴体高さが閾値を超えれば fall（転倒）とします。骨盤との距離だけを測る評価だと、四肢をかすっているのに「安全に見える」手法を通してしまうためです。</p>
+        </div>
+      </div>
+
+      <h2>結果：何が分かったのか</h2>
+      <p>まず基準点として、<strong>動かない静止ロボットは投球の 4% しか生き延びません</strong>。ほぼすべての投球が命中する設定になっているということです。</p>
+      <p>シミュレーションでの全身成功率（%）は次のとおりです。Reset は投球ごとにロボットをリセットする条件、Deployment は投球の合間に移動制御で原点へ戻る条件です。転倒率は全条件で 0 でした。</p>
+
+      <table class="compare-table">
+        <thead>
+          <tr>
+            <th scope="col">レジーム</th>
+            <th scope="col">知覚</th>
+            <th scope="col">No barrier</th>
+            <th scope="col">Link-CBF</th>
+            <th scope="col">Joint-CBF</th>
+            <th scope="col">+filter</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Reset</th>
+            <td>State oracle</td>
+            <td>98</td>
+            <td>88</td>
+            <td>96</td>
+            <td>99</td>
+          </tr>
+          <tr>
+            <th scope="row">Reset</th>
+            <td>Fixed camera</td>
+            <td>86</td>
+            <td><strong>90</strong></td>
+            <td>83</td>
+            <td>97</td>
+          </tr>
+          <tr>
+            <th scope="row">Reset</th>
+            <td>Gimbal camera</td>
+            <td>96</td>
+            <td>95</td>
+            <td>91</td>
+            <td>97</td>
+          </tr>
+          <tr>
+            <th scope="row">Deployment</th>
+            <td>State oracle</td>
+            <td>96</td>
+            <td>93</td>
+            <td>95</td>
+            <td>98</td>
+          </tr>
+          <tr>
+            <th scope="row">Deployment</th>
+            <td>Fixed camera</td>
+            <td>86</td>
+            <td><strong>89</strong></td>
+            <td>76</td>
+            <td>90</td>
+          </tr>
+          <tr>
+            <th scope="row">Deployment</th>
+            <td>Gimbal camera</td>
+            <td>92</td>
+            <td>94</td>
+            <td>90</td>
+            <td>95</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p>太字は実機に展開した固定カメラ + Link-CBF の構成です。</p>
+      <p>ここから読み取れることを 3 点に整理します。</p>
+
+      <p><strong>搭載センサで済ませるコストは数ポイントに留まる。</strong> 同じ Link-CBF 報酬で学習した固定カメラ方策（reset 90%、deployment 89%）は、ボールを保守的なマスク深度としてしか見ていないにもかかわらず、真の状態を見る構成（88% と 93%）と同等です。オラクル系の最良構成（96〜99%）でも、展開する方策との差は 10 ポイント未満です。著者らは「固定した搭載カメラだけで回避には十分であり、知覚が変えるのは<strong>どの安全構造が機能するか</strong>である」とまとめています。</p>
+
+      <p><strong>正確な情報が使えるなら、強い安全構成が最良になる。</strong> ボールの真の状態が使える State oracle の 2 行を見ます。バリア報酬を足さない No barrier（ボールを遠ざけるだけの基本報酬）でも Reset 98%、Deployment 96% と十分に強いのですが、関節空間バリアを実行時フィルタとして残した <code>+filter</code> はそれを上回り、Reset 99%、Deployment 98% に達します。<code>+filter</code> の列は表の全行で最良です。ただし繰り返しになりますが、この改善には搭載スタックが現状供給できないボール状態が必要です。</p>
+
+      <p><strong>実行時のボール状態なしで動く構成では順位が逆転する。</strong> Fixed camera の 2 行では Link-CBF が両レジームで最良（Reset 90%、Deployment 89%）となり、No barrier（ともに 86%）を上回ります。一方、素の Joint-CBF は deployment で 76% まで落ち込みます。著者らはこの差を知覚の問題だと理論づけています。方策が「十分正確に知覚できない全身バリア」を内在化しようとして、かえって悪い回避を学んでしまう、という説明です。</p>
+
+      <p>この解釈を裏づけるのは、Joint-CBF の落ち込みを修復する 2 つの変更がいずれも「固定カメラに欠けているボール情報を補う」ものである点です。実行時フィルタとして残せば固定カメラは 90〜97% に上がり、オラクル照準のジンバルを与えれば同じ Joint-CBF 学習はもはや害にならず deployment 90%（固定カメラでは 76%）になります。論文の言葉では「全身バリアはボールが十分に観測可能なときにのみ成功する」ということです。</p>
+
+      <div class="callout">
+        <span class="callout__icon" aria-hidden="true">!</span>
+        <div class="callout__body">
+          <p>設計上の含意は明快で、<strong>安全構造の強さは、利用できる情報量に見合わせなければならない</strong>となります。</p>
+        </div>
+      </div>
+
+      <p>先行するヒューマノイドドッジボール研究 SMP との比較も行われています。SMP の設定（全方位 360°、8〜10 m からの投球、オラクル観測）に揃えたところ、PAC-MAN は reset 98% を記録し、SMP の報告値である約 99% と同程度でした。</p>
+
+      <h3>実機実験</h3>
+      <p>Unitree G1 に頭部搭載の ZED Mini を付け、Link-CBF の固定カメラ方策を展開しました。シミュレータのセグメンテーションは、学習型トラッカ <strong>EfficientTAM</strong> に置き換えられています。クリックした前景点で初期化されたトラックが RGB 映像中のボールを約 60 Hz でセグメントします。制御レートの 50 Hz より速いので、深度観測は実質的に毎ステップ新しい情報になります。</p>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 720 214" role="img" aria-label="実機の知覚パイプラインを示す図。頭部搭載の ZED Mini が RGB-D 映像を出し、学習型トラッカ EfficientTAM が約 60 Hz でボールをセグメントする。その結果に低パーセンタイルのプーリング、距離考慮のマスクサイズチェック、looming ゲートという 3 つの保守的フィルタをかけ、16×9 のマスク深度として方策へ渡す。方策は 50 Hz で動く。トラックが無い場合は偽の来球ではなく「何も無い」フレームを受け取る。">
+          <defs>
+            <marker id="rig-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L8,3 L0,6 z" fill="var(--color-accent)"></path>
+            </marker>
+          </defs>
+
+          <rect x="14" y="46" width="150" height="72" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="89" y="74" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">ZED Mini</text>
+          <text x="89" y="94" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">頭部搭載の RGB-D</text>
+
+          <path d="M164,82 L194,82" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#rig-arrow)"></path>
+
+          <rect x="200" y="46" width="150" height="72" rx="8" fill="var(--color-surface)" stroke="var(--color-accent)" stroke-width="1.5"></rect>
+          <text x="275" y="70" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">EfficientTAM</text>
+          <text x="275" y="89" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">クリック点で初期化</text>
+          <text x="275" y="106" text-anchor="middle" style="font-size:10.5px;fill:var(--color-accent)">約 60 Hz でセグメント</text>
+
+          <path d="M350,82 L380,82" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#rig-arrow)"></path>
+
+          <rect x="386" y="46" width="150" height="72" rx="8" fill="var(--color-surface)" stroke="var(--color-accent-2)" stroke-width="1.5"></rect>
+          <text x="461" y="70" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">3 つのフィルタ</text>
+          <text x="461" y="89" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">低パーセンタイル / サイズ</text>
+          <text x="461" y="106" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">チェック / looming ゲート</text>
+
+          <path d="M536,82 L566,82" fill="none" stroke="var(--color-accent)" stroke-width="1.5" marker-end="url(#rig-arrow)"></path>
+
+          <rect x="572" y="46" width="134" height="72" rx="8" fill="var(--color-accent-soft)" stroke="var(--color-accent)" stroke-width="2"></rect>
+          <text x="639" y="70" text-anchor="middle" style="font-size:12px;font-weight:700;fill:var(--color-heading)">方策</text>
+          <text x="639" y="89" text-anchor="middle" style="font-size:10.5px;fill:var(--color-text-muted)">16×9 のマスク深度</text>
+          <text x="639" y="106" text-anchor="middle" style="font-size:10.5px;fill:var(--color-accent)">50 Hz で動作</text>
+
+          <text x="360" y="26" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">実行時にボールの真の状態・速度推定・CBF 入力はどの時点でも使えない</text>
+          <text x="360" y="152" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">トラックが無い・棄却された・見失った場合</text>
+          <text x="360" y="172" text-anchor="middle" style="font-size:11px;fill:var(--color-accent)">偽の来球ではなく「何も無い」フレームを方策へ渡す</text>
+          <text x="360" y="196" text-anchor="middle" style="font-size:11px;fill:var(--color-text-muted)">トラッカは任意の物体で初期化できるため、同じ方策のままで異なるボールを避けられる</text>
+        </svg>
+        <figcaption class="diagram__caption">実機の知覚パイプライン。トラッカの出力を 3 つの保守的なフィルタに通し、16×9 のマスク深度として方策へ渡す。</figcaption>
+      </figure>
+
+      <p>このトラッカは任意の物体で初期化できるため、<strong>同じ方策のままで異なるボールを避けられます</strong>。論文にはフォームボールの代わりにサッカーボールを避ける例が示されています。</p>
+      <p>実機フィードを保守的に保つため、次の 3 つのフィルタが入っています。</p>
+
+      <div class="card-grid">
+        <div class="card">
+          <p class="card__title"><span class="badge">1</span>低パーセンタイルのプーリング</p>
+          <p>ZED の飛びピクセル（実際には無い距離を返す誤検出）を捨てるため、深度の小さい側の値だけを使ってまとめます。ボール自体は残ります。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">2</span>距離考慮のマスクサイズチェック</p>
+          <p>測った距離のわりにマスクが大きすぎるときは、ボールではないとみなして棄却します。</p>
+        </div>
+        <div class="card">
+          <p class="card__title"><span class="badge">3</span>looming ゲート</p>
+          <p>平均深度が十分な速さで縮まっていない、つまり近づいてきていない追跡クラスタは抑制します。静止物体や過敏なセグメンテーションが回避動作を誘発するのを防ぐためです。</p>
+        </div>
+      </div>
+
+      <p>トラックが無い・棄却された・見失った場合、方策は偽の来球ではなく「何も無い」フレームを受け取ります。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <p><strong>この実験では、ボールの真の状態も、速度推定も、実行時 CBF の入力も、どの時点でも利用できません。</strong>表中の固定カメラ Link-CBF セルとまったく同じ条件です。</p>
+        </div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat">
+          <p class="stat__value">19 / 20</p>
+          <p class="stat__label">手投げ 20 球に対する回避数。被弾 1 球、転倒 0、成功率 95%</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">0.05〜1.7 m</p>
+          <p class="stat__label">被弾以外の投球で、リンクごとの立ち入り禁止領域（keep-out 領域）をクリアした距離</p>
+        </div>
+        <div class="stat">
+          <p class="stat__value">3 種類</p>
+          <p class="stat__label">創発した回避動作。かがみ・傾き・サイドステップ</p>
+        </div>
+      </div>
+
+      <p>創発した回避動作は、かがみ・傾き・サイドステップの 3 種類です。いずれも脚・胴・腕を協調させ、胴体を平行移動させるだけでなく、脅かされたリンク自体を進路から動かすものになっていました。</p>
+
+      <h2>意義と限界</h2>
+      <p>この研究の核心的な主張は、知覚考慮型の CBF-RL が「安全性と情報の協調設計問題」だという点にあります。適切なバリア構造は、方策やフィルタが利用できる脅威表現に依存して変わります。正確なボール状態があれば Joint-CBF を実行時フィルタとして残す構成が最も成功率が高くなりますが、同じ関節空間バリアを報酬による誘導としてのみ使うと、固定カメラ方策はむしろ劣化します。Link-CBF は骨盤中心の目的を全身リンクへ広げつつ、限られた搭載知覚に耐える折衷点として機能しました。</p>
+      <p>著者らはこの結果を、バリア構造を方策の中に「内在化する」ことと、オンラインで「強制する」ことの区別として整理しています。内在化は方策が推論できる範囲に制限され、強制は実行時に正確な脅威状態を要求します。</p>
+      <p>論文が認めている限界は次のとおりです。</p>
+
+      <div class="callout callout--note">
+        <span class="callout__icon" aria-hidden="true">i</span>
+        <div class="callout__body">
+          <ul>
+            <li><strong><code>+filter</code> は展開できない</strong>: オンラインでボールの真の状態を読むため、視覚のみで展開できる構成ではありません。実機で動かすには、視覚スタックが提供できない高精度なボール状態推定器が必要です。</li>
+            <li><strong>ジンバルはシミュレーション上の天井</strong>: オラクル照準のジンバルも、照準にボールの真の状態を要します。同じセグメンテーション結果で照準を駆動するハードウェアジンバルは今後の課題とされています。</li>
+            <li><strong>今後の方向</strong>: 物理的な追従ジンバルか正確なオンライン推定器によって「知覚から CBF へ」のループを閉じること、そして課題を「立ち直った姿勢からの回避」から「歩きながらの回避」へ広げることが挙げられています。</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>ベンチマークと学習パイプラインは公開予定とされています。</p>
+
+      <h2>まとめ</h2>
+      <p>PAC-MAN は、人型ロボットの全身安全性を「センサで何が見えるか」と切り離さずに設計する枠組みです。学習時にだけ使えるバリア情報で動きを形づくり、実機では頭部カメラの深度と関節センサだけで飛来物を避けます。実機の Unitree G1 で投球の 95% を回避しました。最も示唆的なのは、強い安全機構が常に良いとは限らず、観測できる情報量に見合った安全構造を選ぶ必要があるという発見です。</p>
+
+    </div>
+
+    <section class="glossary">
+      <h2 class="glossary__title">用語集</h2>
+      <dl>
+        <dt>CBF（Control Barrier Function、制御バリア関数）</dt>
+        <dd>安全な状態の集合を関数として表現し、その集合の内側にとどまるようコントローラの指令を制約する枠組み。</dd>
+
+        <dt>CBF-RL</dt>
+        <dd>バリア条件の違反を強化学習の報酬に注入し、方策自身に安全構造を覚えさせる手法。実行時に特権的な幾何情報を不要にできる。</dd>
+
+        <dt>Link-CBF</dt>
+        <dd>骨盤中心の目的を全身の各リンクへ拡張した軽量な報酬項。学習報酬を通してのみ作用し、実行時のオンライン強制は行わない。</dd>
+
+        <dt>Joint-CBF</dt>
+        <dd>関節速度に対する射影として働く、より強いバリア。学習の整形に使うことも、テスト時の特権的フィルタとして残すこともできる。</dd>
+
+        <dt>AMP（Adversarial Motion Prior、敵対的動作事前分布）</dt>
+        <dd>参照動作を明示的に追従させる代わりに識別器を使い、動作の「形」だけを人間らしく正則化する手法。安全集合の定義には関与しない。</dd>
+
+        <dt>非対称 actor-critic</dt>
+        <dd>価値関数だけが特権情報を観測し、方策は実行時に得られる観測のみを見る学習の枠組み。</dd>
+
+        <dt>セグメンテーションマスク深度</dt>
+        <dd>RGB 映像でボールを切り出し、そのピクセルだけ実測深度を残して他を最遠面にした、コンパクトな脅威表現。</dd>
+
+        <dt>looming</dt>
+        <dd>対象が接近することで生じる視覚的な手がかり。時間方向にずらしたフレームを重ねることで符号化される。</dd>
+
+        <dt>any-link contact criterion（任意リンク接触基準）</dt>
+        <dd>ボールがどの身体リンクに触れても被弾とみなす評価基準。骨盤だけを見る評価より厳しい。</dd>
+
+        <dt>EfficientTAM</dt>
+        <dd>実機実験で使われた学習型トラッカ。クリックした点から初期化し、RGB 映像中のボールを約 60 Hz でセグメントする。</dd>
+      </dl>
+    </section>
+
+    <section class="paper-link">
+      <p class="paper-link__label">原論文</p>
+      <p class="paper-link__title">PAC-MAN: Perception-Aware CBF-RL for Whole-Body Safety in Humanoid Dodgeball</p>
+      <p><a href="https://arxiv.org/abs/2607.28623" target="_blank" rel="noopener noreferrer">arXiv:2607.28623 を読む（arxiv.org）</a></p>
+    </section>
+
+    <nav class="article__nav">
+      <a href="../index.html">← 記事一覧へ戻る</a>
+    </nav>
+  </main>
+
+  <footer class="site-footer">
+    <div class="site-footer__inner">
+      <p>paper-lens — arXiv 論文の日本語解説</p>
+    </div>
+  </footer>
+</body>
+</html>
